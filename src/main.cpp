@@ -1,8 +1,16 @@
 #include "main.h"
 
 /**
+ * CONSTANTS
+ */
+
+const double EXP = std::pow(128, 1/127);
+
+/**
  * CONFIG
  */
+
+constexpr float WHEEL_DIAMETER_INCHES = 2.5;
 
 constexpr int DRIVE_TRAIN_LEFT_FRONT_MOTOR_PORT = 15;
 constexpr int DIRVE_TRAIN_LEFT_MIDDLE_MOTOR_PORT = 1;
@@ -21,6 +29,8 @@ constexpr char MOGO_BAR_PORT = 'B';
 constexpr char ARM_PORT = 'D';
 
 constexpr int INTERTIAL_SENSOR_PORT = 0;
+
+constexpr float DRIVE_TRAIN_TURN_SENSITIVITY = 0.3f;
 
 /**
  * COMPONENTS
@@ -103,11 +113,10 @@ void disabled() {}
  */
 void competition_initialize() {
 	intertial_sensor.reset();
+
+	drive_train_left_motor_group.tare_position_all();
+	drive_train_left_motor_group.tare_position_all();
 }
-
-// int* get_robot_position() {
-
-// }
 
 /**
  * Runs the user autonomous code. This function will be started in its own task
@@ -121,7 +130,9 @@ void competition_initialize() {
  * from where it left off.
  */
 void autonomous() {
-	
+	while(true) {
+
+	}
 }
 
 /**
@@ -138,21 +149,16 @@ void autonomous() {
  * task, not resume it from where it left off.
  */
 void opcontrol() {
-	pros::Controller master(pros::E_CONTROLLER_MASTER);
-	pros::MotorGroup left_mg({1, -2, 3});    // Creates a motor group with forwards ports 1 & 3 and reversed port 2
-	pros::MotorGroup right_mg({-4, 5, -6});  // Creates a motor group with forwards port 5 and reversed ports 4 & 6
-
-
 	while (true) {
-		pros::lcd::print(0, "%d %d %d", (pros::lcd::read_buttons() & LCD_BTN_LEFT) >> 2,
-		                 (pros::lcd::read_buttons() & LCD_BTN_CENTER) >> 1,
-		                 (pros::lcd::read_buttons() & LCD_BTN_RIGHT) >> 0);  // Prints status of the emulated screen LCDs
+		int left_stick_y = master.get_analog(ANALOG_LEFT_Y);
+		int right_stick_x = master.get_analog(ANALOG_RIGHT_X);
 
-		// Arcade control scheme
-		int dir = master.get_analog(ANALOG_LEFT_Y);    // Gets amount forward/backward from left joystick
-		int turn = master.get_analog(ANALOG_RIGHT_X);  // Gets the turn left/right from right joystick
-		left_mg.move(dir - turn);                      // Sets left motor voltage
-		right_mg.move(dir + turn);                     // Sets right motor voltage
-		pros::delay(20);                               // Run for 20 ms then update
+		float drive_speed = (0 < left_stick_y - left_stick_y < 0) * (std::pow(EXP, left_stick_y) - 1);
+		float drive_turn_speed = right_stick_x * DRIVE_TRAIN_TURN_SENSITIVITY;
+
+		drive_train_left_motor_group.move(drive_speed + drive_turn_speed);
+		drive_train_right_motor_group.move(drive_speed - drive_turn_speed);
+
+		pros::delay(20);
 	}
 }
