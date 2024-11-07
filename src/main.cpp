@@ -5,6 +5,7 @@
  */
 
 const double EXP = std::pow(128, 1/127);
+const double RADIAN = M_PI / 180;
 
 /**
  * CONFIG
@@ -119,6 +120,22 @@ void competition_initialize() {
 }
 
 /**
+ * Calculates the position of the robot given the previous state. Returns a
+ * pointer to the robot x, y, and heading as doubles.
+ */
+void get_position(double* prev_pos, double* prev_motor_pos) {
+	prev_pos[2] = intertial_sensor.get_heading();
+
+	double robot_move_dist = 
+		((drive_train_left_motor_group.get_position(0) - prev_motor_pos[0])
+		+ (drive_train_right_motor_group.get_position(0) - prev_motor_pos[1]))
+		/ 2;
+
+	prev_pos[0] += robot_move_dist * std::cos(prev_pos[2] * RADIAN);
+	prev_pos[1] += robot_move_dist * std::sin(prev_pos[2] * RADIAN);
+}
+
+/**
  * Runs the user autonomous code. This function will be started in its own task
  * with the default priority and stack size whenever the robot is enabled via
  * the Field Management System or the VEX Competition Switch in the autonomous
@@ -134,6 +151,9 @@ void autonomous() {
 
 	}
 }
+
+double robot_pos[3];
+double drive_train_motor_pos[2];
 
 /**
  * Runs the operator control code. This function will be started in its own task
@@ -158,6 +178,16 @@ void opcontrol() {
 
 		drive_train_left_motor_group.move(drive_speed + drive_turn_speed);
 		drive_train_right_motor_group.move(drive_speed - drive_turn_speed);
+
+		get_position(robot_pos, drive_train_motor_pos);
+
+		master.set_text(1, 1, "X Position");
+		master.set_text(2, 1, "Y Position");
+		master.set_text(3, 1, "Heading");
+
+		master.set_text(1, 2, std::to_string(robot_pos[0]));
+		master.set_text(2, 2, std::to_string(robot_pos[1]));
+		master.set_text(3, 2, std::to_string(robot_pos[2]));
 
 		pros::delay(20);
 	}
