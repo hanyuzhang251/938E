@@ -2,6 +2,7 @@
 #include "lemlib/api.hpp"
 #include "lemlib/chassis/chassis.hpp"
 #include "lemlib/chassis/trackingWheel.hpp"
+#include "pros/misc.h"
 #include <cstddef>
 
 // constants
@@ -18,27 +19,28 @@ const float WHEEL_CIRCUM = M_PI * WHEEL_DIAMETER;
 
 const int TICKS_PER_TILE = TILE_SIDE / WHEEL_CIRCUM * WHEEL_TICKS_PER_ROTATION;
 
+constexpr int INTAKE_SPEED = 100;
+
 // config
 
-constexpr int DRIVE_TRAIN_LEFT_FRONT_MOTOR_PORT = 15;
-constexpr int DIRVE_TRAIN_LEFT_MIDDLE_MOTOR_PORT = 1;
-constexpr int DRIVE_TRAIN_LEFT_BACK_MOTOR_PORT = 4;
+constexpr int DRIVE_TRAIN_LEFT_FRONT_MOTOR_PORT = -15;
+constexpr int DIRVE_TRAIN_LEFT_MIDDLE_MOTOR_PORT = -1;
+constexpr int DRIVE_TRAIN_LEFT_BACK_MOTOR_PORT = -20;
 
-constexpr int DRIVE_TRAIN_RIGHT_FRONT_MOTOR_PORT = -14;
-constexpr int DRIVE_TRAIN_RIGHT_MIDDLE_MOTOR_PORT = -18;
-constexpr int DRIVE_TRAIN_RIGHT_BACK_MOTOR_PORT = -16;
+constexpr int DRIVE_TRAIN_RIGHT_FRONT_MOTOR_PORT = 14;
+constexpr int DRIVE_TRAIN_RIGHT_MIDDLE_MOTOR_PORT = 18;
+constexpr int DRIVE_TRAIN_RIGHT_BACK_MOTOR_PORT = 16;
 
 constexpr int INTAKE_BOTTOM_PORT = 5;
 constexpr int INTAKE_TOP_PORT = -2;
 
 constexpr char MOGO_CLAMP_PORT = 'A';
-constexpr char MOGO_BAR_PORT = 'B';
+constexpr char MOGO_BAR_PORT = 'C';
 
 constexpr char ARM_PORT = 'D';
+constexpr char ARM_END_PORT = 'H';
 
-constexpr int IMU_PORT = 0;
-
-constexpr float DRIVE_TRAIN_TURN_SENSITIVITY = 0.3f;
+constexpr int IMU_PORT = 21;
 
 pros::Controller master(pros::E_CONTROLLER_MASTER);
 
@@ -57,16 +59,23 @@ pros::MotorGroup drive_train_right_motor_group ({
 pros::Motor intake_bottom_motor (INTAKE_BOTTOM_PORT);
 pros::Motor intake_top_motor (INTAKE_TOP_PORT);
 
+pros::MotorGroup intake_both ({
+	INTAKE_BOTTOM_PORT,
+	INTAKE_TOP_PORT
+});
+
 pros::adi::AnalogOut mogo_clamp_piston (MOGO_CLAMP_PORT);
 pros::adi::AnalogOut mogo_bar_piston (MOGO_BAR_PORT);
 
 pros::adi::AnalogOut arm (ARM_PORT);
+pros::adi::AnalogOut arm_end (ARM_END_PORT);
 
 pros::IMU imu (IMU_PORT);
 
-lemlib::Drivetrain drivetrain(&drive_train_left_motor_group, &drive_train_right_motor_group, 12.5, lemlib::Omniwheel::NEW_275, 450, 2);
+lemlib::Drivetrain drivetrain(&drive_train_left_motor_group, &drive_train_right_motor_group, 11, lemlib::Omniwheel::NEW_275, 450, 2);
 
 lemlib::OdomSensors sensors (nullptr, nullptr, nullptr, nullptr, &imu);
+
 
 lemlib::ControllerSettings lateral_controller(10, // proportional gain (kP)
                                               0, // integral gain (kI)
@@ -91,7 +100,19 @@ lemlib::ControllerSettings angular_controller(2, // proportional gain (kP)
                                               0 // maximum acceleration (slew)
 );
 
-lemlib::Chassis chassis (drivetrain, lateral_controller, angular_controller, sensors);
+// input curve for throttle input during driver control
+lemlib::ExpoDriveCurve throttle_curve(3, // joystick deadband out of 127
+                                     10, // minimum output where drivetrain will move out of 127
+                                     1.019 // expo curve gain
+);
+
+// input curve for steer input during driver control
+lemlib::ExpoDriveCurve steer_curve(3, // joystick deadband out of 127
+                                  10, // minimum output where drivetrain will move out of 127
+                                  1.019 // expo curve gain
+);
+
+lemlib::Chassis chassis (drivetrain, lateral_controller, angular_controller, sensors, &throttle_curve, &steer_curve);
 
 void initialize() {
 	pros::lcd::initialize(); // initialize brain screen
@@ -111,26 +132,54 @@ void initialize() {
 
 void disabled() {}
 
-void competition_initialize() {}
-
-void autonomous() {
+void competition_initialize() {
 	arm.set_value(true);
 }
 
+void autonomous() {
+	chassis.setPose(60, 12.5, 310);
+	arm.set_value(true);
+	chassis.moveToPose(62, 10, 310, 1000, {}, false);
+	arm.set_value(false);
+	chassis.moveToPose(30, 18, 315, 5000, {}, false);
+	mogo_clamp_piston.set_value(true);
+	intake_bottom_motor.move(100);
+	chassis.moveToPose(28, 42, 140, 5000, {}, false);
+	
+}
+
 void opcontrol() {
-	master.set_text(0, 0, "op mode");
 
-	while (true) {
-		// basic drive controls
-		int left_stick_y = master.get_analog(ANALOG_LEFT_Y);
-		int right_stick_x = master.get_analog(ANALOG_RIGHT_X);
+    while (true) {
+        int leftY = master.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
+        int rightX = master.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
 
-		float drive_speed = (0 < left_stick_y - left_stick_y < 0) * (std::pow(EXP, left_stick_y) - 1);
-		float drive_turn_speed = right_stick_x * DRIVE_TRAIN_TURN_SENSITIVITY;
+        chassis.arcade(leftY, rightX);
 
-		drive_train_left_motor_group.move(drive_speed + drive_turn_speed);
-		drive_train_right_motor_group.move(drive_speed - drive_turn_speed);
+		if (master.get_digital(pros::E_CONTROLLER_DIGITAL_L2)) intake_both.move(INTAKE_SPEED);
+		else if (master.get_digital(pros::E_CONTROLLER_DIGITAL_L1)) intake_both.move(-INTAKE_SPEED);
+		else intake_both.brake();
+		
+		if (master.get_digital(pros::E_CONTROLLER_DIGITAL_A)) mogo_clamp_piston.set_value(true);
+		else if (master.get_digital(pros::E_CONTROLLER_DIGITAL_B)) mogo_clamp_piston.set_value(false);
+		
+		if (master.get_digital(pros::E_CONTROLLER_DIGITAL_UP)) arm.set_value(false);
+		else if (master.get_digital(pros::E_CONTROLLER_DIGITAL_DOWN)) arm.set_value(false);
 
-		pros::delay(20);
-	}
+		if(master.get_digital(pros::E_CONTROLLER_DIGITAL_R1)){
+			arm_end.set_value(true);
+			arm.set_value(true);
+		}
+		else if(master.get_digital(pros::E_CONTROLLER_DIGITAL_R2)){
+		arm.set_value(false);
+		}
+		if(master.get_digital(pros::E_CONTROLLER_DIGITAL_LEFT)){
+		arm_end.set_value(true);
+		}
+		else if(master.get_digital(pros::E_CONTROLLER_DIGITAL_RIGHT)){
+		mogo_bar_piston.set_value(false);
+		}
+
+        pros::delay(25);
+    }
 }
