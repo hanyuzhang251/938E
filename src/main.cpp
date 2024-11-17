@@ -34,7 +34,7 @@ constexpr int DRIVE_TRAIN_RIGHT_BACK_MOTOR_PORT = 16;
 constexpr int INTAKE_BOTTOM_PORT = 5;
 constexpr int INTAKE_TOP_PORT = -2;
 
-constexpr char MOGO_CLAMP_PORT = 'A';
+constexpr int MOGO_CLAMP_PORT = 1;
 constexpr char MOGO_BAR_PORT = 'C';
 
 constexpr char ARM_PORT = 'D';
@@ -71,6 +71,7 @@ pros::adi::AnalogOut arm (ARM_PORT);
 pros::adi::AnalogOut arm_end (ARM_END_PORT);
 
 pros::IMU imu (IMU_PORT);
+
 
 lemlib::Drivetrain drivetrain(&drive_train_left_motor_group, &drive_train_right_motor_group, 11, lemlib::Omniwheel::NEW_275, 450, 2);
 
@@ -136,15 +137,23 @@ void competition_initialize() {
 	arm.set_value(true);
 }
 
+ASSET(auton_rightGrabMogo_txt)
+
 void autonomous() {
-	chassis.setPose(60, 12.5, 310);
-	arm.set_value(true);
-	chassis.moveToPose(62, 10, 310, 1000, {}, false);
-	arm.set_value(false);
-	chassis.moveToPose(30, 18, 315, 5000, {}, false);
-	mogo_clamp_piston.set_value(true);
-	intake_bottom_motor.move(100);
-	chassis.moveToPose(28, 42, 140, 5000, {}, false);
+	// // intake_top_motor.move(100);
+	// // pros::delay(1000);
+	// // intake_top_motor.brake();
+	// chassis.setPose(47, 0, 0);
+	// chassis.moveToPoint(23, 47, 5000);
+	// // arm.set_value(true);
+	// // chassis.moveToPose(62, 10, 310, 1000, {}, false);
+	// // arm.set_value(false);
+	// // chassis.moveToPose(30, 18, 315, 5000, {}, false);
+	// // mogo_clamp_piston.set_value(true);
+	// // intake_bottom_motor.move(100);
+	// // chassis.moveToPose(28, 42, 140, 5000, {}, false);
+
+	chassis.setPose(59, 14, 145);
 	
 }
 
@@ -177,7 +186,7 @@ void opcontrol() {
 		arm_end.set_value(true);
 		}
 		else if(master.get_digital(pros::E_CONTROLLER_DIGITAL_RIGHT)){
-		mogo_bar_piston.set_value(false);
+		arm_end.set_value(false);
 		}
 
         pros::delay(25);
