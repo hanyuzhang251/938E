@@ -137,7 +137,7 @@ void competition_initialize() {
 	arm.set_value(true);
 }
 
-ASSET(auton_rightGrabMogo_txt)
+ASSET(rightGrabMogo_txt)
 
 void autonomous() {
 	// // intake_top_motor.move(100);
@@ -154,7 +154,22 @@ void autonomous() {
 	// // chassis.moveToPose(28, 42, 140, 5000, {}, false);
 
 	chassis.setPose(59, 14, 145);
-	
+
+	arm.set_value(false); // intentional
+	pros::delay(250);
+	arm_end.set_value(true);
+	pros::delay(250);
+	arm.set_value(true);
+	pros::delay(250);
+
+	chassis.follow(rightGrabMogo_txt, 10, 500, false, true);
+	chassis.waitUntil(34);
+	mogo_clamp_piston.set_value(true);
+	pros::delay(250);
+
+	chassis.turnToPoint(23.5, 47, 5000, {}, false);
+	intake_both.move(100);
+	chassis.moveToPoint(26.5, 40.5, 5000, false);
 }
 
 void opcontrol() {
