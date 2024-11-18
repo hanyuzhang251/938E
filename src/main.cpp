@@ -37,10 +37,10 @@ constexpr int INTAKE_BOTTOM_PORT = 5;
 constexpr int INTAKE_TOP_PORT = -2;
 
 constexpr int MOGO_CLAMP_PORT = 1;
-constexpr char MOGO_BAR_PORT = 'C';
+constexpr int MOGO_BAR_PORT = 3;
 
-constexpr char ARM_PORT = 'D';
-constexpr char ARM_END_PORT = 'H';
+constexpr int ARM_PORT = 4;
+constexpr int ARM_END_PORT = 8;
 
 constexpr int IMU_PORT = 21;
 
@@ -66,11 +66,11 @@ pros::MotorGroup intake_both ({
 	INTAKE_TOP_PORT
 });
 
-pros::ADIAnalogOut mogo_clamp_piston (MOGO_CLAMP_PORT);
-pros::adi::AnalogOut mogo_bar_piston (MOGO_BAR_PORT);
+pros::adi::DigitalOut mogo_clamp_piston (MOGO_CLAMP_PORT);
+pros::adi::DigitalOut mogo_bar_piston (MOGO_BAR_PORT);
 
-pros::adi::AnalogOut arm (ARM_PORT);
-pros::adi::AnalogOut arm_end (ARM_END_PORT);
+pros::adi::DigitalOut arm (ARM_PORT);
+pros::adi::DigitalOut arm_end (ARM_END_PORT);
 
 pros::IMU imu (IMU_PORT);
 
@@ -84,9 +84,9 @@ lemlib::ControllerSettings lateral_controller(10, // proportional gain (kP)
                                               0, // integral gain (kI)
                                               3, // derivative gain (kD)
                                               3, // anti windup
-                                              1, // small error range, in inches
+                                              0.2, // small error range, in inches
                                               100, // small error range timeout, in milliseconds
-                                              3, // large error range, in inches
+                                              1, // large error range, in inches
                                               500, // large error range timeout, in milliseconds
                                               20 // maximum acceleration (slew)
 );
@@ -96,9 +96,9 @@ lemlib::ControllerSettings angular_controller(2, // proportional gain (kP)
                                               0, // integral gain (kI)
                                               10, // derivative gain (kD)
                                               3, // anti windup
-                                              1, // small error range, in degrees
+                                              0.2, // small error range, in degrees
                                               100, // small error range timeout, in milliseconds
-                                              3, // large error range, in degrees
+                                              1, // large error range, in degrees
                                               500, // large error range timeout, in milliseconds
                                               0 // maximum acceleration (slew)
 );
@@ -118,6 +118,8 @@ lemlib::ExpoDriveCurve steer_curve(3, // joystick deadband out of 127
 lemlib::Chassis chassis (drivetrain, lateral_controller, angular_controller, sensors, &throttle_curve, &steer_curve);
 
 void initialize() {
+	arm.set_value(true);
+
 	pros::lcd::initialize(); // initialize brain screen
     chassis.calibrate(); // calibrate sensors
     // print position to brain screen
@@ -152,7 +154,22 @@ void autonomous() {
 	// arm.set_value(true);
 	// pros::delay(250);
 
-	chassis.moveToPoint(49.045, 9.955, 5000, {.forwards=false}, false);
+	chassis.moveToPoint(49.045, 9.955, 1000, {.forwards=false});
+
+	chassis.waitUntilDone();
+	chassis.turnToPoint(70, -1, 1000);
+
+	chassis.waitUntilDone();
+	chassis.moveToPoint(58.47, 5.4, 1000);
+
+	chassis.waitUntilDone();
+	chassis.moveToPose(27.16, 21.727, 115, 1000, {.forwards = false});
+
+	chassis.waitUntil(25);
+	mogo_clamp_piston.set_value(true);
+
+	chassis.waitUntilDone();
+	chassis.moveToPose(36.609, 46.67, 268.5, 5000);
 
 	// chassis.follow(test_txt, 10, 10000, true, false);
 	
@@ -192,7 +209,7 @@ void opcontrol() {
 		else if (master.get_digital(pros::E_CONTROLLER_DIGITAL_B)) mogo_clamp_piston.set_value(false);
 		
 		if (master.get_digital(pros::E_CONTROLLER_DIGITAL_UP)) arm.set_value(false);
-		else if (master.get_digital(pros::E_CONTROLLER_DIGITAL_DOWN)) arm.set_value(false);
+		else if (master.get_digital(pros::E_CONTROLLER_DIGITAL_DOWN)) arm.set_value(true);
 
 		if(master.get_digital(pros::E_CONTROLLER_DIGITAL_R1)){
 			arm_end.set_value(true);
