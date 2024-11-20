@@ -22,6 +22,7 @@ const float WHEEL_CIRCUM = M_PI * WHEEL_DIAMETER;
 const int TICKS_PER_TILE = TILE_SIDE / WHEEL_CIRCUM * WHEEL_TICKS_PER_ROTATION;
 
 constexpr int INTAKE_SPEED = 127;
+constexpr int ARM_SPEED = 50;
 
 // config
 
@@ -33,7 +34,7 @@ constexpr int DRIVE_TRAIN_RIGHT_FRONT_MOTOR_PORT = 14;
 constexpr int DRIVE_TRAIN_RIGHT_MIDDLE_MOTOR_PORT = 18;
 constexpr int DRIVE_TRAIN_RIGHT_BACK_MOTOR_PORT = 16;
 
-constexpr int INTAKE_PORT = 2;
+constexpr int INTAKE_PORT = -2;
 constexpr int INTAKE_TOP_PORT = -2;
 
 constexpr int MOGO_CLAMP_PORT = 1;
@@ -70,7 +71,7 @@ pros::Motor intake (
 pros::adi::DigitalOut mogo_clamp_piston (MOGO_CLAMP_PORT);
 pros::adi::DigitalOut mogo_bar_piston (MOGO_BAR_PORT);
 
-pros::adi::DigitalOut arm (ARM_PORT);
+pros::Motor arm (ARM_PORT);
 pros::adi::DigitalOut arm_end (ARM_END_PORT);
 
 pros::IMU imu (IMU_PORT);
@@ -136,7 +137,7 @@ void initialize() {
 void disabled() {}
 
 void competition_initialize() {	
-	arm.set_value(true);
+
 }
 
 ASSET(test_txt)
@@ -250,16 +251,17 @@ void opcontrol() {
 		if (master.get_digital(pros::E_CONTROLLER_DIGITAL_A)) mogo_clamp_piston.set_value(true);
 		else if (master.get_digital(pros::E_CONTROLLER_DIGITAL_B)) mogo_clamp_piston.set_value(false);
 		
-		if (master.get_digital(pros::E_CONTROLLER_DIGITAL_UP)) arm.set_value(false);
-		else if (master.get_digital(pros::E_CONTROLLER_DIGITAL_DOWN)) arm.set_value(true);
+		if (master.get_digital(pros::E_CONTROLLER_DIGITAL_UP)) arm.move(ARM_SPEED);
+		else if (master.get_digital(pros::E_CONTROLLER_DIGITAL_DOWN)) arm.move(-ARM_SPEED);
+		else arm.brake();
 
-		if(master.get_digital(pros::E_CONTROLLER_DIGITAL_R1)){
-			arm_end.set_value(true);
-			arm.set_value(true);
-		}
-		else if(master.get_digital(pros::E_CONTROLLER_DIGITAL_R2)){
-		arm.set_value(false);
-		}
+		// if(master.get_digital(pros::E_CONTROLLER_DIGITAL_R1)){
+		// 	arm_end.set_value(true);
+		// 	arm.set_value(true);
+		// }
+		// else if(master.get_digital(pros::E_CONTROLLER_DIGITAL_R2)){
+		// 	arm.set_value(false);
+		// }
 		if(master.get_digital(pros::E_CONTROLLER_DIGITAL_LEFT)){
 		arm_end.set_value(true);
 		}
