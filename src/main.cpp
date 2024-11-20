@@ -145,6 +145,8 @@ ASSET(rightGrabRings_txt)
 void autonomous() {
 	chassis.setPose(-60, 0, 270);
 
+	chassis.moveToPoint(-58, 0, 3000, {.forwards=false});
+
 	chassis.moveToPose(-50, -18, 0, 3000, {.forwards = false});
 	mogo_clamp_piston.set_value(true);
 	chassis.waitUntilDone();
@@ -155,47 +157,47 @@ void autonomous() {
 
 	pros::delay(750);
 
-	intake_motor.brake();
-
-	chassis.moveToPoint(38, 8, 10000);
+	chassis.moveToPoint(24, 14, 10000);
 	chassis.waitUntilDone();
 
-	pros::delay(50000);
+	pros::delay(250);
 
-	chassis.moveToPoint(-23.758, -23.789, 3000);
+	chassis.moveToPoint(24.271, -45.886, 5000);
 	chassis.waitUntilDone();
 
-	chassis.moveToPoint(-23.496, -46.852, 3000);
-	chassis.waitUntilDone();
+	pros::delay(25000);
 
-	chassis.moveToPoint(-59.008, -47.245, 3000);
-	chassis.waitUntilDone();
+	// chassis.moveToPoint(-23.496, -46.852, 3000);
+	// chassis.waitUntilDone();
 
-	chassis.moveToPoint(-47.214, -58.907, 3000);
-	chassis.waitUntilDone();
+	// chassis.moveToPoint(-59.008, -47.245, 3000);
+	// chassis.waitUntilDone();
+
+	// chassis.moveToPoint(-47.214, -58.907, 3000);
+	// chassis.waitUntilDone();
 	
-	chassis.turnToPoint(-23.496, -46.852, 3000);
-	chassis.waitUntilDone();
+	// chassis.turnToPoint(-23.496, -46.852, 3000);
+	// chassis.waitUntilDone();
 
-	intake.brake();
+	// intake.brake();
 
-	chassis.moveToPose(-57.297, -63.502, 67.5, 3000);
-
-	chassis.waitUntilDone();
-
-	mogo_clamp_piston.set_value(false);
-
-	// chassis.moveToPoint(49.045, 9.955, 1000, {.forwards=false,.maxSpeed=80,.minSpeed=0});
+	// chassis.moveToPose(-57.297, -63.502, 67.5, 3000);
 
 	// chassis.waitUntilDone();
-	// chassis.turnToPoint(70, -1, 1000, {.maxSpeed=80,.minSpeed=0});
-	// arm.set_value(false);
-	// arm_end.set_value(true);
 
-	// chassis.waitUntilDone();
-	// chassis.moveToPoint(58.47, 5.4, 1000, {.maxSpeed=80,.minSpeed=0});
+	// mogo_clamp_piston.set_value(false);
 
-	// chassis.waitUntilDone();
+	// // chassis.moveToPoint(49.045, 9.955, 1000, {.forwards=false,.maxSpeed=80,.minSpeed=0});
+
+	// // chassis.waitUntilDone();
+	// // chassis.turnToPoint(70, -1, 1000, {.maxSpeed=80,.minSpeed=0});
+	// // arm.set_value(false);
+	// // arm_end.set_value(true);
+
+	// // chassis.waitUntilDone();
+	// // chassis.moveToPoint(58.47, 5.4, 1000, {.maxSpeed=80,.minSpeed=0});
+
+	// // chassis.waitUntilDone();
 	// arm.set_value(false);
 	// chassis.moveToPose(27.16, 21.727, 115, 3000, {.forwards = false,.maxSpeed=80,.minSpeed=0});
 
