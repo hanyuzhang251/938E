@@ -1,8 +1,10 @@
 #include "main.h"
 #include "pros/adi.hpp"
 #include "pros/misc.h"
+#include "pros/rtos.hpp"
 #include <cmath>
 #include <cstddef>
+#include <queue>
 
 // config ports
 
@@ -67,6 +69,17 @@ int turn_ratio = 1;
 
 bool speed_comp = true;
 
+// config auton
+
+struct PIDController {
+	float kP = 0;
+	float kI = 0;
+	float kD = 0;
+};
+
+PIDController lateral_pid ({0, 0, 0});
+PIDController angular_pid ({0, 0, 0});
+
 // defs
 
 pros::Controller master(pros::E_CONTROLLER_MASTER);
@@ -120,9 +133,43 @@ void disabled() {}
 
 void competition_initialize() {}
 
-void autonomous() {}
+float calcPowerPID(int error, int integral, PIDController pid_controller) {
+	float power;
 
-float calcPower(int value, int other_value, DriveCurve curve, int ratio, int other_ratio) {
+	power = error * pid_controller.kP + integral * pid_controller.kI;
+}
+
+struct Pose {
+	int xPos = 0;
+	int yPos = 0;
+	int head = 0;
+};
+
+std::queue<Pose> instructions;
+
+void auton_async() {
+	Pose target;
+
+	int error = 0;
+	int integral = 0;
+
+	while (true) {
+		pros::delay(15);
+
+		if (instructions.empty()) continue;
+
+		Pose target = instructions.front();
+		
+	}
+}
+
+void autonomous() {
+	pros::Task auton_task(auton_async);
+
+	auton_task.remove();
+}
+
+float calcPowerCurve(int value, int other_value, DriveCurve curve, int ratio, int other_ratio) {
 	if (std::abs(value) <= curve.deadband) return 0;
 
 	float ratio_mult = (float) ratio / (ratio + other_ratio);
