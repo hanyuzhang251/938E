@@ -5,6 +5,11 @@
 #include <cmath>
 #include <cstddef>
 #include <queue>
+#include <atomic>
+
+constexpr double INCH_PER_G = 386.08858267717;
+
+constexpr long PROCESS_DELAY = 15;
 
 // config ports
 
@@ -75,10 +80,11 @@ struct PIDController {
 	float kP = 0;
 	float kI = 0;
 	float kD = 0;
+	float small_error = 1;
 };
 
-PIDController lateral_pid ({0, 0, 0});
-PIDController angular_pid ({0, 0, 0});
+PIDController lateral_pid ({0, 0, 0, 1});
+PIDController angular_pid ({0, 0, 0, 3});
 
 // defs
 
@@ -107,24 +113,72 @@ pros::adi::DigitalOut arm_end (ARM_END_PORT);
 pros::IMU imu (IMU_PORT);
 
 // robot position
-float xPos = 0;
-float yPos = 0;
-float head = 0;
+std::atomic<float> xPos (0);
+std::atomic<float> yPos (0);
+std::atomic<float> head (0);
+
+long last_pos_update = 0;
+
+void get_robot_position(long last_update) {
+	last_pos_update = last_update;
+
+	xPos.fetch_add(imu.get_accel().x * INCH_PER_G);
+	yPos.fetch_add(imu.get_accel().y *INCH_PER_G);
+
+	head.store(imu.get_heading());
+}
+
+// telemetry
+constexpr size_t TELEMTRY_SIZE = 100;
+std::string telemetry[TELEMTRY_SIZE];
+
+void log(std::string str) {
+	for (int i = TELEMTRY_SIZE - 1; i > 0; --i) {
+		telemetry[i] = telemetry[i - 1];
+	}
+
+	telemetry[0] = str;
+
+	master.set_text(0, 0, telemetry[0]);
+	master.set_text(1, 0, telemetry[1]);
+	master.set_text(2, 0, telemetry[2]);
+}
+
+void amend(std::string str) {
+	telemetry[0] = str;
+
+	master.set_text(0, 0, telemetry[0]);
+}
+
+// competition:
 
 void initialize() {
+	log("initializing");
+
 	pros::lcd::initialize();
     
-	master.set_text(0, 0, "calibrating imu");
-	imu.reset(true);
-	master.set_text(0, 0, "imu calibrated");
+	log("calibrating imu");
+	auto start = pros::millis();
 
-    pros::Task screen_task([&]() {
+	imu.reset();
+	while(imu.is_calibrating()) {
+		amend("calibrating imu " + std::to_string(pros::millis()));
+		pros::delay(PROCESS_DELAY);
+	}
+
+	amend("imu calibrated " +  std::to_string(pros::millis()));
+
+    pros::Task pos_tracking_task([&]() {
+		last_pos_update = pros::millis();
+
         while (true) {
-            pros::lcd::print(0, "xPos: %f", xPos);
-            pros::lcd::print(1, "yPos: %f", yPos);
-            pros::lcd::print(2, "head: %f", head);
+			get_robot_position(last_pos_update);
+			
+            pros::lcd::print(0, "xPos: %f", xPos.load());
+            pros::lcd::print(1, "yPos: %f", yPos.load());
+            pros::lcd::print(2, "head: %f", head.load());
 
-            pros::delay(20);
+            pros::delay(PROCESS_DELAY);
         }
     });
 }
@@ -140,30 +194,40 @@ float calcPowerPID(int error, int integral, PIDController pid_controller) {
 }
 
 struct Pose {
-	int xPos = 0;
-	int yPos = 0;
-	int head = 0;
+	float xPos = 0;
+	float yPos = 0;
+	float head = 0;
 };
 
 std::queue<Pose> instructions;
 
 void auton_async() {
+	log("async auton started");
+
 	Pose target;
 
 	int error = 0;
 	int integral = 0;
 
 	while (true) {
-		pros::delay(15);
+		pros::delay(PROCESS_DELAY);
 
 		if (instructions.empty()) continue;
 
 		Pose target = instructions.front();
-		
+
+	
+		float right_side_error = std::abs(target.head - head.load());
+		float left_side_error = std::abs(std::min(target.head, head.load()) + 360 - std::max(target.head, head.load()));
+		if (error >= angular_pid.small_error) {
+			dt_left_motors.move(calcPowerPID(error, integral, angular_pid));
+		}
 	}
 }
 
 void autonomous() {
+	log("auton stated");
+
 	pros::Task auton_task(auton_async);
 
 	auton_task.remove();
@@ -189,15 +253,15 @@ float calcPowerCurve(int value, int other_value, DriveCurve curve, int ratio, in
 }
 
 void opcontrol() {
-	master.set_text(0, 0, "op control");
+	log("op control started");
 
     while (true) {
 		// driving
         int drive_value = master.get_analog(DRIVE_JOYSTICK);
         int turn_value = master.get_analog(TURN_JOYSTICK);
 
-		float drive_power = calcPower(drive_value, turn_value, drive_curve, drive_ratio, turn_ratio);
-		float turn_power = calcPower(turn_value, drive_value, turn_curve, turn_ratio, drive_ratio);
+		float drive_power = calcPowerCurve(drive_value, turn_value, drive_curve, drive_ratio, turn_ratio);
+		float turn_power = calcPowerCurve(turn_value, drive_value, turn_curve, turn_ratio, drive_ratio);
 
 		dt_left_motors.move(drive_power + turn_power);
 		dt_right_motors.move(drive_power - turn_power);
