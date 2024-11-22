@@ -223,10 +223,10 @@ void disabled() {}
 
 void competition_initialize() {}
 
-float calcPowerPID(int error, int integral, PIDController pid_controller) {
+float calcPowerPID(int error, int integral, int derivative, PIDController pid_controller) {
 	float power;
 
-	power = error * pid_controller.kP + integral * pid_controller.kI;
+	power = error * pid_controller.kP + integral * pid_controller.kI + derivative * pid_controller.kP;
 
 	return power;
 }
@@ -248,10 +248,14 @@ void adjust_angle(Pose target) {
 
 	log("adj. angle from " + std::to_string(head) + " to " + std::to_string(target.head));
 
+	int prev_error = 0;
 	int error = 0;
 	int integral = 0;
+	int derivative = 0;
 
 	while(true) {
+		prev_error = error;
+
 		float right_side_error = std::abs(target.head - head.load());
 		float left_side_error = std::abs(std::min(target.head, head.load()) + 360 - std::max(target.head, head.load()));
 
@@ -259,39 +263,10 @@ void adjust_angle(Pose target) {
 		else error = -left_side_error;
 
 		integral += error;
+		derivative = error - prev_error;
 
 		if (std::abs(error) >= angular_pid.small_error) {
-			float calc_power = calcPowerPID(error, integral, angular_pid);
-
-			dt_left_motors.move(calc_power);
-			dt_right_motors.move(-calc_power);
-		} else {;
-			dt_left_motors.brake();
-			dt_right_motors.brake();
-			break;
-		}
-
-		pros::delay(PROCESS_DELAY);
-	}
-}
-
-void adjust_pos(Pose target) {
-	log("adj. angle from " + std::to_string(head) + " to " + std::to_string(target.head));
-
-	int error = 0;
-	int integral = 0;
-
-	while(true) {
-		float right_side_error = std::abs(target.head - head.load());
-		float left_side_error = std::abs(std::min(target.head, head.load()) + 360 - std::max(target.head, head.load()));
-
-		if (right_side_error < left_side_error) error = right_side_error;
-		else error = -left_side_error;
-
-		integral += error;
-
-		if (std::abs(error) >= angular_pid.small_error) {
-			float calc_power = calcPowerPID(error, integral, angular_pid);
+			float calc_power = calcPowerPID(error, integral, derivative, angular_pid);
 
 			dt_left_motors.move(calc_power);
 			dt_right_motors.move(-calc_power);
@@ -353,18 +328,24 @@ float calcPowerCurve(int value, int other_value, DriveCurve curve, int ratio, in
 std::atomic<int> target_arm_pos = 0;
 
 void op_async() {
+	int prev_error = 0;
 	int error = 0;
 	int integral = 0;
+	int derivative = 0;
 
 	while(true) {
 		if (target_arm_pos.load() < 0) target_arm_pos.store(0);
 
+		prev_error = error;
 		error = target_arm_pos.load() - arm.get_position();
 		integral += error;
+		derivative = error - prev_error;
 
-		if (std::abs(error) <= arm_pid.small_error) integral = 0;
+		if (std::abs(error) <= arm_pid.small_error) {
+			integral = 0;
+		}
 
-		float calc_power = calcPowerPID(error, integral, arm_pid);
+		float calc_power = calcPowerPID(error, integral, derivative, arm_pid);
 
 		if (calc_power < 0) calc_power /= 2;
 
