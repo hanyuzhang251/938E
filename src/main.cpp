@@ -204,6 +204,8 @@ void initialize() {
 
         while (true) {
 			get_robot_position(last_pos_update);
+
+			update_telemetry();
 			
             pros::lcd::print(0, "xPos: %f", xPos.load());
             pros::lcd::print(1, "yPos: %f", yPos.load());
