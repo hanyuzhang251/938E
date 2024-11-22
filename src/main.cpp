@@ -209,6 +209,8 @@ float calcPowerPID(int error, int integral, PIDController pid_controller) {
 	float power;
 
 	power = error * pid_controller.kP + integral * pid_controller.kI;
+
+	return power;
 }
 
 struct Pose {
