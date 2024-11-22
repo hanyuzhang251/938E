@@ -7,6 +7,7 @@
 #include <queue>
 #include <atomic>
 #include <string>
+#include <sys/_stdint.h>
 
 #define digi_button controller_digital_e_t
 #define anal_button controller_analog_e_t
@@ -94,7 +95,8 @@ bool speed_comp = true;
 
 // config auton
 
-PIDController lateral_pid ({0, 0, 0, 1});
+PIDController lateral_pid ({1, 0, 0, 1});
+
 PIDController angular_pid ({0, 0, 0, 3});
 
 // defs
@@ -126,7 +128,7 @@ pros::IMU imu (IMU_PORT);
 // robot position
 std::atomic<float> xPos (0);
 std::atomic<float> yPos (0);
-std::atomic<float> head (0);
+std::atomic<float> heading (0);
 
 long last_pos_update = 0;
 
@@ -136,7 +138,7 @@ void get_robot_position(long last_update) {
 	xPos.fetch_add(imu.get_accel().x);
 	yPos.fetch_add(imu.get_accel().y);
 
-	head.store(imu.get_heading());
+	heading.store(imu.get_heading());
 }
 
 // telemetry
@@ -161,7 +163,7 @@ void update_telemetry() {
 	} else if (check_multi_digi_button(3, POS_INFO_BUTTONS)) {
 		master.set_text(0, 0, "xPos " + std::to_string(xPos.load()));
 		master.set_text(1, 0, "yPos " + std::to_string(yPos.load()));
-		master.set_text(2, 0, "head " + std::to_string(head.load()));
+		master.set_text(2, 0, "head " + std::to_string(heading.load()));
 	} else {
 		master.set_text(0, 0, telemetry[0]);
 		master.set_text(1, 0, telemetry[1]);
@@ -212,9 +214,9 @@ void initialize() {
 			
             pros::lcd::print(0, "xPos: %f", xPos.load());
             pros::lcd::print(1, "yPos: %f", yPos.load());
-            pros::lcd::print(2, "head: %f", head.load());
+            pros::lcd::print(2, "head: %f", heading.load());
 
-            pros::delay(LONG_DELAY);
+            pros::delay(PROCESS_DELAY);
         }
     });
 }
@@ -226,7 +228,7 @@ void competition_initialize() {}
 float calcPowerPID(int error, int integral, int derivative, PIDController pid_controller) {
 	float power;
 
-	power = error * pid_controller.kP + integral * pid_controller.kI + derivative * pid_controller.kP;
+	power = error * pid_controller.kP + integral * pid_controller.kI + derivative * pid_controller.kD;
 
 	return power;
 }
@@ -238,72 +240,85 @@ struct Pose {
 	bool forward = true;
 };
 
-std::queue<Pose> instructions;
+int mod(int a, int b) {
+    return (a % b + b) % b;
+}
 
-void adjust_angle(Pose target) {
-	if (!target.forward) {
-		target.head += 180;
-		if (target.head >= 360) target.head -= 360;
-	}
-
-	log("adj. angle from " + std::to_string(head) + " to " + std::to_string(target.head));
-
+/**
+ * Rotates the robot to a heading
+ * 
+ * @param target_heading heading to turn to
+ * @param timeout time allocated to the process
+ */
+void turn_to_heading(float target_heading, int32_t timeout) {
+	// variables used for PID calculation
 	int prev_error = 0;
 	int error = 0;
 	int integral = 0;
 	int derivative = 0;
 
+	// direction to turn in; true for clockwise and false for counterclockwise
+	bool turn_dir;
+
+	// calculates the distance for turning clockwise and counterclockwise
+	float clockwise_diff = mod(target_heading - heading.load(), 360);
+	float counterclockwise_diff = mod(heading.load() - target_heading, 360);
+
+	// compares the errors and selects the best option, setting turn_dur and error
+	if (clockwise_diff <= counterclockwise_diff) {
+		turn_dir = true;
+		error = clockwise_diff;
+	} else {
+		turn_dir = false;
+		error = -counterclockwise_diff;
+	}
+
+	// when the process should timeout
+	int32_t end_time = pros::millis() + timeout;
+
+	// turning toward target heading
 	while(true) {
+		// updating values
 		prev_error = error;
-
-		float right_side_error = std::abs(target.head - head.load());
-		float left_side_error = std::abs(std::min(target.head, head.load()) + 360 - std::max(target.head, head.load()));
-
-		if (right_side_error < left_side_error) error = right_side_error;
-		else error = -left_side_error;
-
+		if (turn_dir) error = mod(target_heading - heading.load(), 360);
+		else error = -mod(heading.load() - target_heading, 360);
 		integral += error;
 		derivative = error - prev_error;
 
-		if (std::abs(error) >= angular_pid.small_error) {
-			float calc_power = calcPowerPID(error, integral, derivative, angular_pid);
-
-			dt_left_motors.move(calc_power);
-			dt_right_motors.move(-calc_power);
-		} else {;
+		// check if the error is acceptable and we are stable
+		if (std::abs(prev_error) <= angular_pid.small_error && std::abs(error) <= angular_pid.small_error) {
+			// if so stop the motors and break
 			dt_left_motors.brake();
 			dt_right_motors.brake();
 			break;
 		}
 
+		// check if we crossed the target heading
+		if (turn_dir && mod(heading.load() - target_heading, 360) < mod(target_heading - heading.load(), 360)
+		|| !turn_dir && mod(target_heading - heading.load(), 360) < mod(heading.load() - target_heading, 360)) {
+			// if so we flip the turn direction and set integral to 0;
+			turn_dir = !turn_dir;
+			integral = 0;
+		}
+
+		// calculate the power that should be put into the motors
+		float calc_power = calcPowerPID(error, integral, derivative, angular_pid);
+
+		// run the motors at the calculated power
+		dt_left_motors.move(calc_power);
+		dt_right_motors.move(-calc_power);
+
+		// check if we should end the process
+		if (pros::millis() >= end_time) break;
+
 		pros::delay(PROCESS_DELAY);
-	}
-}
-
-void auton_async() {
-	log("async auton start");
-
-	Pose target;
-
-	while (true) {
-		pros::delay(PROCESS_DELAY);
-
-		if (instructions.empty()) continue;
-
-		Pose target = instructions.front();
-
-		adjust_angle(target);
 	}
 }
 
 void autonomous() {
 	log("auton start");
 
-	pros::Task auton_task(auton_async);
-
-	log("end async auton");
-	auton_task.remove();
-	amend_last_log("async auton end");
+	turn_to_heading(90, 3000);
 }
 
 float calcPowerCurve(int value, int other_value, DriveCurve curve, int ratio, int other_ratio) {
@@ -325,7 +340,7 @@ float calcPowerCurve(int value, int other_value, DriveCurve curve, int ratio, in
 	return sign_mult * std::max(curve.minOutput, output);
 }
 
-std::atomic<int> target_arm_pos = 0;
+std::atomic<int> heading_arm_pos = 0;
 
 void op_async() {
 	int prev_error = 0;
@@ -334,10 +349,10 @@ void op_async() {
 	int derivative = 0;
 
 	while(true) {
-		if (target_arm_pos.load() < 0) target_arm_pos.store(0);
+		if (heading_arm_pos.load() < 0) heading_arm_pos.store(0);
 
 		prev_error = error;
-		error = target_arm_pos.load() - arm.get_position();
+		error = heading_arm_pos.load() - arm.get_position();
 		integral += error;
 		derivative = error - prev_error;
 
@@ -385,8 +400,8 @@ void opcontrol() {
 		else if (master.get_digital(BAR_OFF_BUTTON)) bar_piston.set_value(false);
 
 		// arm
-		if (master.get_digital(ARM_UP_BUTTON)) target_arm_pos += ARM_SPEED;
-		else if (master.get_digital(ARM_DOWN_BUTTON)) target_arm_pos -= ARM_SPEED;
+		if (master.get_digital(ARM_UP_BUTTON)) heading_arm_pos += ARM_SPEED;
+		else if (master.get_digital(ARM_DOWN_BUTTON)) heading_arm_pos -= ARM_SPEED;
 
 		// arm end
 		if(master.get_digital(ARM_END_ON_BUTTON)) arm_end.set_value(true);
