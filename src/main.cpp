@@ -9,6 +9,7 @@
 #include <string>
 #include <sys/_stdint.h>
 
+
 #define DIGI_BUTTON controller_digital_e_t
 #define ANAL_BUTTON controller_analog_e_t
 
@@ -358,10 +359,6 @@ struct Pose {
 	float head = 0;
 	bool forward = true;
 };
-
-int mod(int a, int b) {
-    return (a % b + b) % b;
-}
 
 void turn_to_heading(float target_heading, int32_t timeout) {
 	// error normalization function to deal with 0-360 wrap around
