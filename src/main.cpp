@@ -97,7 +97,7 @@ bool speed_comp = true;
 
 PIDController lateral_pid ({1, 0, 0, 1});
 
-PIDController angular_pid ({0, 0, 0, 3});
+PIDController angular_pid ({0.5, 0.02, 5, 3});
 
 // defs
 
@@ -285,13 +285,13 @@ void turn_to_heading(float target_heading, int32_t timeout) {
 		integral += error;
 		derivative = error - prev_error;
 
-		// check if the error is acceptable and we are stable
-		if (std::abs(prev_error) <= angular_pid.small_error && std::abs(error) <= angular_pid.small_error) {
-			// if so stop the motors and break
-			dt_left_motors.brake();
-			dt_right_motors.brake();
-			break;
-		}
+		// // check if the error is acceptable and we are stable
+		// if (std::abs(prev_error) <= angular_pid.small_error && std::abs(error) <= angular_pid.small_error) {
+		// 	// if so stop the motors and break
+		// 	dt_left_motors.brake();
+		// 	dt_right_motors.brake();
+		// 	break;
+		// }
 
 		// check if we crossed the target heading
 		if (turn_dir && mod(heading.load() - target_heading, 360) < mod(target_heading - heading.load(), 360)
@@ -319,6 +319,11 @@ void autonomous() {
 	log("auton start");
 
 	turn_to_heading(90, 3000);
+
+	turn_to_heading(0, 3000);
+
+	dt_left_motors.brake();
+	dt_right_motors.brake();
 }
 
 float calcPowerCurve(int value, int other_value, DriveCurve curve, int ratio, int other_ratio) {
