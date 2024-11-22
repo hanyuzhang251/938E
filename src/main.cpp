@@ -14,6 +14,22 @@
 constexpr double INCH_PER_G = 386.08858267717;
 
 constexpr long PROCESS_DELAY = 15;
+constexpr long LONG_DELAY = 34;
+
+// structs
+
+struct DriveCurve {
+	float deadband = 0;
+	float minOutput = 0;
+	float expoCurve = 1;
+};
+
+struct PIDController {
+	float kP = 0;
+	float kI = 0;
+	float kD = 0;
+	float small_error = 1;
+};
 
 // config ports
 
@@ -39,8 +55,9 @@ constexpr int IMU_PORT = 21;
 
 constexpr int INTAKE_MOTOR_SPEED = 127;
 
-constexpr int ARM_SPEED = 127;
-constexpr int ARM_IDLE_SPEED = 5;
+constexpr int ARM_SPEED = 50;
+
+PIDController arm_pid ({0.3, 0, 0, 30});
 
 // config controller
 
@@ -67,12 +84,6 @@ constexpr pros::digi_button ARM_END_OFF_BUTTON = pros::E_CONTROLLER_DIGITAL_LEFT
 
 // config drive
 
-struct DriveCurve {
-	float deadband = 0;
-	float minOutput = 0;
-	float expoCurve = 1;
-};
-
 DriveCurve drive_curve ({3, 10, 2});
 DriveCurve turn_curve ({3, 10, 2});
 
@@ -82,13 +93,6 @@ int turn_ratio = 1;
 bool speed_comp = true;
 
 // config auton
-
-struct PIDController {
-	float kP = 0;
-	float kI = 0;
-	float kD = 0;
-	float small_error = 1;
-};
 
 PIDController lateral_pid ({0, 0, 0, 1});
 PIDController angular_pid ({0, 0, 0, 3});
@@ -129,8 +133,8 @@ long last_pos_update = 0;
 void get_robot_position(long last_update) {
 	last_pos_update = last_update;
 
-	xPos.fetch_add(imu.get_accel().x * INCH_PER_G);
-	yPos.fetch_add(imu.get_accel().y *INCH_PER_G);
+	xPos.fetch_add(imu.get_accel().x);
+	yPos.fetch_add(imu.get_accel().y);
 
 	head.store(imu.get_heading());
 }
@@ -146,7 +150,9 @@ bool check_multi_digi_button(int n, const pros::digi_button* digi_buttons) {
 }
 
 void update_telemetry() {
-	master.clear();
+	master.clear_line(0);
+	master.clear_line(1);
+	master.clear_line(2);
 
 	if (check_multi_digi_button(3, GENERAL_INFO_BUTTONS)) {
 		master.set_text(0, 0, "VEX2024-938E");
@@ -169,16 +175,12 @@ void log(std::string str) {
 	}
 
 	telemetry[0] = str;
-
-	update_telemetry();
 }
 
 void amend_last_log(std::string str) {
 	telemetry[0] = str;
 
 	master.set_text(0, 0, telemetry[0]);
-
-	update_telemetry();
 }
 
 // competition:
@@ -205,13 +207,14 @@ void initialize() {
         while (true) {
 			get_robot_position(last_pos_update);
 
+			if (master.get_digital(MOGO_ON_BUTTON))
 			update_telemetry();
 			
             pros::lcd::print(0, "xPos: %f", xPos.load());
             pros::lcd::print(1, "yPos: %f", yPos.load());
             pros::lcd::print(2, "head: %f", head.load());
 
-            pros::delay(PROCESS_DELAY);
+            pros::delay(LONG_DELAY);
         }
     });
 }
@@ -232,11 +235,17 @@ struct Pose {
 	float xPos = 0;
 	float yPos = 0;
 	float head = 0;
+	bool forward = true;
 };
 
 std::queue<Pose> instructions;
 
 void adjust_angle(Pose target) {
+	if (!target.forward) {
+		target.head += 180;
+		if (target.head >= 360) target.head -= 360;
+	}
+
 	log("adj. angle from " + std::to_string(head) + " to " + std::to_string(target.head));
 
 	int error = 0;
@@ -249,12 +258,44 @@ void adjust_angle(Pose target) {
 		if (right_side_error < left_side_error) error = right_side_error;
 		else error = -left_side_error;
 
+		integral += error;
+
 		if (std::abs(error) >= angular_pid.small_error) {
 			float calc_power = calcPowerPID(error, integral, angular_pid);
 
 			dt_left_motors.move(calc_power);
 			dt_right_motors.move(-calc_power);
-		} else {
+		} else {;
+			dt_left_motors.brake();
+			dt_right_motors.brake();
+			break;
+		}
+
+		pros::delay(PROCESS_DELAY);
+	}
+}
+
+void adjust_pos(Pose target) {
+	log("adj. angle from " + std::to_string(head) + " to " + std::to_string(target.head));
+
+	int error = 0;
+	int integral = 0;
+
+	while(true) {
+		float right_side_error = std::abs(target.head - head.load());
+		float left_side_error = std::abs(std::min(target.head, head.load()) + 360 - std::max(target.head, head.load()));
+
+		if (right_side_error < left_side_error) error = right_side_error;
+		else error = -left_side_error;
+
+		integral += error;
+
+		if (std::abs(error) >= angular_pid.small_error) {
+			float calc_power = calcPowerPID(error, integral, angular_pid);
+
+			dt_left_motors.move(calc_power);
+			dt_right_motors.move(-calc_power);
+		} else {;
 			dt_left_motors.brake();
 			dt_right_motors.brake();
 			break;
@@ -309,8 +350,34 @@ float calcPowerCurve(int value, int other_value, DriveCurve curve, int ratio, in
 	return sign_mult * std::max(curve.minOutput, output);
 }
 
+std::atomic<int> target_arm_pos = 0;
+
+void op_async() {
+	int error = 0;
+	int integral = 0;
+
+	while(true) {
+		if (target_arm_pos.load() < 0) target_arm_pos.store(0);
+
+		error = target_arm_pos.load() - arm.get_position();
+		integral += error;
+
+		if (std::abs(error) <= arm_pid.small_error) integral = 0;
+
+		float calc_power = calcPowerPID(error, integral, arm_pid);
+
+		if (calc_power < 0) calc_power /= 2;
+
+		arm.move(calc_power);
+
+		pros::delay(PROCESS_DELAY);
+	}
+}
+
 void opcontrol() {
 	log("op control started");
+
+	pros::Task op_async_task(op_async);
 
     while (true) {
 		// driving
@@ -337,15 +404,13 @@ void opcontrol() {
 		else if (master.get_digital(BAR_OFF_BUTTON)) bar_piston.set_value(false);
 
 		// arm
-		if (master.get_digital(ARM_UP_BUTTON)) arm.move(ARM_SPEED);
-		else if (master.get_digital(ARM_DOWN_BUTTON)) arm.move(-ARM_SPEED);
-		else arm.move(ARM_IDLE_SPEED);
+		if (master.get_digital(ARM_UP_BUTTON)) target_arm_pos += ARM_SPEED;
+		else if (master.get_digital(ARM_DOWN_BUTTON)) target_arm_pos -= ARM_SPEED;
 
 		// arm end
-
 		if(master.get_digital(ARM_END_ON_BUTTON)) arm_end.set_value(true);
 		else if(master.get_digital(ARM_END_OFF_BUTTON)) arm_end.set_value(false);
 
-        pros::delay(25);
+        pros::delay(PROCESS_DELAY);
     }
 }
