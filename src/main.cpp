@@ -9,8 +9,8 @@
 #include <string>
 #include <sys/_stdint.h>
 
-#define DIGI_BUTTON controller_digital_e_t
-#define ANAL_BUTTON controller_analog_e_t
+#define digi_button controller_digital_e_t
+#define anal_button controller_analog_e_t
 
 #define CTRL_ANAL_LX E_CONTROLLER_ANALOG_LEFT_X
 #define CTRL_ANAL_LY E_CONTROLLER_ANALOG_LEFT_Y
@@ -33,10 +33,27 @@
 #define CTRL_DIGI_LEFT E_CONTROLLER_DIGITAL_LEFT
 #define CTRL_DIGI_RIGHT E_CONTROLLER_DIGITAL_RIGHT
 
+#define Cartridge MotorGearset
+
+// If these are change they will probably screw up the entire PID system, so
+// unless you desperately need to, don't.
 constexpr long PROCESS_DELAY = 15;
 constexpr long LONG_DELAY = 34;
 
-/**********************************  CONFIG  *********************************/
+/**
+ * Returns the sign of a value
+ *
+ * @param val value
+ */
+template <typename T> int sgn(T val) {
+    return (T(0) < val) - (val < T(0));
+}
+
+
+
+/*****************************************************************************/
+/*                                  CONFIG                                   */
+/*****************************************************************************/
 
 // PORTS
 
@@ -60,53 +77,25 @@ constexpr int IMU_PORT = 21;
 
 // BUTTONS
 
-constexpr pros::ANAL_BUTTON DRIVE_JOYSTICK = pros::CTRL_ANAL_LY;
-constexpr pros::ANAL_BUTTON TURN_JOYSTICK = pros::CTRL_ANAL_RX;
+constexpr pros::anal_button DRIVE_JOYSTICK = pros::CTRL_ANAL_LY;
+constexpr pros::anal_button TURN_JOYSTICK = pros::CTRL_ANAL_RX;
 
-constexpr pros::DIGI_BUTTON INTAKE_FWD_BUTTON = pros::CTRL_DIGI_L2;
-constexpr pros::DIGI_BUTTON INTAKE_REV_BUTTON = pros::CTRL_DIGI_L1;
+constexpr pros::digi_button INTAKE_FWD_BUTTON = pros::CTRL_DIGI_L2;
+constexpr pros::digi_button INTAKE_REV_BUTTON = pros::CTRL_DIGI_L1;
 
-constexpr pros::DIGI_BUTTON MOGO_ON_BUTTON = pros::CTRL_DIGI_A;
-constexpr pros::DIGI_BUTTON MOGO_OFF_BUTTON = pros::CTRL_DIGI_B;
+constexpr pros::digi_button MOGO_ON_BUTTON = pros::CTRL_DIGI_A;
+constexpr pros::digi_button MOGO_OFF_BUTTON = pros::CTRL_DIGI_B;
 
-constexpr pros::DIGI_BUTTON BAR_ON_BUTTON = pros::CTRL_DIGI_X;
-constexpr pros::DIGI_BUTTON BAR_OFF_BUTTON = pros::CTRL_DIGI_Y;
+constexpr pros::digi_button BAR_ON_BUTTON = pros::CTRL_DIGI_X;
+constexpr pros::digi_button BAR_OFF_BUTTON = pros::CTRL_DIGI_Y;
 
-constexpr pros::DIGI_BUTTON ARM_UP_BUTTON = pros::CTRL_DIGI_UP;
-constexpr pros::DIGI_BUTTON ARM_DOWN_BUTTON = pros::CTRL_DIGI_DOWN;
+constexpr pros::digi_button ARM_UP_BUTTON = pros::CTRL_DIGI_UP;
+constexpr pros::digi_button ARM_DOWN_BUTTON = pros::CTRL_DIGI_DOWN;
 
-constexpr pros::DIGI_BUTTON ARM_END_ON_BUTTON = pros::CTRL_DIGI_RIGHT;
-constexpr pros::DIGI_BUTTON ARM_END_OFF_BUTTON = pros::CTRL_DIGI_LEFT;
+constexpr pros::digi_button ARM_END_ON_BUTTON = pros::CTRL_DIGI_RIGHT;
+constexpr pros::digi_button ARM_END_OFF_BUTTON = pros::CTRL_DIGI_LEFT;
 
-// DRIVING
-
-constexpr float DRIVE_DEADBAND = 3;
-constexpr float DRIVE_MIN_OUTPUT = 10;
-constexpr float DRIVE_EXPO_CURVE = 2;
-
-constexpr float TURN_DEADBAND = 3;
-constexpr float TURN_MIN_OUTPUT = 10;
-constexpr float TURN_EXPO_CURVE = 2;
-
-constexpr int drive_ratio = 1;
-constexpr int turn_ratio = 1;
-
-constexpr bool speed_comp = true;
-
-constexpr int INTAKE_MOTOR_SPEED = 127;
-
-constexpr int ARM_SPEED = 50;
-
-/********************************  CONFIG END  *******************************/
-
-/**
- * Returns the sign of a value
- *
- * @param val value
- */
-template <typename T> int sgn(T val) {
-    return (T(0) < val) - (val < T(0));
-}
+// PID CONTROLLER
 
 /**
  * Stores the variables for a PID controller
@@ -125,6 +114,92 @@ struct PIDController {
 	float windup = 0;
 	float slew = 0;
 };
+
+PIDController lateral_pid ({1, 0, 0});
+PIDController angular_pid ({0.5, 0.02, 5});
+
+PIDController arm_pid ({0.3, 0, 0});
+
+// DRIVING
+
+struct DriveCurve {
+	float deadband = 0;
+	float minOutput = 0;
+	float expoCurve = 1;
+};
+
+DriveCurve drive_curve ({3, 10, 2});
+DriveCurve turn_curve ({3, 10, 2});
+
+constexpr int drive_ratio = 1;
+constexpr int turn_ratio = 1;
+
+constexpr bool speed_comp = true;
+
+constexpr int INTAKE_MOTOR_SPEED = 127;
+
+constexpr int ARM_SPEED = 50;
+
+float calcPowerCurve(
+		int value,
+		int other_value,
+		DriveCurve curve,
+		int ratio,
+		int other_ratio
+) {
+	if (std::abs(value) <= curve.deadband) return 0;
+
+	float ratio_mult = (float) ratio / (ratio + other_ratio);
+	if (speed_comp) {
+		float dynamic_ratio = ((float) other_ratio * std::abs(other_value) / 127);
+		ratio_mult = (float) ratio / (ratio + dynamic_ratio);
+	}
+
+	int sign_mult = sgn(value);
+
+	float adj = 127 / std::pow(127, curve.expoCurve);
+	float expo = std::pow(std::abs(value), curve.expoCurve);
+
+	float output = (float) (adj * expo);
+	
+	return sign_mult * std::max(curve.minOutput, output);
+}
+
+
+
+/*****************************************************************************/
+/*                             MICROCONTROLLERS                              */
+/*****************************************************************************/
+
+pros::Controller master(pros::E_CONTROLLER_MASTER);
+
+pros::MotorGroup dt_left_motors ({
+	DT_FL_PORT,
+	DT_LM_PORT,
+	DT_BL_PORT
+}, pros::Cartridge::blue);
+
+pros::MotorGroup dt_right_motors ({
+	DT_FR_PORT,
+	DT_MR_PORT,
+	DT_BR_PORT
+}, pros::Cartridge::blue);
+
+pros::Motor intake_motor (INTAKE_PORT, pros::Cartridge::green);
+
+pros::adi::DigitalOut mogo_piston (MOGO_PORT);
+pros::adi::DigitalOut bar_piston (BAR_PORT);
+
+pros::Motor arm (ARM_PORT, pros::Cartridge::red);
+pros::adi::DigitalOut arm_end (ARM_END_PORT);
+
+pros::IMU imu (IMU_PORT);
+
+
+
+/*****************************************************************************/
+/*                               PID CONTROLLER                              */
+/*****************************************************************************/
 
 /**
  * Calculates the power output of a PID given the current status
@@ -215,58 +290,7 @@ void pid_process(
 	}
 }
 
-// structs
 
-struct DriveCurve {
-	float deadband = 0;
-	float minOutput = 0;
-	float expoCurve = 1;
-};
-
-
-PIDController arm_pid ({0.3, 0, 0});
-
-// config controller
-
-constexpr pros::DIGI_BUTTON POS_INFO_BUTTONS[] = {pros::E_CONTROLLER_DIGITAL_R1, pros::E_CONTROLLER_DIGITAL_R2, pros::E_CONTROLLER_DIGITAL_A};
-constexpr pros::DIGI_BUTTON GENERAL_INFO_BUTTONS[] = {pros::E_CONTROLLER_DIGITAL_R1, pros::E_CONTROLLER_DIGITAL_R2, pros::E_CONTROLLER_DIGITAL_B};
-
-// config drive
-
-DriveCurve drive_curve ({DRIVE_DEADBAND, DRIVE_MIN_OUTPUT, DRIVE_EXPO_CURVE});
-DriveCurve turn_curve ({TURN_DEADBAND, TURN_MIN_OUTPUT, TURN_EXPO_CURVE});
-
-// config auton
-
-PIDController lateral_pid ({1, 0, 0});
-
-PIDController angular_pid ({0.5, 0.02, 5});
-
-// defs
-
-pros::Controller master(pros::E_CONTROLLER_MASTER);
-
-pros::MotorGroup dt_left_motors ({
-	DT_FL_PORT,
-	DT_LM_PORT,
-	DT_BL_PORT
-}, pros::MotorGearset::blue);
-
-pros::MotorGroup dt_right_motors ({
-	DT_FR_PORT,
-	DT_MR_PORT,
-	DT_BR_PORT
-}, pros::MotorGearset::blue);
-
-pros::Motor intake_motor (INTAKE_PORT, pros::v5::MotorGears::green);
-
-pros::adi::DigitalOut mogo_piston (MOGO_PORT);
-pros::adi::DigitalOut bar_piston (BAR_PORT);
-
-pros::Motor arm (ARM_PORT, pros::v5::MotorGears::red);
-pros::adi::DigitalOut arm_end (ARM_END_PORT);
-
-pros::IMU imu (IMU_PORT);
 
 // robot position
 std::atomic<float> xPos (0);
@@ -283,68 +307,17 @@ void get_robot_position(long last_update) {
 
 	heading.store(imu.get_heading());
 }
-
-// telemetry
-constexpr size_t TELEMTRY_SIZE = 100;
-std::string telemetry[TELEMTRY_SIZE];
-
-bool check_multi_DIGI_BUTTON(int n, const pros::DIGI_BUTTON* DIGI_BUTTONs) {
-	for (int i = 0; i < n; ++i) if (!master.get_digital(DIGI_BUTTONs[n])) return false;
-
-	return true;
-}
-
-void update_telemetry() {
-	master.clear_line(0);
-	master.clear_line(1);
-	master.clear_line(2);
-
-	if (check_multi_DIGI_BUTTON(3, GENERAL_INFO_BUTTONS)) {
-		master.set_text(0, 0, "VEX2024-938E");
-		master.set_text(1, 0, "time " + std::to_string(pros::millis()));
-		master.set_text(2, 0, "batt " + std::to_string(master.get_battery_capacity()));
-	} else if (check_multi_DIGI_BUTTON(3, POS_INFO_BUTTONS)) {
-		master.set_text(0, 0, "xPos " + std::to_string(xPos.load()));
-		master.set_text(1, 0, "yPos " + std::to_string(yPos.load()));
-		master.set_text(2, 0, "head " + std::to_string(heading.load()));
-	} else {
-		master.set_text(0, 0, telemetry[0]);
-		master.set_text(1, 0, telemetry[1]);
-		master.set_text(2, 0, telemetry[2]);
-	}
-}
-
-void log(std::string str) {
-	for (int i = TELEMTRY_SIZE - 1; i > 0; --i) {
-		telemetry[i] = telemetry[i - 1];
-	}
-
-	telemetry[0] = str;
-}
-
-void amend_last_log(std::string str) {
-	telemetry[0] = str;
-
-	master.set_text(0, 0, telemetry[0]);
-}
-
 // competition:
 
 void initialize() {
-	log("initialize");
-
 	pros::lcd::initialize();
     
-	log("reset imu");
 	auto start = pros::millis();
 
 	imu.reset();
 	while(imu.is_calibrating()) {
-		amend_last_log("reset imu " + std::to_string(pros::millis()));
 		pros::delay(PROCESS_DELAY);
 	}
-
-	amend_last_log("imu reset " +  std::to_string(pros::millis()));
 
     pros::Task pos_tracking_task([&]() {
 		last_pos_update = pros::millis();
@@ -353,7 +326,6 @@ void initialize() {
 			get_robot_position(last_pos_update);
 
 			if (master.get_digital(MOGO_ON_BUTTON))
-			update_telemetry();
 			
             pros::lcd::print(0, "xPos: %f", xPos.load());
             pros::lcd::print(1, "yPos: %f", yPos.load());
@@ -418,8 +390,6 @@ void turn_to_heading(float target_heading, int32_t timeout) {
 }
 
 void autonomous() {
-	log("auton start");
-
 	turn_to_heading(90, 3000);
 
 	turn_to_heading(0, 3000);
@@ -428,30 +398,9 @@ void autonomous() {
 	dt_right_motors.brake();
 }
 
-float calcPowerCurve(int value, int other_value, DriveCurve curve, int ratio, int other_ratio) {
-	if (std::abs(value) <= curve.deadband) return 0;
-
-	float ratio_mult = (float) ratio / (ratio + other_ratio);
-	if (speed_comp) {
-		float dynamic_ratio = ((float) other_ratio * std::abs(other_value) / 127);
-		ratio_mult = (float) ratio / (ratio + dynamic_ratio);
-	}
-
-	int sign_mult = std::copysign(1, value);
-
-	float adj = 127 / std::pow(127, curve.expoCurve);
-	float expo = std::pow(std::abs(value), curve.expoCurve);
-
-	float output = (float) (adj * expo);
-	
-	return sign_mult * std::max(curve.minOutput, output);
-}
-
 std::atomic<int> arm_target_pos = 0;
 
 void opcontrol() {
-	log("op control started");
-
 	// records the output of the arm PID process
 	std::atomic<float> output (0);
 	// records position of the arm throughout the PID process
