@@ -12,10 +12,108 @@
 #define digi_button controller_digital_e_t
 #define anal_button controller_analog_e_t
 
-constexpr double INCH_PER_G = 386.08858267717;
-
 constexpr long PROCESS_DELAY = 15;
 constexpr long LONG_DELAY = 34;
+
+// util
+
+/**
+ * Returns the sign of a value
+ *
+ * @param val value
+ */
+template <typename T> int sgn(T val) {
+    return (T(0) < val) - (val < T(0));
+}
+
+/**
+ * Stores the variables for a PID controller
+ *
+ * @param kP proportional component, provides the bulk of the power
+ * @param kI integral component, adjusts for steady state error
+ * @param kD derivative component, dampener
+ * @param windup range around the target that the integral will start accumulating
+ * @param slew maximum acceleration rate
+ */
+struct PIDController {
+	float kP = 0;
+	float kI = 0;
+	float kD = 0;
+	float windup = 0;
+	float slew = 0;
+};
+
+/**
+ * Calculates the power output of a PID given the current status
+ *
+ * @param error difference between current and target values
+ * @param integral error accumulated over time
+ * @param derivative dampener based on predicted future error
+ * @param pid PID controller to calculate power with
+ */
+float calcPowerPID(int error, int integral, int derivative, const PIDController* pid) {
+	return error * pid->kP + integral * pid->kI + derivative * pid->kD;
+}
+
+/**
+ * Standard PID process primarily for managing the integral and derivative values
+ *
+ * @param value pointer to the current value
+ * @param target pointer to the target value
+ * @param timeout time allocated to task
+ * @param pid PID controller to use
+ * @param output pointer to location to store the output
+ */
+void pid_process(std::atomic<float>* value, std::atomic<float>* target, const int32_t timeout, const PIDController* pid, std::atomic<float>* output) {
+	// start time of process
+	int32_t start_time = pros::millis();
+	
+	// variables used for PID calculation
+	float prev_output = 0;
+	int prev_error = 0;
+	int error = 0;
+	int integral = 0;
+	int derivative = 0;
+
+	// while the process has not exceeded the time limit
+	while(pros::millis() < start_time + timeout) {
+		// update previous output
+		prev_output = *output;
+
+		// update error
+		prev_error = error;
+		error = *target - *value;
+
+		// check if we crossed the target or not by comparing the signs of errors
+		if (sgn(prev_error) != sgn(error)) {
+			// if we did, reset integral
+			integral = 0;
+		}
+
+		// check if the error is in the range of the integral windup
+		if (std::abs(error) <= pid->windup) {
+			// if so, update integral
+			integral += error;
+		} else {
+			// if not, set integral to 0
+			integral = 0;
+		}
+
+		// update derivative
+		derivative = error - prev_error;
+
+		// calculate the power
+		float calc_power = calcPowerPID(error, integral, derivative, pid);
+		// constrain the power to slew
+		calc_power = std::max(prev_output - pid->slew, std::min(prev_error + pid->slew, calc_power));
+
+		// set output power
+		*output = calc_power;
+
+		// delay to save resources
+		pros::delay(PROCESS_DELAY);
+	}
+}
 
 // structs
 
@@ -23,13 +121,6 @@ struct DriveCurve {
 	float deadband = 0;
 	float minOutput = 0;
 	float expoCurve = 1;
-};
-
-struct PIDController {
-	float kP = 0;
-	float kI = 0;
-	float kD = 0;
-	float small_error = 1;
 };
 
 // config ports
@@ -58,7 +149,7 @@ constexpr int INTAKE_MOTOR_SPEED = 127;
 
 constexpr int ARM_SPEED = 50;
 
-PIDController arm_pid ({0.3, 0, 0, 30});
+PIDController arm_pid ({0.3, 0, 0});
 
 // config controller
 
@@ -95,9 +186,9 @@ bool speed_comp = true;
 
 // config auton
 
-PIDController lateral_pid ({1, 0, 0, 1});
+PIDController lateral_pid ({1, 0, 0});
 
-PIDController angular_pid ({0.5, 0.02, 5, 3});
+PIDController angular_pid ({0.5, 0.02, 5});
 
 // defs
 
@@ -225,14 +316,6 @@ void disabled() {}
 
 void competition_initialize() {}
 
-float calcPowerPID(int error, int integral, int derivative, PIDController pid_controller) {
-	float power;
-
-	power = error * pid_controller.kP + integral * pid_controller.kI + derivative * pid_controller.kD;
-
-	return power;
-}
-
 struct Pose {
 	float xPos = 0;
 	float yPos = 0;
@@ -284,14 +367,6 @@ void turn_to_heading(float target_heading, int32_t timeout) {
 		else error = -mod(heading.load() - target_heading, 360);
 		integral += error;
 		derivative = error - prev_error;
-
-		// // check if the error is acceptable and we are stable
-		// if (std::abs(prev_error) <= angular_pid.small_error && std::abs(error) <= angular_pid.small_error) {
-		// 	// if so stop the motors and break
-		// 	dt_left_motors.brake();
-		// 	dt_right_motors.brake();
-		// 	break;
-		// }
 
 		// check if we crossed the target heading
 		if (turn_dir && mod(heading.load() - target_heading, 360) < mod(target_heading - heading.load(), 360)
