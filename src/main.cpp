@@ -7,14 +7,150 @@
 #include <queue>
 #include <atomic>
 #include <string>
+#include <sys/_stdint.h>
 
-#define digi_button controller_digital_e_t
-#define anal_button controller_analog_e_t
+#define DIGI_BUTTON controller_digital_e_t
+#define ANAL_BUTTON controller_analog_e_t
 
-constexpr double INCH_PER_G = 386.08858267717;
+#define CTRL_ANAL_LX E_CONTROLLER_ANALOG_LEFT_X
+#define CTRL_ANAL_LY E_CONTROLLER_ANALOG_LEFT_Y
+
+#define CTRL_ANAL_RX E_CONTROLLER_ANALOG_RIGHT_X
+#define CTRL_ANAL_RY E_CONTROLLER_ANALOG_RIGHT_Y
+
+#define CTRL_DIGI_L1 E_CONTROLLER_DIGITAL_L1
+#define CTRL_DIGI_L2 E_CONTROLLER_DIGITAL_L2
+#define CTRL_DIGI_R1 E_CONTROLLER_DIGITAL_R1
+#define CTRL_DIGI_R2 E_CONTROLLER_DIGITAL_R2
+
+#define CTRL_DIGI_A E_CONTROLLER_DIGITAL_A
+#define CTRL_DIGI_B E_CONTROLLER_DIGITAL_B
+#define CTRL_DIGI_X E_CONTROLLER_DIGITAL_X
+#define CTRL_DIGI_Y E_CONTROLLER_DIGITAL_Y
+
+#define CTRL_DIGI_UP E_CONTROLLER_DIGITAL_UP
+#define CTRL_DIGI_DOWN E_CONTROLLER_DIGITAL_DOWN
+#define CTRL_DIGI_LEFT E_CONTROLLER_DIGITAL_LEFT
+#define CTRL_DIGI_RIGHT E_CONTROLLER_DIGITAL_RIGHT
 
 constexpr long PROCESS_DELAY = 15;
 constexpr long LONG_DELAY = 34;
+
+/**
+ * Returns the sign of a value
+ *
+ * @param val value
+ */
+template <typename T> int sgn(T val) {
+    return (T(0) < val) - (val < T(0));
+}
+
+/**
+ * Stores the variables for a PID controller
+ *
+ * @param kP proportional component, provides the bulk of the power
+ * @param kI integral component, adjusts for steady state error
+ * @param kD derivative component, dampener
+ * @param windup range around the target that the integral will start
+ * accumulating, useful in large motions to prevent overshoot
+ * @param slew maximum acceleration rate
+ */
+struct PIDController {
+	float kP = 0;
+	float kI = 0;
+	float kD = 0;
+	float windup = 0;
+	float slew = 0;
+};
+
+/**
+ * Calculates the power output of a PID given the current status
+ *
+ * @param error difference between current and target values
+ * @param integral error accumulated over time
+ * @param derivative dampener based on predicted future error
+ * @param pid PID controller to calculate power with
+ */
+float calcPowerPID(
+	int error, int integral, int derivative, const PIDController* pid
+) {
+	return error * pid->kP + integral * pid->kI + derivative * pid->kD;
+}
+
+/**
+ * Standard PID process primarily for managing the integral and derivative
+ * values
+ *
+ * @param value pointer to the current value
+ * @param target pointer to the target value
+ * @param timeout time allocated to task
+ * @param pid PID controller to use
+ * @param output pointer to location to store the output
+ * @param normalize_func will be used to normalize the error given the value
+ * and target, usually used when rotating in degrees
+ */
+void pid_process(
+		std::atomic<float>* value,
+		float target,
+		const int32_t timeout,
+		const PIDController* pid,
+		std::atomic<float>* output,
+		std::function<float(float, float)> normalize_func = nullptr
+) {
+	// start time of process
+	int32_t start_time = pros::millis();
+	
+	// variables used for PID calculation
+	float prev_output = 0;
+	int prev_error = 0;
+	int error = 0;
+	int integral = 0;
+	int derivative = 0;
+
+	// while the process has not exceeded the time limit
+	while(pros::millis() < start_time + timeout) {
+		// update previous output
+		prev_output = *output;
+
+		// update error
+		prev_error = error;
+		error = target - *value;
+
+		// apply normalization if provided
+        if (normalize_func) error = normalize_func(target, *value);
+
+		// check if we crossed the target or not by comparing the signs of
+		// errors
+		if (sgn(prev_error) != sgn(error)) {
+			// if we did, reset integral
+			integral = 0;
+		}
+
+		// check if the error is in the range of the integral windup
+		if (std::abs(error) <= pid->windup) {
+			// if so, update integral
+			integral += error;
+		} else {
+			// if not, set integral to 0
+			integral = 0;
+		}
+
+		// update derivative
+		derivative = error - prev_error;
+
+		// calculate the power
+		float calc_power = calcPowerPID(error, integral, derivative, pid);
+		// constrain the power to slew
+		calc_power = std::max(prev_output - pid->slew,
+				std::min(prev_error + pid->slew, calc_power));
+
+		// set output power
+		*output = calc_power;
+
+		// delay to save resources
+		pros::delay(PROCESS_DELAY);
+	}
+}
 
 // structs
 
@@ -24,15 +160,7 @@ struct DriveCurve {
 	float expoCurve = 1;
 };
 
-struct PIDController {
-	float kP = 0;
-	float kI = 0;
-	float kD = 0;
-	float small_error = 1;
-};
-
 // config ports
-
 constexpr int DT_FL_PORT = -15;
 constexpr int DT_LM_PORT = -1;
 constexpr int DT_BL_PORT = -20;
@@ -57,30 +185,30 @@ constexpr int INTAKE_MOTOR_SPEED = 127;
 
 constexpr int ARM_SPEED = 50;
 
-PIDController arm_pid ({0.3, 0, 0, 30});
+PIDController arm_pid ({0.3, 0, 0});
 
 // config controller
 
-constexpr pros::digi_button POS_INFO_BUTTONS[] = {pros::E_CONTROLLER_DIGITAL_R1, pros::E_CONTROLLER_DIGITAL_R2, pros::E_CONTROLLER_DIGITAL_A};
-constexpr pros::digi_button GENERAL_INFO_BUTTONS[] = {pros::E_CONTROLLER_DIGITAL_R1, pros::E_CONTROLLER_DIGITAL_R2, pros::E_CONTROLLER_DIGITAL_B};
+constexpr pros::DIGI_BUTTON POS_INFO_BUTTONS[] = {pros::E_CONTROLLER_DIGITAL_R1, pros::E_CONTROLLER_DIGITAL_R2, pros::E_CONTROLLER_DIGITAL_A};
+constexpr pros::DIGI_BUTTON GENERAL_INFO_BUTTONS[] = {pros::E_CONTROLLER_DIGITAL_R1, pros::E_CONTROLLER_DIGITAL_R2, pros::E_CONTROLLER_DIGITAL_B};
 
-constexpr pros::anal_button DRIVE_JOYSTICK = pros::E_CONTROLLER_ANALOG_LEFT_Y;
-constexpr pros::anal_button TURN_JOYSTICK = pros::E_CONTROLLER_ANALOG_RIGHT_X;
+constexpr pros::ANAL_BUTTON DRIVE_JOYSTICK = pros::CTRL_ANAL_LY;
+constexpr pros::ANAL_BUTTON TURN_JOYSTICK = pros::CTRL_ANAL_RX;
 
-constexpr pros::digi_button INTAKE_FWD_BUTTON = pros::E_CONTROLLER_DIGITAL_L2;
-constexpr pros::digi_button INTAKE_REV_BUTTON = pros::E_CONTROLLER_DIGITAL_L1;
+constexpr pros::DIGI_BUTTON INTAKE_FWD_BUTTON = pros::CTRL_DIGI_L2;
+constexpr pros::DIGI_BUTTON INTAKE_REV_BUTTON = pros::CTRL_DIGI_L1;
 
-constexpr pros::digi_button MOGO_ON_BUTTON = pros::E_CONTROLLER_DIGITAL_A;
-constexpr pros::digi_button MOGO_OFF_BUTTON = pros::E_CONTROLLER_DIGITAL_B;
+constexpr pros::DIGI_BUTTON MOGO_ON_BUTTON = pros::CTRL_DIGI_A;
+constexpr pros::DIGI_BUTTON MOGO_OFF_BUTTON = pros::CTRL_DIGI_B;
 
-constexpr pros::digi_button BAR_ON_BUTTON = pros::E_CONTROLLER_DIGITAL_X;
-constexpr pros::digi_button BAR_OFF_BUTTON = pros::E_CONTROLLER_DIGITAL_Y;
+constexpr pros::DIGI_BUTTON BAR_ON_BUTTON = pros::CTRL_DIGI_X;
+constexpr pros::DIGI_BUTTON BAR_OFF_BUTTON = pros::CTRL_DIGI_Y;
 
-constexpr pros::digi_button ARM_UP_BUTTON = pros::E_CONTROLLER_DIGITAL_UP;
-constexpr pros::digi_button ARM_DOWN_BUTTON = pros::E_CONTROLLER_DIGITAL_DOWN;
+constexpr pros::DIGI_BUTTON ARM_UP_BUTTON = pros::CTRL_DIGI_UP;
+constexpr pros::DIGI_BUTTON ARM_DOWN_BUTTON = pros::CTRL_DIGI_DOWN;
 
-constexpr pros::digi_button ARM_END_ON_BUTTON = pros::E_CONTROLLER_DIGITAL_RIGHT;
-constexpr pros::digi_button ARM_END_OFF_BUTTON = pros::E_CONTROLLER_DIGITAL_LEFT;
+constexpr pros::DIGI_BUTTON ARM_END_ON_BUTTON = pros::CTRL_DIGI_RIGHT;
+constexpr pros::DIGI_BUTTON ARM_END_OFF_BUTTON = pros::CTRL_DIGI_LEFT;
 
 // config drive
 
@@ -94,8 +222,9 @@ bool speed_comp = true;
 
 // config auton
 
-PIDController lateral_pid ({0, 0, 0, 1});
-PIDController angular_pid ({0, 0, 0, 3});
+PIDController lateral_pid ({1, 0, 0});
+
+PIDController angular_pid ({0.5, 0.02, 5});
 
 // defs
 
@@ -126,7 +255,7 @@ pros::IMU imu (IMU_PORT);
 // robot position
 std::atomic<float> xPos (0);
 std::atomic<float> yPos (0);
-std::atomic<float> head (0);
+std::atomic<float> heading (0);
 
 long last_pos_update = 0;
 
@@ -136,15 +265,15 @@ void get_robot_position(long last_update) {
 	xPos.fetch_add(imu.get_accel().x);
 	yPos.fetch_add(imu.get_accel().y);
 
-	head.store(imu.get_heading());
+	heading.store(imu.get_heading());
 }
 
 // telemetry
 constexpr size_t TELEMTRY_SIZE = 100;
 std::string telemetry[TELEMTRY_SIZE];
 
-bool check_multi_digi_button(int n, const pros::digi_button* digi_buttons) {
-	for (int i = 0; i < n; ++i) if (!master.get_digital(digi_buttons[n])) return false;
+bool check_multi_DIGI_BUTTON(int n, const pros::DIGI_BUTTON* DIGI_BUTTONs) {
+	for (int i = 0; i < n; ++i) if (!master.get_digital(DIGI_BUTTONs[n])) return false;
 
 	return true;
 }
@@ -154,14 +283,14 @@ void update_telemetry() {
 	master.clear_line(1);
 	master.clear_line(2);
 
-	if (check_multi_digi_button(3, GENERAL_INFO_BUTTONS)) {
+	if (check_multi_DIGI_BUTTON(3, GENERAL_INFO_BUTTONS)) {
 		master.set_text(0, 0, "VEX2024-938E");
 		master.set_text(1, 0, "time " + std::to_string(pros::millis()));
 		master.set_text(2, 0, "batt " + std::to_string(master.get_battery_capacity()));
-	} else if (check_multi_digi_button(3, POS_INFO_BUTTONS)) {
+	} else if (check_multi_DIGI_BUTTON(3, POS_INFO_BUTTONS)) {
 		master.set_text(0, 0, "xPos " + std::to_string(xPos.load()));
 		master.set_text(1, 0, "yPos " + std::to_string(yPos.load()));
-		master.set_text(2, 0, "head " + std::to_string(head.load()));
+		master.set_text(2, 0, "head " + std::to_string(heading.load()));
 	} else {
 		master.set_text(0, 0, telemetry[0]);
 		master.set_text(1, 0, telemetry[1]);
@@ -212,9 +341,9 @@ void initialize() {
 			
             pros::lcd::print(0, "xPos: %f", xPos.load());
             pros::lcd::print(1, "yPos: %f", yPos.load());
-            pros::lcd::print(2, "head: %f", head.load());
+            pros::lcd::print(2, "head: %f", heading.load());
 
-            pros::delay(LONG_DELAY);
+            pros::delay(PROCESS_DELAY);
         }
     });
 }
@@ -223,14 +352,6 @@ void disabled() {}
 
 void competition_initialize() {}
 
-float calcPowerPID(int error, int integral, int derivative, PIDController pid_controller) {
-	float power;
-
-	power = error * pid_controller.kP + integral * pid_controller.kI + derivative * pid_controller.kP;
-
-	return power;
-}
-
 struct Pose {
 	float xPos = 0;
 	float yPos = 0;
@@ -238,72 +359,61 @@ struct Pose {
 	bool forward = true;
 };
 
-std::queue<Pose> instructions;
-
-void adjust_angle(Pose target) {
-	if (!target.forward) {
-		target.head += 180;
-		if (target.head >= 360) target.head -= 360;
-	}
-
-	log("adj. angle from " + std::to_string(head) + " to " + std::to_string(target.head));
-
-	int prev_error = 0;
-	int error = 0;
-	int integral = 0;
-	int derivative = 0;
-
-	while(true) {
-		prev_error = error;
-
-		float right_side_error = std::abs(target.head - head.load());
-		float left_side_error = std::abs(std::min(target.head, head.load()) + 360 - std::max(target.head, head.load()));
-
-		if (right_side_error < left_side_error) error = right_side_error;
-		else error = -left_side_error;
-
-		integral += error;
-		derivative = error - prev_error;
-
-		if (std::abs(error) >= angular_pid.small_error) {
-			float calc_power = calcPowerPID(error, integral, derivative, angular_pid);
-
-			dt_left_motors.move(calc_power);
-			dt_right_motors.move(-calc_power);
-		} else {;
-			dt_left_motors.brake();
-			dt_right_motors.brake();
-			break;
-		}
-
-		pros::delay(PROCESS_DELAY);
-	}
+int mod(int a, int b) {
+    return (a % b + b) % b;
 }
 
-void auton_async() {
-	log("async auton start");
+void turn_to_heading(float target_heading, int32_t timeout) {
+	// error normalization function to deal with 0-360 wrap around
+	auto normalize_rotation = [](float target, float current) {
+		float error = target - current;
+		return fmod((error + 180), 360) - 180;
+	};
 
-	Pose target;
+	// records the output of the PID process
+	std::atomic<float> output (0);
 
-	while (true) {
+	// start time of process
+	int32_t start_time = pros::millis();
+
+	// start the PID process
+	pros::Task pid_process_task{[&] {
+		pid_process(
+				&heading,
+				target_heading,
+				timeout,
+				&angular_pid,
+				&output,
+				normalize_rotation
+		);
+	}};
+	
+	// apply the motor values
+	while (pros::millis() < start_time + timeout) {
+		dt_left_motors.move(output.load());
+		dt_right_motors.move(-output.load());
+
+		// delay to save resources
 		pros::delay(PROCESS_DELAY);
-
-		if (instructions.empty()) continue;
-
-		Pose target = instructions.front();
-
-		adjust_angle(target);
 	}
+
+	// brake motors at end of process
+	dt_left_motors.brake();
+	dt_right_motors.brake();
+
+	// remove task
+	pid_process_task.remove();
 }
 
 void autonomous() {
 	log("auton start");
 
-	pros::Task auton_task(auton_async);
+	turn_to_heading(90, 3000);
 
-	log("end async auton");
-	auton_task.remove();
-	amend_last_log("async auton end");
+	turn_to_heading(0, 3000);
+
+	dt_left_motors.brake();
+	dt_right_motors.brake();
 }
 
 float calcPowerCurve(int value, int other_value, DriveCurve curve, int ratio, int other_ratio) {
@@ -325,40 +435,26 @@ float calcPowerCurve(int value, int other_value, DriveCurve curve, int ratio, in
 	return sign_mult * std::max(curve.minOutput, output);
 }
 
-std::atomic<int> target_arm_pos = 0;
-
-void op_async() {
-	int prev_error = 0;
-	int error = 0;
-	int integral = 0;
-	int derivative = 0;
-
-	while(true) {
-		if (target_arm_pos.load() < 0) target_arm_pos.store(0);
-
-		prev_error = error;
-		error = target_arm_pos.load() - arm.get_position();
-		integral += error;
-		derivative = error - prev_error;
-
-		if (std::abs(error) <= arm_pid.small_error) {
-			integral = 0;
-		}
-
-		float calc_power = calcPowerPID(error, integral, derivative, arm_pid);
-
-		if (calc_power < 0) calc_power /= 2;
-
-		arm.move(calc_power);
-
-		pros::delay(PROCESS_DELAY);
-	}
-}
+std::atomic<int> arm_target_pos = 0;
 
 void opcontrol() {
 	log("op control started");
 
-	pros::Task op_async_task(op_async);
+	// records the output of the arm PID process
+	std::atomic<float> output (0);
+	// records position of the arm throughout the PID process
+	std::atomic<float> arm_pos (0);
+
+	// start arm PID process
+	pros::Task arm_pid_task([&] {
+		pid_process(
+				&arm_pos,
+				arm_target_pos,
+				120000, // bombastically long timeout to cover entire period
+				&arm_pid,
+				&output
+		);
+	});
 
     while (true) {
 		// driving
@@ -385,8 +481,12 @@ void opcontrol() {
 		else if (master.get_digital(BAR_OFF_BUTTON)) bar_piston.set_value(false);
 
 		// arm
-		if (master.get_digital(ARM_UP_BUTTON)) target_arm_pos += ARM_SPEED;
-		else if (master.get_digital(ARM_DOWN_BUTTON)) target_arm_pos -= ARM_SPEED;
+		if (master.get_digital(ARM_UP_BUTTON)) arm_target_pos += ARM_SPEED;
+		else if (master.get_digital(ARM_DOWN_BUTTON)) arm_target_pos -= ARM_SPEED;
+		// update current arm pos
+		arm_pos.store(arm.get_position());
+		// move arm to PID output
+		arm.move(output.load());
 
 		// arm end
 		if(master.get_digital(ARM_END_ON_BUTTON)) arm_end.set_value(true);
