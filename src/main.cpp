@@ -9,7 +9,6 @@
 #include <string>
 #include <sys/_stdint.h>
 
-
 #define DIGI_BUTTON controller_digital_e_t
 #define ANAL_BUTTON controller_analog_e_t
 
@@ -36,6 +35,69 @@
 
 constexpr long PROCESS_DELAY = 15;
 constexpr long LONG_DELAY = 34;
+
+/**********************************  CONFIG  *********************************/
+
+// PORTS
+
+constexpr int DT_FL_PORT = -15;
+constexpr int DT_LM_PORT = -1;
+constexpr int DT_BL_PORT = -20;
+
+constexpr int DT_FR_PORT = 14;
+constexpr int DT_MR_PORT = 18;
+constexpr int DT_BR_PORT = 16;
+
+constexpr int INTAKE_PORT = -2;
+
+constexpr int MOGO_PORT = 1;
+constexpr int BAR_PORT = 3;
+
+constexpr int ARM_PORT = -5;
+constexpr int ARM_END_PORT = 8;
+
+constexpr int IMU_PORT = 21;
+
+// BUTTONS
+
+constexpr pros::ANAL_BUTTON DRIVE_JOYSTICK = pros::CTRL_ANAL_LY;
+constexpr pros::ANAL_BUTTON TURN_JOYSTICK = pros::CTRL_ANAL_RX;
+
+constexpr pros::DIGI_BUTTON INTAKE_FWD_BUTTON = pros::CTRL_DIGI_L2;
+constexpr pros::DIGI_BUTTON INTAKE_REV_BUTTON = pros::CTRL_DIGI_L1;
+
+constexpr pros::DIGI_BUTTON MOGO_ON_BUTTON = pros::CTRL_DIGI_A;
+constexpr pros::DIGI_BUTTON MOGO_OFF_BUTTON = pros::CTRL_DIGI_B;
+
+constexpr pros::DIGI_BUTTON BAR_ON_BUTTON = pros::CTRL_DIGI_X;
+constexpr pros::DIGI_BUTTON BAR_OFF_BUTTON = pros::CTRL_DIGI_Y;
+
+constexpr pros::DIGI_BUTTON ARM_UP_BUTTON = pros::CTRL_DIGI_UP;
+constexpr pros::DIGI_BUTTON ARM_DOWN_BUTTON = pros::CTRL_DIGI_DOWN;
+
+constexpr pros::DIGI_BUTTON ARM_END_ON_BUTTON = pros::CTRL_DIGI_RIGHT;
+constexpr pros::DIGI_BUTTON ARM_END_OFF_BUTTON = pros::CTRL_DIGI_LEFT;
+
+// DRIVING
+
+constexpr float DRIVE_DEADBAND = 3;
+constexpr float DRIVE_MIN_OUTPUT = 10;
+constexpr float DRIVE_EXPO_CURVE = 2;
+
+constexpr float TURN_DEADBAND = 3;
+constexpr float TURN_MIN_OUTPUT = 10;
+constexpr float TURN_EXPO_CURVE = 2;
+
+constexpr int drive_ratio = 1;
+constexpr int turn_ratio = 1;
+
+constexpr bool speed_comp = true;
+
+constexpr int INTAKE_MOTOR_SPEED = 127;
+
+constexpr int ARM_SPEED = 50;
+
+/********************************  CONFIG END  *******************************/
 
 /**
  * Returns the sign of a value
@@ -161,30 +223,6 @@ struct DriveCurve {
 	float expoCurve = 1;
 };
 
-// config ports
-constexpr int DT_FL_PORT = -15;
-constexpr int DT_LM_PORT = -1;
-constexpr int DT_BL_PORT = -20;
-
-constexpr int DT_FR_PORT = 14;
-constexpr int DT_MR_PORT = 18;
-constexpr int DT_BR_PORT = 16;
-
-constexpr int INTAKE_PORT = -2;
-
-constexpr int MOGO_PORT = 1;
-constexpr int BAR_PORT = 3;
-
-constexpr int ARM_PORT = -5;
-constexpr int ARM_END_PORT = 8;
-
-constexpr int IMU_PORT = 21;
-
-// config motors
-
-constexpr int INTAKE_MOTOR_SPEED = 127;
-
-constexpr int ARM_SPEED = 50;
 
 PIDController arm_pid ({0.3, 0, 0});
 
@@ -193,33 +231,10 @@ PIDController arm_pid ({0.3, 0, 0});
 constexpr pros::DIGI_BUTTON POS_INFO_BUTTONS[] = {pros::E_CONTROLLER_DIGITAL_R1, pros::E_CONTROLLER_DIGITAL_R2, pros::E_CONTROLLER_DIGITAL_A};
 constexpr pros::DIGI_BUTTON GENERAL_INFO_BUTTONS[] = {pros::E_CONTROLLER_DIGITAL_R1, pros::E_CONTROLLER_DIGITAL_R2, pros::E_CONTROLLER_DIGITAL_B};
 
-constexpr pros::ANAL_BUTTON DRIVE_JOYSTICK = pros::CTRL_ANAL_LY;
-constexpr pros::ANAL_BUTTON TURN_JOYSTICK = pros::CTRL_ANAL_RX;
-
-constexpr pros::DIGI_BUTTON INTAKE_FWD_BUTTON = pros::CTRL_DIGI_L2;
-constexpr pros::DIGI_BUTTON INTAKE_REV_BUTTON = pros::CTRL_DIGI_L1;
-
-constexpr pros::DIGI_BUTTON MOGO_ON_BUTTON = pros::CTRL_DIGI_A;
-constexpr pros::DIGI_BUTTON MOGO_OFF_BUTTON = pros::CTRL_DIGI_B;
-
-constexpr pros::DIGI_BUTTON BAR_ON_BUTTON = pros::CTRL_DIGI_X;
-constexpr pros::DIGI_BUTTON BAR_OFF_BUTTON = pros::CTRL_DIGI_Y;
-
-constexpr pros::DIGI_BUTTON ARM_UP_BUTTON = pros::CTRL_DIGI_UP;
-constexpr pros::DIGI_BUTTON ARM_DOWN_BUTTON = pros::CTRL_DIGI_DOWN;
-
-constexpr pros::DIGI_BUTTON ARM_END_ON_BUTTON = pros::CTRL_DIGI_RIGHT;
-constexpr pros::DIGI_BUTTON ARM_END_OFF_BUTTON = pros::CTRL_DIGI_LEFT;
-
 // config drive
 
-DriveCurve drive_curve ({3, 10, 2});
-DriveCurve turn_curve ({3, 10, 2});
-
-int drive_ratio = 1;
-int turn_ratio = 1;
-
-bool speed_comp = true;
+DriveCurve drive_curve ({DRIVE_DEADBAND, DRIVE_MIN_OUTPUT, DRIVE_EXPO_CURVE});
+DriveCurve turn_curve ({TURN_DEADBAND, TURN_MIN_OUTPUT, TURN_EXPO_CURVE});
 
 // config auton
 
