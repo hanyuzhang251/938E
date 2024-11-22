@@ -435,40 +435,26 @@ float calcPowerCurve(int value, int other_value, DriveCurve curve, int ratio, in
 	return sign_mult * std::max(curve.minOutput, output);
 }
 
-std::atomic<int> heading_arm_pos = 0;
-
-void op_async() {
-	int prev_error = 0;
-	int error = 0;
-	int integral = 0;
-	int derivative = 0;
-
-	while(true) {
-		if (heading_arm_pos.load() < 0) heading_arm_pos.store(0);
-
-		prev_error = error;
-		error = heading_arm_pos.load() - arm.get_position();
-		integral += error;
-		derivative = error - prev_error;
-
-		if (std::abs(error) <= arm_pid.small_error) {
-			integral = 0;
-		}
-
-		float calc_power = calcPowerPID(error, integral, derivative, arm_pid);
-
-		if (calc_power < 0) calc_power /= 2;
-
-		arm.move(calc_power);
-
-		pros::delay(PROCESS_DELAY);
-	}
-}
+std::atomic<int> arm_target_pos = 0;
 
 void opcontrol() {
 	log("op control started");
 
-	pros::Task op_async_task(op_async);
+	// records the output of the arm PID process
+	std::atomic<float> output (0);
+	// records position of the arm throughout the PID process
+	std::atomic<float> arm_pos (0);
+
+	// start arm PID process
+	pros::Task arm_pid_task([&] {
+		pid_process(
+				&arm_pos,
+				arm_target_pos,
+				120000, // bombastically long timeout to cover entire period
+				&arm_pid,
+				&output
+		);
+	});
 
     while (true) {
 		// driving
@@ -495,8 +481,12 @@ void opcontrol() {
 		else if (master.get_digital(BAR_OFF_BUTTON)) bar_piston.set_value(false);
 
 		// arm
-		if (master.get_digital(ARM_UP_BUTTON)) heading_arm_pos += ARM_SPEED;
-		else if (master.get_digital(ARM_DOWN_BUTTON)) heading_arm_pos -= ARM_SPEED;
+		if (master.get_digital(ARM_UP_BUTTON)) arm_target_pos += ARM_SPEED;
+		else if (master.get_digital(ARM_DOWN_BUTTON)) arm_target_pos -= ARM_SPEED;
+		// update current arm pos
+		arm_pos.store(arm.get_position());
+		// move arm to PID output
+		arm.move(output.load());
 
 		// arm end
 		if(master.get_digital(ARM_END_ON_BUTTON)) arm_end.set_value(true);
