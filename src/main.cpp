@@ -114,7 +114,7 @@ void pid_process(
 
 		// update error
 		prev_error = error;
-		error = *target - *value;
+		error = target - *value;
 
 		// check if we crossed the target or not by comparing the signs of
 		// errors
@@ -426,8 +426,42 @@ void turn_to_heading(float target_heading, int32_t timeout) {
 */
 
 void turn_to_heading(float target_heading, int32_t timeout) {
+	// error normalization function to deal with 0-360 wrap around
+	auto normalize_rotation = [](float target, float current) {
+		float error = target - current;
+		return fmod((error + 180), 360) - 180;
+	};
+
+	// records the output of the PID process
 	std::atomic<float> output (0);
-	pid_process(&heading, target_heading, timeout, &angular_pid, &output);
+
+	// start time of process
+	int32_t start_time = pros::millis();
+
+	// start the PID process
+	pros::Task pid_process_task{[&] {
+		pid_process(
+				&heading,
+				target_heading,
+				timeout,
+				&angular_pid,
+				&output,
+				normalize_rotation
+		);
+	}};
+	
+	// apply the motor values
+	while (pros::millis() < start_time + timeout) {
+		dt_left_motors.move(output.load());
+		dt_right_motors.move(-output.load());
+
+		// delay to save resources
+		pros::delay(PROCESS_DELAY);
+	}
+
+	// brake motors at end of process
+	dt_left_motors.brake();
+	dt_right_motors.brake();
 }
 
 void autonomous() {
