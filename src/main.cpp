@@ -15,6 +15,7 @@ constexpr double INCH_PER_G = 386.08858267717;
 
 constexpr long PROCESS_DELAY = 15;
 constexpr long LONG_DELAY = 34;
+constexpr long TELEMETRY_DELAY = 200;
 
 // structs
 
@@ -150,22 +151,28 @@ bool check_multi_digi_button(int n, const pros::digi_button* digi_buttons) {
 }
 
 void update_telemetry() {
-	master.clear_line(0);
-	master.clear_line(1);
-	master.clear_line(2);
+	master.clear();
 
-	if (check_multi_digi_button(3, GENERAL_INFO_BUTTONS)) {
-		master.set_text(0, 0, "VEX2024-938E");
-		master.set_text(1, 0, "time " + std::to_string(pros::millis()));
-		master.set_text(2, 0, "batt " + std::to_string(master.get_battery_capacity()));
-	} else if (check_multi_digi_button(3, POS_INFO_BUTTONS)) {
-		master.set_text(0, 0, "xPos " + std::to_string(xPos.load()));
-		master.set_text(1, 0, "yPos " + std::to_string(yPos.load()));
-		master.set_text(2, 0, "head " + std::to_string(head.load()));
-	} else {
-		master.set_text(0, 0, telemetry[0]);
-		master.set_text(1, 0, telemetry[1]);
-		master.set_text(2, 0, telemetry[2]);
+	while(true) {
+
+		// master.print(0, 0, "VEX2024-938Etime %ubatt %d", pros::millis(), master.get_battery_capacity());
+
+		// if (check_multi_digi_button(3, GENERAL_INFO_BUTTONS)) {
+		// 	master.print(0, 0, "VEX2024-938Etime %ubatt %d", pros::millis(), master.get_battery_capacity());
+		// } else if (check_multi_digi_button(3, POS_INFO_BUTTONS)) {
+		// 	// master.set_text(0, 0, "xPos " + std::to_string(xPos.load()));
+		// 	// master.set_text(1, 1, "yPos " + std::to_string(yPos.load()));
+		// 	// master.set_text(2, 2, "head " + std::to_string(head.load()));
+		// 	// master.print(0, 0, "VEX2024-938E");
+		// 	// master.print(0, 1, "time %u", pros::millis());
+		// 	// master.print(0, 2, "batt %d", master.get_battery_capacity());
+		// } else {
+			master.set_text(0, 0, "line 1");
+			master.set_text(1, 0, "line 2");
+			master.set_text(2, 0, "line 3");
+		// }
+
+		pros::delay(1000);
 	}
 }
 
@@ -179,13 +186,13 @@ void log(std::string str) {
 
 void amend_last_log(std::string str) {
 	telemetry[0] = str;
-
-	master.set_text(0, 0, telemetry[0]);
 }
 
 // competition:
 
 void initialize() {
+	pros::Task telemetry_update_task(update_telemetry);
+
 	log("initialize");
 
 	pros::lcd::initialize();
@@ -206,9 +213,6 @@ void initialize() {
 
         while (true) {
 			get_robot_position(last_pos_update);
-
-			if (master.get_digital(MOGO_ON_BUTTON))
-			update_telemetry();
 			
             pros::lcd::print(0, "xPos: %f", xPos.load());
             pros::lcd::print(1, "yPos: %f", yPos.load());
@@ -280,30 +284,18 @@ void adjust_angle(Pose target) {
 	}
 }
 
-void auton_async() {
-	log("async auton start");
+void autonomous() {
+	log("auton start");
 
 	Pose target;
 
-	while (true) {
+	while (!instructions.empty()) {
 		pros::delay(PROCESS_DELAY);
-
-		if (instructions.empty()) continue;
 
 		Pose target = instructions.front();
 
 		adjust_angle(target);
 	}
-}
-
-void autonomous() {
-	log("auton start");
-
-	pros::Task auton_task(auton_async);
-
-	log("end async auton");
-	auton_task.remove();
-	amend_last_log("async auton end");
 }
 
 float calcPowerCurve(int value, int other_value, DriveCurve curve, int ratio, int other_ratio) {
@@ -356,7 +348,7 @@ void op_async() {
 }
 
 void opcontrol() {
-	log("op control started");
+	// log("op control started");
 
 	pros::Task op_async_task(op_async);
 
