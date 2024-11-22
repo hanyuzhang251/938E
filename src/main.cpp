@@ -44,7 +44,8 @@ constexpr int ARM_IDLE_SPEED = 5;
 
 // config controller
 
-constexpr std::pair<pros::digi_button, pros::digi_button> INFO_BUTTONS ({pros::E_CONTROLLER_DIGITAL_R1, pros::E_CONTROLLER_DIGITAL_R2});
+constexpr pros::digi_button POS_INFO_BUTTONS[] = {pros::E_CONTROLLER_DIGITAL_R1, pros::E_CONTROLLER_DIGITAL_R2, pros::E_CONTROLLER_DIGITAL_A};
+constexpr pros::digi_button GENERAL_INFO_BUTTONS[] = {pros::E_CONTROLLER_DIGITAL_R1, pros::E_CONTROLLER_DIGITAL_R2, pros::E_CONTROLLER_DIGITAL_B};
 
 constexpr pros::anal_button DRIVE_JOYSTICK = pros::E_CONTROLLER_ANALOG_LEFT_Y;
 constexpr pros::anal_button TURN_JOYSTICK = pros::E_CONTROLLER_ANALOG_RIGHT_X;
@@ -138,11 +139,23 @@ void get_robot_position(long last_update) {
 constexpr size_t TELEMTRY_SIZE = 100;
 std::string telemetry[TELEMTRY_SIZE];
 
+bool check_multi_digi_button(int n, const pros::digi_button* digi_buttons) {
+	for (int i = 0; i < n; ++i) if (!master.get_digital(digi_buttons[n])) return false;
+
+	return true;
+}
+
 void update_telemetry() {
-	if (master.get_digital(INFO_BUTTONS.first) && master.get_digital(INFO_BUTTONS.second)) {
-		master.set_text(0, 0, telemetry[0]);
-		master.set_text(1, 0, telemetry[1]);
-		master.set_text(2, 0, telemetry[2]);
+	master.clear();
+
+	if (check_multi_digi_button(3, GENERAL_INFO_BUTTONS)) {
+		master.set_text(0, 0, "VEX2024-938E");
+		master.set_text(1, 0, "time " + std::to_string(pros::millis()));
+		master.set_text(2, 0, "batt " + std::to_string(master.get_battery_capacity()));
+	} else if (check_multi_digi_button(3, POS_INFO_BUTTONS)) {
+		master.set_text(0, 0, "xPos " + std::to_string(xPos.load()));
+		master.set_text(1, 0, "yPos " + std::to_string(yPos.load()));
+		master.set_text(2, 0, "head " + std::to_string(head.load()));
 	} else {
 		master.set_text(0, 0, telemetry[0]);
 		master.set_text(1, 0, telemetry[1]);
@@ -239,7 +252,13 @@ void adjust_angle(Pose target) {
 
 			dt_left_motors.move(calc_power);
 			dt_right_motors.move(-calc_power);
+		} else {
+			dt_left_motors.brake();
+			dt_right_motors.brake();
+			break;
 		}
+
+		pros::delay(PROCESS_DELAY);
 	}
 }
 
