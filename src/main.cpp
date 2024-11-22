@@ -116,6 +116,9 @@ void pid_process(
 		prev_error = error;
 		error = target - *value;
 
+		// apply normalization if provided
+        if (normalize_func) error = normalize_func(target, *value);
+
 		// check if we crossed the target or not by comparing the signs of
 		// errors
 		if (sgn(prev_error) != sgn(error)) {
@@ -462,6 +465,9 @@ void turn_to_heading(float target_heading, int32_t timeout) {
 	// brake motors at end of process
 	dt_left_motors.brake();
 	dt_right_motors.brake();
+
+	// remove task
+	pid_process_task.remove();
 }
 
 void autonomous() {
