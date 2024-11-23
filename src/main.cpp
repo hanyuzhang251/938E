@@ -329,9 +329,10 @@ void initialize() {
 	imu.reset();
 	while(imu.is_calibrating()) {
 		pros::delay(LONG_DELAY);
-		printc_bulk('\b', 30);
+		printf(DEL80);
 		printf("resetting imu: %dms elapsed", pros::millis() - start);
 	}
+	printf(DEL80);
 	printf("imu reset, took %dms", pros::millis() - start);
 
     pros::Task pos_tracking_task([&]() {
