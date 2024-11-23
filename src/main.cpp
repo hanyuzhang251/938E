@@ -2,8 +2,10 @@
 #include "pros/adi.hpp"
 #include "pros/misc.h"
 #include "pros/rtos.hpp"
+#include <charconv>
 #include <cmath>
 #include <cstddef>
+#include <cstdio>
 #include <queue>
 #include <atomic>
 #include <string>
@@ -35,6 +37,8 @@
 
 #define Cartridge MotorGearset
 
+#define DEL80 "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b"
+
 // If these are change they will probably screw up the entire PID system, so
 // unless you desperately need to, don't.
 constexpr long PROCESS_DELAY = 15;
@@ -47,6 +51,10 @@ constexpr long LONG_DELAY = 34;
  */
 template <typename T> int sgn(T val) {
     return (T(0) < val) - (val < T(0));
+}
+
+void printc_bulk(char c, int n) {
+	for (int i = 0; i < n; ++i) printf("%c", c);
 }
 
 
@@ -118,7 +126,7 @@ struct PIDController {
 PIDController lateral_pid ({1, 0, 0});
 PIDController angular_pid ({0.5, 0.02, 5});
 
-PIDController arm_pid ({0.3, 0, 0});
+PIDController arm_pid ({0.3, 0.01, 0, 20, 5});
 
 // DRIVING
 
@@ -215,6 +223,8 @@ float calcPowerPID(
 	return error * pid->kP + integral * pid->kI + derivative * pid->kD;
 }
 
+int pid_process_counter = 0;
+
 /**
  * Standard PID process primarily for managing the integral and derivative
  * values
@@ -235,6 +245,8 @@ void pid_process(
 		std::atomic<float>* output,
 		std::function<float(float, float)> normalize_func = nullptr
 ) {
+	printf("[%d]: new PID process %d started", pros::millis(), pid_process_counter++);
+
 	// start time of process
 	int32_t start_time = pros::millis();
 	
@@ -316,16 +328,17 @@ void initialize() {
 
 	imu.reset();
 	while(imu.is_calibrating()) {
-		pros::delay(PROCESS_DELAY);
+		pros::delay(LONG_DELAY);
+		printc_bulk('\b', 30);
+		printf("resetting imu: %dms elapsed", pros::millis() - start);
 	}
+	printf("imu reset, took %dms", pros::millis() - start);
 
     pros::Task pos_tracking_task([&]() {
 		last_pos_update = pros::millis();
 
         while (true) {
 			get_robot_position(last_pos_update);
-
-			if (master.get_digital(MOGO_ON_BUTTON))
 			
             pros::lcd::print(0, "xPos: %f", xPos.load());
             pros::lcd::print(1, "yPos: %f", yPos.load());
