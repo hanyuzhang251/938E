@@ -407,6 +407,7 @@ void turn_to_heading(float target_heading, int32_t timeout) {
 		// delay to save resources
 		pros::delay(PROCESS_DELAY);
 	}
+	
 
 	// brake motors at end of process
 	dt_left_motors.brake();
