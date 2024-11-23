@@ -126,7 +126,7 @@ struct PIDController {
 PIDController lateral_pid ({1, 0, 0});
 PIDController angular_pid ({0.5, 0.02, 5});
 
-PIDController arm_pid ({0.3, 0.01, 0, 20, 5});
+PIDController arm_pid ({0.3, 0, 0, 0, 999});
 
 // DRIVING
 
@@ -147,6 +147,9 @@ constexpr bool speed_comp = true;
 constexpr int INTAKE_MOTOR_SPEED = 127;
 
 constexpr int ARM_SPEED = 50;
+constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
+constexpr float MIN_ARM_HEIGHT = 0;
+constexpr float MAX_ARM_HEIGHT = 2500;
 
 float calcPowerCurve(
 		int value,
@@ -239,13 +242,14 @@ int pid_process_counter = 0;
  */
 void pid_process(
 		std::atomic<float>* value,
-		float target,
+		std::atomic<float>* target,
 		const int32_t timeout,
 		const PIDController* pid,
 		std::atomic<float>* output,
 		std::function<float(float, float)> normalize_func = nullptr
 ) {
-	printf("[%d]: new PID process %d started", pros::millis(), pid_process_counter++);
+	int process_number = pid_process_counter++;
+	printf("[%d]: new PID process %d started\n", pros::millis(), process_number);
 
 	// start time of process
 	int32_t start_time = pros::millis();
@@ -259,15 +263,18 @@ void pid_process(
 
 	// while the process has not exceeded the time limit
 	while(pros::millis() < start_time + timeout) {
+		printf("[%d]: PID process %d running\n", pros::millis(), process_number);
+		printf("[%d]: PID process %d running\n", pros::millis(), process_number);
+
 		// update previous output
 		prev_output = *output;
 
 		// update error
 		prev_error = error;
-		error = target - *value;
+		error = *target - *value;
 
 		// apply normalization if provided
-        if (normalize_func) error = normalize_func(target, *value);
+        if (normalize_func) error = normalize_func(*target, *value);
 
 		// check if we crossed the target or not by comparing the signs of
 		// errors
@@ -296,6 +303,7 @@ void pid_process(
 
 		// set output power
 		*output = calc_power;
+		printf("[%d]: PID process %d output set to %f\n", pros::millis(), process_number, output->load());
 
 		// delay to save resources
 		pros::delay(PROCESS_DELAY);
@@ -319,7 +327,12 @@ void get_robot_position(long last_update) {
 
 	heading.store(imu.get_heading());
 }
-// competition:
+
+
+
+/*****************************************************************************/
+/*                                COMPETITION                                */
+/*****************************************************************************/
 
 void initialize() {
 	pros::lcd::initialize();
@@ -329,11 +342,9 @@ void initialize() {
 	imu.reset();
 	while(imu.is_calibrating()) {
 		pros::delay(LONG_DELAY);
-		printf(DEL80);
-		printf("resetting imu: %dms elapsed", pros::millis() - start);
+		printf("resetting imu: %dms elapsed\n", pros::millis() - start);
 	}
-	printf(DEL80);
-	printf("imu reset, took %dms", pros::millis() - start);
+	printf("imu reset completed, took %dms\n", pros::millis() - start);
 
     pros::Task pos_tracking_task([&]() {
 		last_pos_update = pros::millis();
@@ -368,6 +379,8 @@ void turn_to_heading(float target_heading, int32_t timeout) {
 		return fmod((error + 180), 360) - 180;
 	};
 
+
+
 	// records the output of the PID process
 	std::atomic<float> output (0);
 
@@ -376,14 +389,14 @@ void turn_to_heading(float target_heading, int32_t timeout) {
 
 	// start the PID process
 	pros::Task pid_process_task{[&] {
-		pid_process(
-				&heading,
-				target_heading,
-				timeout,
-				&angular_pid,
-				&output,
-				normalize_rotation
-		);
+		// pid_process(
+		// 		&heading,
+		// 		&target_heading,
+		// 		timeout,
+		// 		&angular_pid,
+		// 		&output,
+		// 		normalize_rotation
+		// );
 	}};
 	
 	// apply the motor values
@@ -412,9 +425,17 @@ void autonomous() {
 	dt_right_motors.brake();
 }
 
-std::atomic<int> arm_target_pos = 0;
+std::atomic<float> arm_target_pos = 0;
 
 void opcontrol() {
+	printf("op control start\n");
+
+	// dampens the error when moving downward to prevent dropping the arm
+	auto error_mod = [](float target, float current) {
+		float error = target - current;
+		if (error < 0) error *= ARM_DOWN_SPEED_MULTI;
+		return error;
+	};
 	// records the output of the arm PID process
 	std::atomic<float> output (0);
 	// records position of the arm throughout the PID process
@@ -424,10 +445,11 @@ void opcontrol() {
 	pros::Task arm_pid_task([&] {
 		pid_process(
 				&arm_pos,
-				arm_target_pos,
+				&arm_target_pos,
 				120000, // bombastically long timeout to cover entire period
 				&arm_pid,
-				&output
+				&output,
+				error_mod
 		);
 	});
 
@@ -458,6 +480,8 @@ void opcontrol() {
 		// arm
 		if (master.get_digital(ARM_UP_BUTTON)) arm_target_pos += ARM_SPEED;
 		else if (master.get_digital(ARM_DOWN_BUTTON)) arm_target_pos -= ARM_SPEED;
+		// constrain the target arm pos
+		arm_target_pos.store(std::min(MAX_ARM_HEIGHT, std::max(MIN_ARM_HEIGHT, arm_target_pos.load())));
 		// update current arm pos
 		arm_pos.store(arm.get_position());
 		// move arm to PID output
