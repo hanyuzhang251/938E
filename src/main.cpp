@@ -162,7 +162,8 @@ float calcPowerCurve(
 
 	float ratio_mult = (float) ratio / (ratio + other_ratio);
 	if (speed_comp) {
-		float dynamic_ratio = ((float) other_ratio * std::abs(other_value) / 127);
+		float dynamic_ratio = (
+				(float) other_ratio * std::abs(other_value) / 127);
 		ratio_mult = (float) ratio / (ratio + dynamic_ratio);
 	}
 
@@ -249,7 +250,8 @@ void pid_process(
 		std::function<float(float, float)> normalize_func = nullptr
 ) {
 	int process_number = pid_process_counter++;
-	printf("[%d]: new PID process %d started\n", pros::millis(), process_number);
+	printf("[%d]: new PID process %d started\n",
+			pros::millis(), process_number);
 
 	// start time of process
 	int32_t start_time = pros::millis();
@@ -263,8 +265,10 @@ void pid_process(
 
 	// while the process has not exceeded the time limit
 	while(pros::millis() < start_time + timeout) {
-		printf("[%d]: PID process %d running\n", pros::millis(), process_number);
-		printf("[%d]: PID process %d running\n", pros::millis(), process_number);
+		printf("[%d]: PID process %d running\n",
+				pros::millis(), process_number);
+		printf("[%d]: PID process %d running\n",
+				pros::millis(), process_number);
 
 		// update previous output
 		prev_output = *output;
@@ -303,7 +307,8 @@ void pid_process(
 
 		// set output power
 		*output = calc_power;
-		printf("[%d]: PID process %d output set to %f\n", pros::millis(), process_number, output->load());
+		printf("[%d]: PID process %d output set to %f\n",
+				pros::millis(), process_number, output->load());
 
 		// delay to save resources
 		pros::delay(PROCESS_DELAY);
@@ -312,9 +317,18 @@ void pid_process(
 
 
 
+/*****************************************************************************/
+/*                                    ODOM                                   */
+/*****************************************************************************/
+
+float imu_bias_x = 0;
+float imu_bias_y = 0;
+float imu_bias_z = 0;
+
 // robot position
 std::atomic<float> xPos (0);
 std::atomic<float> yPos (0);
+std::atomic<float> zPos (0);
 std::atomic<float> heading (0);
 
 long last_pos_update = 0;
@@ -324,6 +338,7 @@ void get_robot_position(long last_update) {
 
 	xPos.fetch_add(imu.get_accel().x);
 	yPos.fetch_add(imu.get_accel().y);
+	zPos.fetch_add(imu.get_accel().z);
 
 	heading.store(imu.get_heading());
 }
@@ -379,8 +394,9 @@ void turn_to_heading(float target_heading, int32_t timeout) {
 		return fmod((error + 180), 360) - 180;
 	};
 
-
-
+	// atomic instance of target heading cause that is that the PID process
+	// requires
+	std::atomic<float> atomic_target_heading (target_heading);
 	// records the output of the PID process
 	std::atomic<float> output (0);
 
@@ -389,14 +405,14 @@ void turn_to_heading(float target_heading, int32_t timeout) {
 
 	// start the PID process
 	pros::Task pid_process_task{[&] {
-		// pid_process(
-		// 		&heading,
-		// 		&target_heading,
-		// 		timeout,
-		// 		&angular_pid,
-		// 		&output,
-		// 		normalize_rotation
-		// );
+		pid_process(
+				&heading,
+				&atomic_target_heading,
+				timeout,
+				&angular_pid,
+				&output,
+				normalize_rotation
+		);
 	}};
 	
 	// apply the motor values
@@ -407,7 +423,6 @@ void turn_to_heading(float target_heading, int32_t timeout) {
 		// delay to save resources
 		pros::delay(PROCESS_DELAY);
 	}
-	
 
 	// brake motors at end of process
 	dt_left_motors.brake();
@@ -459,38 +474,52 @@ void opcontrol() {
         int drive_value = master.get_analog(DRIVE_JOYSTICK);
         int turn_value = master.get_analog(TURN_JOYSTICK);
 
-		float drive_power = calcPowerCurve(drive_value, turn_value, drive_curve, drive_ratio, turn_ratio);
-		float turn_power = calcPowerCurve(turn_value, drive_value, turn_curve, turn_ratio, drive_ratio);
+		float drive_power = calcPowerCurve(
+				drive_value, turn_value, drive_curve, drive_ratio, turn_ratio);
+		float turn_power = calcPowerCurve(
+				turn_value, drive_value, turn_curve, turn_ratio, drive_ratio);
 
 		dt_left_motors.move(drive_power + turn_power);
 		dt_right_motors.move(drive_power - turn_power);
 
 		// intake
-		if (master.get_digital(INTAKE_FWD_BUTTON)) intake_motor.move(INTAKE_MOTOR_SPEED);
-		else if (master.get_digital(INTAKE_REV_BUTTON)) intake_motor.move(-INTAKE_MOTOR_SPEED);
+		if (master.get_digital(INTAKE_FWD_BUTTON))
+			intake_motor.move(INTAKE_MOTOR_SPEED);
+		else if (master.get_digital(INTAKE_REV_BUTTON))
+			intake_motor.move(-INTAKE_MOTOR_SPEED);
 		else intake_motor.brake();
 		
 		// mogo
-		if (master.get_digital(MOGO_ON_BUTTON)) mogo_piston.set_value(true);
-		else if (master.get_digital(MOGO_OFF_BUTTON)) mogo_piston.set_value(false);
+		if (master.get_digital(MOGO_ON_BUTTON))
+			mogo_piston.set_value(true);
+		else if (master.get_digital(MOGO_OFF_BUTTON))
+			mogo_piston.set_value(false);
 		
 		// bar
-		if (master.get_digital(BAR_ON_BUTTON)) bar_piston.set_value(true);
-		else if (master.get_digital(BAR_OFF_BUTTON)) bar_piston.set_value(false);
+		if (master.get_digital(BAR_ON_BUTTON))
+			bar_piston.set_value(true);
+		else if (master.get_digital(BAR_OFF_BUTTON))
+			bar_piston.set_value(false);
 
 		// arm
-		if (master.get_digital(ARM_UP_BUTTON)) arm_target_pos += ARM_SPEED;
-		else if (master.get_digital(ARM_DOWN_BUTTON)) arm_target_pos -= ARM_SPEED;
+		if (master.get_digital(ARM_UP_BUTTON))
+			arm_target_pos += ARM_SPEED;
+		else if (master.get_digital(ARM_DOWN_BUTTON))
+			arm_target_pos -= ARM_SPEED;
 		// constrain the target arm pos
-		arm_target_pos.store(std::min(MAX_ARM_HEIGHT, std::max(MIN_ARM_HEIGHT, arm_target_pos.load())));
+		arm_target_pos.store(std::min(MAX_ARM_HEIGHT, std::max(MIN_ARM_HEIGHT,
+				arm_target_pos.load()
+		)));
 		// update current arm pos
 		arm_pos.store(arm.get_position());
 		// move arm to PID output
 		arm.move(output.load());
 
 		// arm end
-		if(master.get_digital(ARM_END_ON_BUTTON)) arm_end.set_value(true);
-		else if(master.get_digital(ARM_END_OFF_BUTTON)) arm_end.set_value(false);
+		if(master.get_digital(ARM_END_ON_BUTTON))
+			arm_end.set_value(true);
+		else if(master.get_digital(ARM_END_OFF_BUTTON))
+			arm_end.set_value(false);
 
         pros::delay(PROCESS_DELAY);
     }
