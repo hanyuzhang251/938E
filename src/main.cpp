@@ -10,6 +10,7 @@
 #include <atomic>
 #include <string>
 #include <sys/_stdint.h>
+#include <unordered_map>
 
 #define digi_button controller_digital_e_t
 #define anal_button controller_analog_e_t
@@ -36,6 +37,8 @@
 #define CTRL_DIGI_RIGHT E_CONTROLLER_DIGITAL_RIGHT
 
 #define Cartridge MotorGearset
+
+#define CLEAR_TERMINAL printf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
 
 // If these are change they will probably screw up the entire PID system, so
 // unless you desperately need to, don't.
@@ -103,7 +106,51 @@ constexpr pros::digi_button ARM_DOWN_BUTTON = pros::CTRL_DIGI_DOWN;
 constexpr pros::digi_button ARM_END_ON_BUTTON = pros::CTRL_DIGI_RIGHT;
 constexpr pros::digi_button ARM_END_OFF_BUTTON = pros::CTRL_DIGI_LEFT;
 
-// PID CONTROLLER
+
+
+/*****************************************************************************/
+/*                                 TELEMETRY                                 */
+/*****************************************************************************/
+
+std::unordered_map<std::string, std::unordered_map<std::string, std::string>> telemetry;
+
+void add_process(const std::string& name) {
+	telemetry.insert({name, {}});
+}
+
+void remove_process(const std::string& name) {
+	telemetry.erase(name);
+}
+
+void log_data(const std::string& process, const std::string& key, const std::string& value) {
+	telemetry.at(process).insert_or_assign(key, value);
+}
+
+void update_telemetry() {
+	CLEAR_TERMINAL
+
+	for (const auto& process : telemetry) {
+		std::string process_name = process.first;
+
+		printf("[");
+		printc_bulk('=', std::floor((74 - process_name.length() / 2)));
+		printf("  %s  ", process_name.c_str());
+		printc_bulk('=', std::ceil((74 - process_name.length() / 2)));
+		printf("]\n");
+
+		for (const auto& data : process.second) {
+			printf("%s: %s\n", data.first.c_str(), data.second.c_str());
+		}
+
+		printf("\n\n");
+	}
+}
+
+
+
+/*****************************************************************************/
+/*                              PID CONTROLLER                               */
+/*****************************************************************************/
 
 /**
  * Stores the variables for a PID controller
