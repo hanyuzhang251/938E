@@ -328,7 +328,7 @@ void pid_process(
 	p.status = 3;
 }
 
-PIDController lateral_pid ({1, 0, 0});
+PIDController lateral_pid ({0.075, 0.005, 0, 300, 999});
 PIDController angular_pid ({1, 0.1, 3, 30, 999});
 
 PIDController arm_pid ({0.3, 0, 0, 0, 999});
@@ -640,9 +640,7 @@ void move_a_distance(float distance, int32_t timeout) {
 }
 
 void autonomous() {
-	turn_to_heading(90, 3000);
-	turn_to_heading(-45, 3000);
-	turn_to_heading(0, 3000);
+	move_a_distance(3000, 5000);
 
 	dt_left_motors.brake();
 	dt_right_motors.brake();
