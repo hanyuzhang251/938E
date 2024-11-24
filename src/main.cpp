@@ -5,11 +5,17 @@
 #include <charconv>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <queue>
 #include <atomic>
 #include <string>
 #include <sys/_stdint.h>
+#include <type_traits>
+#include <unordered_map>
+#include <sstream>
+#include <stdarg.h>
+#include "tsl/ordered_map.h"
 
 #define digi_button controller_digital_e_t
 #define anal_button controller_analog_e_t
@@ -37,9 +43,11 @@
 
 #define Cartridge MotorGearset
 
-#define DEL80 "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b"
+#define str(n) std::to_string(n)
 
-// If these are change they will probably screw up the entire PID system, so
+#define CLEAR_TERMINAL printf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
+
+// If these are changed they will probably screw up the entire PID system, so
 // unless you desperately need to, don't.
 constexpr long PROCESS_DELAY = 15;
 constexpr long LONG_DELAY = 34;
@@ -62,6 +70,8 @@ void printc_bulk(char c, int n) {
 /*****************************************************************************/
 /*                                  CONFIG                                   */
 /*****************************************************************************/
+
+constexpr float DT_WHEEL_DIAM = 2.75;
 
 // PORTS
 
@@ -103,7 +113,96 @@ constexpr pros::digi_button ARM_DOWN_BUTTON = pros::CTRL_DIGI_DOWN;
 constexpr pros::digi_button ARM_END_ON_BUTTON = pros::CTRL_DIGI_RIGHT;
 constexpr pros::digi_button ARM_END_OFF_BUTTON = pros::CTRL_DIGI_LEFT;
 
-// PID CONTROLLER
+
+
+/*****************************************************************************/
+/*                                 TELEMETRY                                 */
+/*****************************************************************************/
+
+constexpr int32_t PROCESS_DECAY_DELAY = 5000;
+
+struct process {
+	int status = 0;
+	int32_t start_time = pros::millis();
+	int32_t end_time = INT32_MAX;
+	int32_t decay_time = INT32_MAX;
+	tsl::ordered_map<std::string, std::string> data;
+
+	void log_data(const std::string& key, const std::string& value) {
+		data.insert_or_assign(key, value);
+	}
+};
+
+tsl::ordered_map<std::string, process> telemetry;
+
+process add_process(const std::string& name) {
+	process p;
+	telemetry.insert({name, p});
+	return p;
+}
+
+process remove_process(const std::string& name) {
+	process p = telemetry.at(name);
+	telemetry.erase(name);
+	return p;
+}
+
+void update_telemetry() {
+	CLEAR_TERMINAL
+
+	for (const auto& process : telemetry) {
+		std::string process_name = process.first;
+		auto p = process.second;
+
+		if (pros::millis() >= p.decay_time) {
+			remove_process(process_name);
+			continue;
+		}
+
+		printf("[");
+		printc_bulk('=', std::floor((74 - process_name.length() / 2)));
+		printf("  %s  ", process_name.c_str());
+		printc_bulk('=', std::ceil((74 - process_name.length() / 2)));
+		printf("]\n");
+
+		printf("status: ");
+		switch(p.status) {
+			case 0: {
+				printf("not started\n");
+				break;
+			}
+			case 1: {
+				printf("waiting...\n");
+				break;
+			}
+			case 2: {
+				int32_t elapsed_ms = pros::millis() - p.start_time;
+				printf("running... %dms elapsed\n", elapsed_ms);
+				p.end_time = p.start_time + elapsed_ms;
+				break;
+			}
+			case 3: {
+				p.decay_time = p.end_time + PROCESS_DECAY_DELAY;
+				p.status = 4;
+			}
+			case 4: {
+				printf("completed, took %dms\n", p.end_time - p.start_time);
+			}
+		}
+
+		for (const auto& data : process.second.data) {
+			printf("%s: %s\n", data.first.c_str(), data.second.c_str());
+		}
+
+		printf("\n\n");
+	}
+}
+
+
+
+/*****************************************************************************/
+/*                              PID CONTROLLER                               */
+/*****************************************************************************/
 
 /**
  * Stores the variables for a PID controller
@@ -122,6 +221,110 @@ struct PIDController {
 	float windup = 0;
 	float slew = 0;
 };
+
+/**
+ * Calculates the power output of a PID given the current status
+ *
+ * @param error difference between current and target values
+ * @param integral error accumulated over time
+ * @param derivative dampener based on predicted future error
+ * @param pid PID controller to calculate power with
+ */
+float calcPowerPID(
+	int error, int integral, int derivative, const PIDController* pid
+) {
+	return error * pid->kP + integral * pid->kI + derivative * pid->kD;
+}
+
+int pid_process_counter = 0;
+
+/**
+ * Standard PID process primarily for managing the integral and derivative
+ * values
+ *
+ * @param value pointer to the current value
+ * @param target pointer to the target value
+ * @param timeout time allocated to task
+ * @param pid PID controller to use
+ * @param output pointer to location to store the output
+ * @param normalize_func will be used to normalize the error given the value
+ * and target, usually used when rotating in degrees
+ */
+void pid_process(
+		std::atomic<float>* value,
+		std::atomic<float>* target,
+		const int32_t timeout,
+		const PIDController* pid,
+		std::atomic<float>* output,
+		std::function<float(float, float)> normalize_func = nullptr
+) {
+	std::string process_name = "PID Process " + std::to_string(pid_process_counter++);
+	process p = add_process(process_name);
+
+	// start time of process
+	int32_t start_time = pros::millis();
+	
+	// variables used for PID calculation
+	float prev_output = 0;
+	int prev_error = 0;
+	int error = 0;
+	int integral = 0;
+	int derivative = 0;
+
+	// while the process has not exceeded the time limit
+	while(pros::millis() < start_time + timeout) {
+		p.status = 2;
+
+		// update previous output
+		prev_output = *output;
+
+		// update error
+		prev_error = error;
+		error = *target - *value;
+
+		// apply normalization if provided
+        if (normalize_func) error = normalize_func(*target, *value);
+
+		// check if we crossed the target or not by comparing the signs of
+		// errors
+		if (sgn(prev_error) != sgn(error)) {
+			// if we did, reset integral
+			integral = 0;
+		}
+
+		// check if the error is in the range of the integral windup
+		if (std::abs(error) <= pid->windup) {
+			// if so, update integral
+			integral += error;
+		} else {
+			// if not, set integral to 0
+			integral = 0;
+		}
+
+		// update derivative
+		derivative = error - prev_error;
+
+		// calculate the power
+		float calc_power = calcPowerPID(error, integral, derivative, pid);
+		// constrain the power to slew
+		calc_power = std::max(prev_output - pid->slew,
+				std::min(prev_error + pid->slew, calc_power));
+
+		// set output power
+		*output = calc_power;
+
+		p.log_data("p-output", std::to_string(prev_output));
+		p.log_data("output", std::to_string(calc_power));
+		p.log_data("p-error", std::to_string(prev_error));
+		p.log_data("error", std::to_string(error));
+		p.log_data("integral", std::to_string(integral));
+		p.log_data("derivative", std::to_string(derivative));
+
+		// delay to save resources
+		pros::delay(PROCESS_DELAY);
+	}
+	p.status = 3;
+}
 
 PIDController lateral_pid ({1, 0, 0});
 PIDController angular_pid ({0.5, 0.02, 5});
@@ -162,7 +365,8 @@ float calcPowerCurve(
 
 	float ratio_mult = (float) ratio / (ratio + other_ratio);
 	if (speed_comp) {
-		float dynamic_ratio = ((float) other_ratio * std::abs(other_value) / 127);
+		float dynamic_ratio = (
+				(float) other_ratio * std::abs(other_value) / 127);
 		ratio_mult = (float) ratio / (ratio + dynamic_ratio);
 	}
 
@@ -209,112 +413,55 @@ pros::IMU imu (IMU_PORT);
 
 
 /*****************************************************************************/
-/*                               PID CONTROLLER                              */
+/*                                    ODOM                                   */
 /*****************************************************************************/
 
-/**
- * Calculates the power output of a PID given the current status
- *
- * @param error difference between current and target values
- * @param integral error accumulated over time
- * @param derivative dampener based on predicted future error
- * @param pid PID controller to calculate power with
- */
-float calcPowerPID(
-	int error, int integral, int derivative, const PIDController* pid
-) {
-	return error * pid->kP + integral * pid->kI + derivative * pid->kD;
-}
+// imu bias
 
-int pid_process_counter = 0;
+float imu_bias_x = 0;
+float imu_bias_y = 0;
+float imu_bias_z = 0;
 
-/**
- * Standard PID process primarily for managing the integral and derivative
- * values
- *
- * @param value pointer to the current value
- * @param target pointer to the target value
- * @param timeout time allocated to task
- * @param pid PID controller to use
- * @param output pointer to location to store the output
- * @param normalize_func will be used to normalize the error given the value
- * and target, usually used when rotating in degrees
- */
-void pid_process(
-		std::atomic<float>* value,
-		std::atomic<float>* target,
-		const int32_t timeout,
-		const PIDController* pid,
-		std::atomic<float>* output,
-		std::function<float(float, float)> normalize_func = nullptr
-) {
-	int process_number = pid_process_counter++;
-	printf("[%d]: new PID process %d started\n", pros::millis(), process_number);
+void solve_imu_bias(int32_t timeout) {
+	process p = add_process("Solve IMU Bias");
+	p.log_data("X bias", "waiting...");
+	p.log_data("Y bias", "waiting...");
+	p.log_data("Z bias", "waiting...");
 
-	// start time of process
 	int32_t start_time = pros::millis();
-	
-	// variables used for PID calculation
-	float prev_output = 0;
-	int prev_error = 0;
-	int error = 0;
-	int integral = 0;
-	int derivative = 0;
 
-	// while the process has not exceeded the time limit
-	while(pros::millis() < start_time + timeout) {
-		printf("[%d]: PID process %d running\n", pros::millis(), process_number);
-		printf("[%d]: PID process %d running\n", pros::millis(), process_number);
+	imu_bias_x = 0;
+	imu_bias_y = 0;
+	imu_bias_z = 0;
 
-		// update previous output
-		prev_output = *output;
+	int cycle_count = 0;
 
-		// update error
-		prev_error = error;
-		error = *target - *value;
+	p.status = 2;
+	while(pros::millis() <= start_time + timeout) {
+		imu_bias_x += imu.get_accel().x;
+		imu_bias_y += imu.get_accel().y;
+		imu_bias_z += imu.get_accel().z;
 
-		// apply normalization if provided
-        if (normalize_func) error = normalize_func(*target, *value);
+		++cycle_count;
 
-		// check if we crossed the target or not by comparing the signs of
-		// errors
-		if (sgn(prev_error) != sgn(error)) {
-			// if we did, reset integral
-			integral = 0;
-		}
-
-		// check if the error is in the range of the integral windup
-		if (std::abs(error) <= pid->windup) {
-			// if so, update integral
-			integral += error;
-		} else {
-			// if not, set integral to 0
-			integral = 0;
-		}
-
-		// update derivative
-		derivative = error - prev_error;
-
-		// calculate the power
-		float calc_power = calcPowerPID(error, integral, derivative, pid);
-		// constrain the power to slew
-		calc_power = std::max(prev_output - pid->slew,
-				std::min(prev_error + pid->slew, calc_power));
-
-		// set output power
-		*output = calc_power;
-		printf("[%d]: PID process %d output set to %f\n", pros::millis(), process_number, output->load());
-
-		// delay to save resources
 		pros::delay(PROCESS_DELAY);
 	}
+
+	imu_bias_x /= cycle_count;
+	imu_bias_y /= cycle_count;
+	imu_bias_z /= cycle_count;
+
+	p.log_data("X bias", str(imu_bias_x));
+	p.log_data("Y bias", str(imu_bias_y));
+	p.log_data("Z bias", str(imu_bias_z));
+
+	p.status = 3;
 }
-
-
 
 // robot position
 std::atomic<float> xPos (0);
 std::atomic<float> yPos (0);
+std::atomic<float> zPos (0);
 std::atomic<float> heading (0);
 
 long last_pos_update = 0;
@@ -322,8 +469,9 @@ long last_pos_update = 0;
 void get_robot_position(long last_update) {
 	last_pos_update = last_update;
 
-	xPos.fetch_add(imu.get_accel().x);
-	yPos.fetch_add(imu.get_accel().y);
+	xPos.fetch_add(imu.get_accel().x - imu_bias_x);
+	yPos.fetch_add(imu.get_accel().y - imu_bias_y);
+	zPos.fetch_add(imu.get_accel().z - imu_bias_z);
 
 	heading.store(imu.get_heading());
 }
@@ -336,15 +484,22 @@ void get_robot_position(long last_update) {
 
 void initialize() {
 	pros::lcd::initialize();
-    
+
+	process init = add_process("Initialize");
+	init.log_data("reset imu" , "waiting...");
+	init.log_data("solve imu bias" , "waiting...");
+
 	auto start = pros::millis();
 
-	imu.reset();
-	while(imu.is_calibrating()) {
-		pros::delay(LONG_DELAY);
-		printf("resetting imu: %dms elapsed\n", pros::millis() - start);
-	}
-	printf("imu reset completed, took %dms\n", pros::millis() - start);
+	process reset_imu = add_process("Reset IMU");
+	imu.reset(true);
+	reset_imu.status = 3;
+
+	init.log_data("reset imu", "completed");
+
+	solve_imu_bias(2000);
+
+	init.log_data("solve imu bias", "completed");
 
     pros::Task pos_tracking_task([&]() {
 		last_pos_update = pros::millis();
@@ -359,6 +514,8 @@ void initialize() {
             pros::delay(PROCESS_DELAY);
         }
     });
+
+	init.status = 3;
 }
 
 void disabled() {}
@@ -379,8 +536,9 @@ void turn_to_heading(float target_heading, int32_t timeout) {
 		return fmod((error + 180), 360) - 180;
 	};
 
-
-
+	// atomic instance of target heading cause that is that the PID process
+	// requires
+	std::atomic<float> atomic_target_heading (target_heading);
 	// records the output of the PID process
 	std::atomic<float> output (0);
 
@@ -389,14 +547,14 @@ void turn_to_heading(float target_heading, int32_t timeout) {
 
 	// start the PID process
 	pros::Task pid_process_task{[&] {
-		// pid_process(
-		// 		&heading,
-		// 		&target_heading,
-		// 		timeout,
-		// 		&angular_pid,
-		// 		&output,
-		// 		normalize_rotation
-		// );
+		pid_process(
+				&heading,
+				&atomic_target_heading,
+				timeout,
+				&angular_pid,
+				&output,
+				normalize_rotation
+		);
 	}};
 	
 	// apply the motor values
@@ -458,38 +616,52 @@ void opcontrol() {
         int drive_value = master.get_analog(DRIVE_JOYSTICK);
         int turn_value = master.get_analog(TURN_JOYSTICK);
 
-		float drive_power = calcPowerCurve(drive_value, turn_value, drive_curve, drive_ratio, turn_ratio);
-		float turn_power = calcPowerCurve(turn_value, drive_value, turn_curve, turn_ratio, drive_ratio);
+		float drive_power = calcPowerCurve(
+				drive_value, turn_value, drive_curve, drive_ratio, turn_ratio);
+		float turn_power = calcPowerCurve(
+				turn_value, drive_value, turn_curve, turn_ratio, drive_ratio);
 
 		dt_left_motors.move(drive_power + turn_power);
 		dt_right_motors.move(drive_power - turn_power);
 
 		// intake
-		if (master.get_digital(INTAKE_FWD_BUTTON)) intake_motor.move(INTAKE_MOTOR_SPEED);
-		else if (master.get_digital(INTAKE_REV_BUTTON)) intake_motor.move(-INTAKE_MOTOR_SPEED);
+		if (master.get_digital(INTAKE_FWD_BUTTON))
+			intake_motor.move(INTAKE_MOTOR_SPEED);
+		else if (master.get_digital(INTAKE_REV_BUTTON))
+			intake_motor.move(-INTAKE_MOTOR_SPEED);
 		else intake_motor.brake();
 		
 		// mogo
-		if (master.get_digital(MOGO_ON_BUTTON)) mogo_piston.set_value(true);
-		else if (master.get_digital(MOGO_OFF_BUTTON)) mogo_piston.set_value(false);
+		if (master.get_digital(MOGO_ON_BUTTON))
+			mogo_piston.set_value(true);
+		else if (master.get_digital(MOGO_OFF_BUTTON))
+			mogo_piston.set_value(false);
 		
 		// bar
-		if (master.get_digital(BAR_ON_BUTTON)) bar_piston.set_value(true);
-		else if (master.get_digital(BAR_OFF_BUTTON)) bar_piston.set_value(false);
+		if (master.get_digital(BAR_ON_BUTTON))
+			bar_piston.set_value(true);
+		else if (master.get_digital(BAR_OFF_BUTTON))
+			bar_piston.set_value(false);
 
 		// arm
-		if (master.get_digital(ARM_UP_BUTTON)) arm_target_pos += ARM_SPEED;
-		else if (master.get_digital(ARM_DOWN_BUTTON)) arm_target_pos -= ARM_SPEED;
+		if (master.get_digital(ARM_UP_BUTTON))
+			arm_target_pos += ARM_SPEED;
+		else if (master.get_digital(ARM_DOWN_BUTTON))
+			arm_target_pos -= ARM_SPEED;
 		// constrain the target arm pos
-		arm_target_pos.store(std::min(MAX_ARM_HEIGHT, std::max(MIN_ARM_HEIGHT, arm_target_pos.load())));
+		arm_target_pos.store(std::min(MAX_ARM_HEIGHT, std::max(MIN_ARM_HEIGHT,
+				arm_target_pos.load()
+		)));
 		// update current arm pos
 		arm_pos.store(arm.get_position());
 		// move arm to PID output
 		arm.move(output.load());
 
 		// arm end
-		if(master.get_digital(ARM_END_ON_BUTTON)) arm_end.set_value(true);
-		else if(master.get_digital(ARM_END_OFF_BUTTON)) arm_end.set_value(false);
+		if(master.get_digital(ARM_END_ON_BUTTON))
+			arm_end.set_value(true);
+		else if(master.get_digital(ARM_END_OFF_BUTTON))
+			arm_end.set_value(false);
 
         pros::delay(PROCESS_DELAY);
     }
