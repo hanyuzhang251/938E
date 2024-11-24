@@ -469,9 +469,9 @@ long last_pos_update = 0;
 void get_robot_position(long last_update) {
 	last_pos_update = last_update;
 
-	xPos.fetch_add(imu.get_accel().x);
-	yPos.fetch_add(imu.get_accel().y);
-	zPos.fetch_add(imu.get_accel().z);
+	xPos.fetch_add(imu.get_accel().x - imu_bias_x);
+	yPos.fetch_add(imu.get_accel().y - imu_bias_y);
+	zPos.fetch_add(imu.get_accel().z - imu_bias_z);
 
 	heading.store(imu.get_heading());
 }
