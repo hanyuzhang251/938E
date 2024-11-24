@@ -321,9 +321,33 @@ void pid_process(
 /*                                    ODOM                                   */
 /*****************************************************************************/
 
+// imu bias
+
 float imu_bias_x = 0;
 float imu_bias_y = 0;
 float imu_bias_z = 0;
+
+void calc_imu_bias(int32_t timeout) {
+	imu_bias_x = 0;
+	imu_bias_y = 0;
+	imu_bias_z = 0;
+
+	int32_t start_time = pros::millis();
+
+	int cycle_count = 0;
+
+	while(pros::millis() <= start_time + timeout) {
+		imu_bias_x += imu.get_accel().x;
+		imu_bias_y += imu.get_accel().y;
+		imu_bias_z += imu.get_accel().z;
+
+		++cycle_count;
+	}
+
+	imu_bias_x /= cycle_count;
+	imu_bias_y /= cycle_count;
+	imu_bias_z /= cycle_count;
+}
 
 // robot position
 std::atomic<float> xPos (0);
@@ -360,6 +384,8 @@ void initialize() {
 		printf("resetting imu: %dms elapsed\n", pros::millis() - start);
 	}
 	printf("imu reset completed, took %dms\n", pros::millis() - start);
+
+	calc_imu_bias(2000);
 
     pros::Task pos_tracking_task([&]() {
 		last_pos_update = pros::millis();
