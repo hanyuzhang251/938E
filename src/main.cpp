@@ -548,9 +548,19 @@ struct Pose {
 void turn_to_heading(float target_heading, int32_t timeout) {
 	// error normalization function to deal with 0-360 wrap around
 	auto normalize_rotation = [](float target, float current) {
+		// Normalize current and target to [-180, 180]
+		target = fmod((target + 180), 360) - 180;
+		current = fmod((current + 180), 360) - 180;
+
+		// Calculate the error (still in the range [-180, 180])
 		float error = target - current;
+
+		// Ensure the error is also in [-180, 180]
+		error = fmod((error + 180), 360) - 180;
 		printf("target: %f\tcurrent: %f\terror: %f\n",target, current, fmod((error + 180), 360) - 180 );
-		return fmod((error + 180), 360) - 180;
+		return error;
+		
+
 	};
 
 	// atomic instance of target heading cause that is that the PID process
