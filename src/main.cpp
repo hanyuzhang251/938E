@@ -50,7 +50,7 @@
 // If these are changed they will probably screw up the entire PID system, so
 // unless you desperately need to, don't.
 constexpr long PROCESS_DELAY = 15;
-constexpr long LONG_DELAY = 34;
+constexpr long LONG_DELAY = 200;
 
 /**
  * Returns the sign of a value
@@ -290,6 +290,8 @@ void pid_process(
 		if (sgn(prev_error) != sgn(error)) {
 			// if we did, reset integral
 			integral = 0;
+
+			printf("reset integral\n");
 		}
 
 		// check if the error is in the range of the integral windup
@@ -327,7 +329,7 @@ void pid_process(
 }
 
 PIDController lateral_pid ({1, 0, 0});
-PIDController angular_pid ({0.5, 0.02, 5});
+PIDController angular_pid ({1, 0.1, 3, 30, 999});
 
 PIDController arm_pid ({0.3, 0, 0, 0, 999});
 
@@ -340,12 +342,12 @@ struct DriveCurve {
 };
 
 DriveCurve drive_curve ({3, 10, 2});
-DriveCurve turn_curve ({3, 10, 2});
+DriveCurve turn_curve ({3, 10, 0.6});
 
 constexpr int drive_ratio = 1;
 constexpr int turn_ratio = 1;
 
-constexpr bool speed_comp = true;
+constexpr bool speed_comp = false;
 
 constexpr int INTAKE_MOTOR_SPEED = 127;
 
@@ -462,7 +464,11 @@ void solve_imu_bias(int32_t timeout) {
 std::atomic<float> xPos (0);
 std::atomic<float> yPos (0);
 std::atomic<float> zPos (0);
+std::atomic<float> dist (0);
 std::atomic<float> heading (0);
+
+int left_motors_prev_pos = 0;
+int right_motors_prev_pos = 0;
 
 long last_pos_update = 0;
 
@@ -472,6 +478,10 @@ void get_robot_position(long last_update) {
 	xPos.fetch_add(imu.get_accel().x - imu_bias_x);
 	yPos.fetch_add(imu.get_accel().y - imu_bias_y);
 	zPos.fetch_add(imu.get_accel().z - imu_bias_z);
+
+	dist.fetch_add(((dt_left_motors.get_position() - left_motors_prev_pos) + (dt_right_motors.get_position() - right_motors_prev_pos)) / 2.0f);
+	left_motors_prev_pos = dt_left_motors.get_position();
+	right_motors_prev_pos = dt_right_motors.get_position();
 
 	heading.store(imu.get_heading());
 }
@@ -483,6 +493,11 @@ void get_robot_position(long last_update) {
 /*****************************************************************************/
 
 void initialize() {
+	pros::Task telemetry([&](){
+		update_telemetry();
+		pros::delay(LONG_DELAY);
+	});
+
 	pros::lcd::initialize();
 
 	process init = add_process("Initialize");
@@ -509,7 +524,8 @@ void initialize() {
 			
             pros::lcd::print(0, "xPos: %f", xPos.load());
             pros::lcd::print(1, "yPos: %f", yPos.load());
-            pros::lcd::print(2, "head: %f", heading.load());
+			pros::lcd::print(2, "dist: %f", dist.load());
+            pros::lcd::print(3, "head: %f", heading.load());
 
             pros::delay(PROCESS_DELAY);
         }
@@ -533,6 +549,7 @@ void turn_to_heading(float target_heading, int32_t timeout) {
 	// error normalization function to deal with 0-360 wrap around
 	auto normalize_rotation = [](float target, float current) {
 		float error = target - current;
+		printf("target: %f\tcurrent: %f\terror: %f\n",target, current, fmod((error + 180), 360) - 180 );
 		return fmod((error + 180), 360) - 180;
 	};
 
@@ -574,9 +591,47 @@ void turn_to_heading(float target_heading, int32_t timeout) {
 	pid_process_task.remove();
 }
 
+void move_a_distance(float distance, int32_t timeout) {
+	// atomic instance of target heading cause that is that the PID process
+	// requires
+	std::atomic<float> atomic_distance (distance);
+	// records the output of the PID process
+	std::atomic<float> output (0);
+
+	// start time of process
+	int32_t start_time = pros::millis();
+
+	// start the PID process
+	pros::Task pid_process_task{[&] {
+		pid_process(
+				&dist,
+				&atomic_distance,
+				timeout,
+				&lateral_pid,
+				&output
+		);
+	}};
+	
+	// apply the motor values
+	while (pros::millis() < start_time + timeout) {
+		dt_left_motors.move(output.load());
+		dt_right_motors.move(output.load());
+
+		// delay to save resources
+		pros::delay(PROCESS_DELAY);
+	}
+
+	// brake motors at end of process
+	dt_left_motors.brake();
+	dt_right_motors.brake();
+
+	// remove task
+	pid_process_task.remove();
+}
+
 void autonomous() {
 	turn_to_heading(90, 3000);
-
+	turn_to_heading(-45, 3000);
 	turn_to_heading(0, 3000);
 
 	dt_left_motors.brake();
