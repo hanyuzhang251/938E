@@ -37,8 +37,6 @@
 
 #define Cartridge MotorGearset
 
-#define DEL80 "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b"
-
 // If these are change they will probably screw up the entire PID system, so
 // unless you desperately need to, don't.
 constexpr long PROCESS_DELAY = 15;
@@ -62,6 +60,8 @@ void printc_bulk(char c, int n) {
 /*****************************************************************************/
 /*                                  CONFIG                                   */
 /*****************************************************************************/
+
+constexpr float DT_WHEEL_DIAM = 2.75;
 
 // PORTS
 
