@@ -98,8 +98,8 @@ constexpr int IMU_PORT = 21;
 constexpr pros::anal_button DRIVE_JOYSTICK = pros::CTRL_ANAL_LY;
 constexpr pros::anal_button TURN_JOYSTICK = pros::CTRL_ANAL_RX;
 
-constexpr pros::digi_button INTAKE_FWD_BUTTON = pros::CTRL_DIGI_L2;
-constexpr pros::digi_button INTAKE_REV_BUTTON = pros::CTRL_DIGI_L1;
+constexpr pros::digi_button INTAKE_FWD_BUTTON = pros::CTRL_DIGI_L1;
+constexpr pros::digi_button INTAKE_REV_BUTTON = pros::CTRL_DIGI_L2;
 
 constexpr pros::digi_button MOGO_ON_BUTTON = pros::CTRL_DIGI_A;
 constexpr pros::digi_button MOGO_OFF_BUTTON = pros::CTRL_DIGI_B;
@@ -107,8 +107,8 @@ constexpr pros::digi_button MOGO_OFF_BUTTON = pros::CTRL_DIGI_B;
 constexpr pros::digi_button BAR_ON_BUTTON = pros::CTRL_DIGI_X;
 constexpr pros::digi_button BAR_OFF_BUTTON = pros::CTRL_DIGI_Y;
 
-constexpr pros::digi_button ARM_UP_BUTTON = pros::CTRL_DIGI_UP;
-constexpr pros::digi_button ARM_DOWN_BUTTON = pros::CTRL_DIGI_DOWN;
+constexpr pros::digi_button ARM_UP_BUTTON = pros::CTRL_DIGI_R1;
+constexpr pros::digi_button ARM_DOWN_BUTTON = pros::CTRL_DIGI_R2;
 
 constexpr pros::digi_button ARM_END_ON_BUTTON = pros::CTRL_DIGI_RIGHT;
 constexpr pros::digi_button ARM_END_OFF_BUTTON = pros::CTRL_DIGI_LEFT;
@@ -328,10 +328,11 @@ void pid_process(
 	p.status = 3;
 }
 
-PIDController lateral_pid ({0.075, 0.005, 0, 300, 999});
-PIDController angular_pid ({1, 0.1, 3, 30, 999});
+PIDController lateral_pid ({0.07, 0.005, 0, 300, 999});
+PIDController angular_pid ({0.8, 0.1, 3, 30, 999});
 
-PIDController arm_pid ({0.3, 0, 0, 0, 999});
+
+PIDController arm_pid ({0.3, 0.02, 0, 90, 999});
 
 // DRIVING
 
@@ -341,8 +342,8 @@ struct DriveCurve {
 	float expoCurve = 1;
 };
 
-DriveCurve drive_curve ({3, 10, 2});
-DriveCurve turn_curve ({3, 10, 0.6});
+DriveCurve drive_curve ({3, 10, 3});
+DriveCurve turn_curve ({3, 10, 4});
 
 constexpr int drive_ratio = 1;
 constexpr int turn_ratio = 1;
@@ -640,7 +641,119 @@ void move_a_distance(float distance, int32_t timeout) {
 }
 
 void autonomous() {
-	move_a_distance(3000, 5000);
+	dt_left_motors.tare_position_all();
+	dt_right_motors.tare_position_all();
+
+	std::atomic<float> target_heading (0);
+	auto normalize_rotation = [](float target, float current) {
+		// Normalize current and target to the range [-180, 180]
+		target = fmod((target + 180), 360) - 180;
+		current = fmod((current + 180), 360) - 180;
+
+		// Calculate the raw error
+		float error = target - current;
+
+		// Normalize the error to [-180, 180]
+		error = fmod((error + 180), 360) - 180;
+
+		return error;
+	};
+	std::atomic<float> angular_output;
+	pros::Task angular_pid_process_task{[&] {
+		pid_process(
+				&heading,
+				&target_heading,
+				120000,
+				&angular_pid,
+				&angular_output,
+				normalize_rotation
+		);
+	}};
+
+	std::atomic<float> target_dist (0);
+	std::atomic<float> lateral_output;
+	pros::Task lateral_pid_process_task{[&] {
+		pid_process(
+				&dist,
+				&target_dist,
+				120000,
+				&lateral_pid,
+				&lateral_output
+		);
+	}};
+
+	pros::Task pid_output_manager_task([&]{
+		while (true) {
+			dt_left_motors.move(angular_output.load() + lateral_output.load());
+			dt_right_motors.move(lateral_output.load() - angular_output.load());
+		}
+	});
+
+	target_heading.store(-90);
+
+	pros::delay(5000);
+
+	target_heading.store(180);
+	pros::delay(10000);
+	
+	// intake_motor.move(127);
+	// pros::delay(500);
+
+	// intake_motor.brake();
+
+	// target_heading.store(0);
+
+	// target_dist.fetch_add(750);
+	// pros::delay(1500);
+
+	// target_heading.store(90);
+	// pros::delay(1500);
+
+	// target_dist.fetch_add(-1200);
+	// pros::delay(2000);
+
+	// mogo_piston.set_value(true);
+	// target_heading.store(-5);
+	// pros::delay(1500);
+
+	// target_dist.fetch_add(1750);
+	// intake_motor.move(127);
+	// pros::delay(3000);
+
+	// target_heading.store(-90);
+	// pros::delay(1500);
+
+	// target_dist.fetch_add(1750);
+	// pros::delay(3000);
+
+	// target_heading.store(-180);
+	// pros::delay(1500);
+
+	// target_dist.fetch_add(2250);
+	// pros::delay(3000);
+
+	// target_dist.fetch_add(-500);
+	// pros::delay(1000);
+
+	// target_heading.store(-135);
+	// pros::delay(1500);
+
+	// target_dist.fetch_add(250);
+	// pros::delay(500);
+
+	// target_heading.store(0);
+	// pros::delay(1000);
+
+	// target_dist.fetch_add(-2000);
+	// pros::delay(3000);
+
+	// mogo_piston.set_value(false);
+
+	intake_motor.brake();
+
+	angular_pid_process_task.remove();
+	lateral_pid_process_task.remove();
+	pid_output_manager_task.remove();
 
 	dt_left_motors.brake();
 	dt_right_motors.brake();
