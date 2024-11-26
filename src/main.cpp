@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <queue>
 #include <atomic>
+#include <regex>
 #include <string>
 #include <sys/_stdint.h>
 #include <type_traits>
@@ -558,7 +559,7 @@ void turn_to_heading(float target_heading, int32_t timeout) {
 
 		// Ensure the error is also in [-180, 180]
 		error = fmod((error + 180), 360) - 180;
-		printf("target: %f\tcurrent: %f\terror: %f\n",target, current, fmod((error + 180), 360) - 180 );
+	
 		return error;
 		
 
@@ -640,6 +641,8 @@ void move_a_distance(float distance, int32_t timeout) {
 	pid_process_task.remove();
 }
 
+float prev_rotational_error = 0;
+
 void autonomous() {
 	dt_left_motors.tare_position_all();
 	dt_right_motors.tare_position_all();
@@ -656,7 +659,13 @@ void autonomous() {
 		// Normalize the error to [-180, 180]
 		error = fmod((error + 180), 360) - 180;
 
-		return error;
+		float absErr = std::abs(error);
+		float absPErr = std::abs(error + 360);
+		float absSErr = std::abs(error - 360);
+
+		if (absErr < absPErr && absErr < absSErr) return error;
+		if (absPErr < absSErr && absPErr < absSErr) return error + 360;
+		if (absSErr < absPErr && absSErr < absErr) return error - 360;
 	};
 	std::atomic<float> angular_output;
 	pros::Task angular_pid_process_task{[&] {
@@ -689,65 +698,72 @@ void autonomous() {
 		}
 	});
 
-	target_heading.store(-90);
-
-	pros::delay(5000);
-
-	target_heading.store(180);
-	pros::delay(10000);
-	
-	// intake_motor.move(127);
-	// pros::delay(500);
-
-	// intake_motor.brake();
-
-	// target_heading.store(0);
-
-	// target_dist.fetch_add(750);
-	// pros::delay(1500);
-
-	// target_heading.store(90);
-	// pros::delay(1500);
-
-	// target_dist.fetch_add(-1200);
-	// pros::delay(2000);
-
-	// mogo_piston.set_value(true);
-	// target_heading.store(-5);
-	// pros::delay(1500);
-
-	// target_dist.fetch_add(1750);
-	// intake_motor.move(127);
-	// pros::delay(3000);
-
 	// target_heading.store(-90);
-	// pros::delay(1500);
 
-	// target_dist.fetch_add(1750);
-	// pros::delay(3000);
+	// pros::delay(5000);
 
-	// target_heading.store(-180);
-	// pros::delay(1500);
+	// target_heading.store(180);
+	// pros::delay(10000);
 
-	// target_dist.fetch_add(2250);
-	// pros::delay(3000);
+	mogo_piston.set_value(true);
+	target_dist.fetch_add(-500);
+	
+	intake_motor.move(127);
+	pros::delay(500);
 
-	// target_dist.fetch_add(-500);
-	// pros::delay(1000);
+	mogo_piston.set_value(false);
+	intake_motor.brake();
 
-	// target_heading.store(-135);
-	// pros::delay(1500);
+	target_heading.store(0);
 
-	// target_dist.fetch_add(250);
-	// pros::delay(500);
+	target_dist.fetch_add(1100);
+	pros::delay(1500);
 
-	// target_heading.store(0);
-	// pros::delay(1000);
+	target_heading.store(90);
+	pros::delay(1500);
 
-	// target_dist.fetch_add(-2000);
-	// pros::delay(3000);
+	target_dist.fetch_add(-1250); 
+	pros::delay(2000);
 
-	// mogo_piston.set_value(false);
+	mogo_piston.set_value(true);
+	target_heading.store(-5);
+	pros::delay(1500);
+
+	target_dist.fetch_add(1600);
+	intake_motor.move(127);
+	pros::delay(3000);
+
+	target_heading.store(-90);
+	pros::delay(1650);
+
+	target_dist.fetch_add(1500);
+	pros::delay(3000);
+
+	target_heading.store(-173);
+	pros::delay(3000);
+
+	target_dist.fetch_add(2250);
+	pros::delay(3000);
+
+	target_dist.fetch_add(-1500);
+	pros::delay(1500);
+
+	target_heading.store(-135);
+	pros::delay(1500);
+
+	target_dist.fetch_add(750);
+	pros::delay(1000);
+
+	target_heading.store(-90);
+	pros::delay(1500);
+
+	target_heading.store(35);
+	pros::delay(2000);
+
+	target_dist.fetch_add(-2500);
+	pros::delay(3000);
+
+	mogo_piston.set_value(false);
 
 	intake_motor.brake();
 
