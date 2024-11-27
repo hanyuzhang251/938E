@@ -120,6 +120,9 @@ constexpr pros::digi_button ARM_DOWN_BUTTON = pros::CTRL_DIGI_R2;
 constexpr pros::digi_button ARM_END_ON_BUTTON = pros::CTRL_DIGI_RIGHT;
 constexpr pros::digi_button ARM_END_OFF_BUTTON = pros::CTRL_DIGI_LEFT;
 
+constexpr pros::digi_button RESET_ARM_POS_BUTTON = pros::CTRL_DIGI_X;
+constexpr pros::digi_button FORCE_ARM_POS_BUTTON = pros::CTRL_DIGI_Y;
+
 // PID CONTROLLERS
 
 constexpr float LATERAL_PID_KP = 0.07;
@@ -582,7 +585,7 @@ void initialize() {
 
 	init.log_data("reset imu", "completed");
 
-	solve_imu_bias(2000);
+	solve_imu_bias(1500);
 
 	init.log_data("solve imu bias", "completed");
 
@@ -903,24 +906,28 @@ void opcontrol() {
 			mogo_piston.set_value(false);
 		
 		// bar
-		if (master.get_digital(BAR_ON_BUTTON))
-			bar_piston.set_value(true);
-		else if (master.get_digital(BAR_OFF_BUTTON))
-			bar_piston.set_value(false);
+		// if (master.get_digital(BAR_ON_BUTTON))
+		// 	bar_piston.set_value(true);
+		// else if (master.get_digital(BAR_OFF_BUTTON))
+		// 	bar_piston.set_value(false);
 
 		// arm
 		if (master.get_digital(ARM_UP_BUTTON))
 			arm_target_pos += ARM_SPEED;
 		else if (master.get_digital(ARM_DOWN_BUTTON))
 			arm_target_pos -= ARM_SPEED;
-		// constrain the target arm pos
-		arm_target_pos.store(std::min(MAX_ARM_HEIGHT, std::max(MIN_ARM_HEIGHT,
-				arm_target_pos.load()
-		)));
+		// constrain the target arm pos if we're not forcing it
+		if (!master.get_digital(FORCE_ARM_POS_BUTTON)) {
+			arm_target_pos.store(std::min(MAX_ARM_HEIGHT, std::max(MIN_ARM_HEIGHT,
+					arm_target_pos.load()
+			)));
+		}
 		// update current arm pos
 		arm_pos.store(arm.get_position());
 		// move arm to PID output
 		arm.move(output.load());
+
+		if (master.get_digital(RESET_ARM_POS_BUTTON)) arm.tare_position();
 
 		// arm end
 		if(master.get_digital(ARM_END_ON_BUTTON))
