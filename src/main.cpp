@@ -585,7 +585,7 @@ void initialize() {
 
 	init.log_data("reset imu", "completed");
 
-	solve_imu_bias(1500);
+	solve_imu_bias(1000);
 
 	init.log_data("solve imu bias", "completed");
 
