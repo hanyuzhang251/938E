@@ -72,10 +72,7 @@ void printc_bulk(char c, int n) {
 /*                                  CONFIG                                   */
 /*****************************************************************************/
 
-// 0	NO AUTON
-// 1    pranav normal auton
-// 11	skills auton 17 pts
-constexpr int AUTON_SELECT = 1;
+constexpr float DT_WHEEL_DIAM = 2.75;
 
 // PORTS
 
@@ -116,48 +113,6 @@ constexpr pros::digi_button ARM_DOWN_BUTTON = pros::CTRL_DIGI_R2;
 
 constexpr pros::digi_button ARM_END_ON_BUTTON = pros::CTRL_DIGI_RIGHT;
 constexpr pros::digi_button ARM_END_OFF_BUTTON = pros::CTRL_DIGI_LEFT;
-
-// PID CONTROLLERS
-
-constexpr float LATERAL_PID_KP = 0.07;
-constexpr float LATERAL_PID_KI = 0.005;
-constexpr float LATERAL_PID_KD = 0;
-constexpr float LATERAL_PID_WIND = 300;
-constexpr float LATERAL_PID_SLEW = 999;
-
-constexpr float ANGULAR_PID_KP = 0.8;
-constexpr float ANGULAR_PID_KI = 0.1;
-constexpr float ANGULAR_PID_KD = 3;
-constexpr float ANGULAR_PID_WIND = 30;
-constexpr float ANGULAR_PID_SLEW = 999;
-
-constexpr float ARM_PID_KP = 0.3;
-constexpr float ARM_PID_KI = 0.02;
-constexpr float ARM_PID_KD = 0;
-constexpr float ARM_PID_WIND = 90;
-constexpr float ARM_PID_SLEW = 999;
-
-// DRIVING
-
-constexpr int DRIVE_RATIO = 1;
-constexpr int TURN_RATIO = 1;
-
-constexpr bool SPEED_COMP = false;
-
-constexpr int INTAKE_MOTOR_SPEED = 127;
-
-constexpr int ARM_SPEED = 50;
-constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
-constexpr float MIN_ARM_HEIGHT = 0;
-constexpr float MAX_ARM_HEIGHT = 2700;
-
-constexpr float DRIVE_CURVE_DEADBAND = 3;
-constexpr float DRIVE_CURVE_MIN_OUT = 10;
-constexpr float DRIVE_CURVE_EXPO_CURVE = 3;
-
-constexpr float TURN_CURVE_DEADBAND = 3;
-constexpr float TURN_CURVE_MIN_OUT = 10;
-constexpr float TURN_CURVE_EXPO_CURVE = 3;
 
 
 
@@ -374,36 +329,13 @@ void pid_process(
 	p.status = 3;
 }
 
-PIDController lateral_pid ({
-		LATERAL_PID_KP,
-		LATERAL_PID_KI,
-		LATERAL_PID_KD,
-		LATERAL_PID_WIND,
-		LATERAL_PID_SLEW
-});
-
-PIDController angular_pid ({
-		ANGULAR_PID_KP,
-		ANGULAR_PID_KI,
-		ANGULAR_PID_KD,
-		ANGULAR_PID_WIND,
-		ANGULAR_PID_SLEW
-});
+PIDController lateral_pid ({0.07, 0.005, 0, 300, 999});
+PIDController angular_pid ({0.8, 0.1, 3, 30, 999});
 
 
-PIDController arm_pid ({
-		ARM_PID_KP,
-		ARM_PID_KI,
-		ARM_PID_KD,
-		ARM_PID_WIND,
-		ARM_PID_SLEW
-});
+PIDController arm_pid ({0.3, 0.02, 0, 90, 999});
 
-
-
-/*****************************************************************************/
-/*                                  DRIVING                                  */
-/*****************************************************************************/
+// DRIVING
 
 struct DriveCurve {
 	float deadband = 0;
@@ -411,17 +343,20 @@ struct DriveCurve {
 	float expoCurve = 1;
 };
 
-DriveCurve drive_curve ({
-		DRIVE_CURVE_DEADBAND,
-		DRIVE_CURVE_MIN_OUT,
-		DRIVE_CURVE_EXPO_CURVE
-});
+DriveCurve drive_curve ({3, 10, 3});
+DriveCurve turn_curve ({3, 10, 4});
 
-DriveCurve turn_curve ({
-		TURN_CURVE_DEADBAND,
-		TURN_CURVE_MIN_OUT,
-		TURN_CURVE_EXPO_CURVE
-});
+constexpr int drive_ratio = 1;
+constexpr int turn_ratio = 1;
+
+constexpr bool speed_comp = false;
+
+constexpr int INTAKE_MOTOR_SPEED = 127;
+
+constexpr int ARM_SPEED = 50;
+constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
+constexpr float MIN_ARM_HEIGHT = 0;
+constexpr float MAX_ARM_HEIGHT = 2500;
 
 float calcPowerCurve(
 		int value,
@@ -433,7 +368,7 @@ float calcPowerCurve(
 	if (std::abs(value) <= curve.deadband) return 0;
 
 	float ratio_mult = (float) ratio / (ratio + other_ratio);
-	if (SPEED_COMP) {
+	if (speed_comp) {
 		float dynamic_ratio = (
 				(float) other_ratio * std::abs(other_value) / 127);
 		ratio_mult = (float) ratio / (ratio + dynamic_ratio);
@@ -708,11 +643,68 @@ void move_a_distance(float distance, int32_t timeout) {
 
 float prev_rotational_error = 0;
 
-void pranav_norm_auton(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
+void autonomous() {
+	dt_left_motors.tare_position_all();
+	dt_right_motors.tare_position_all();
 
-}
+	std::atomic<float> target_heading (0);
+	auto normalize_rotation = [](float target, float current) {
+		// Normalize current and target to the range [-180, 180]
+		target = fmod((target + 180), 360) - 180;
+		current = fmod((current + 180), 360) - 180;
 
-void skills_auton_17pts(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
+		// Calculate the raw error
+		float error = target - current;
+
+		// Normalize the error to [-180, 180]
+		error = fmod((error + 180), 360) - 180;
+
+		float absErr = std::abs(error);
+		float absPErr = std::abs(error + 360);
+		float absSErr = std::abs(error - 360);
+
+		if (absErr < absPErr && absErr < absSErr) return error;
+		if (absPErr < absSErr && absPErr < absSErr) return error + 360;
+		if (absSErr < absPErr && absSErr < absErr) return error - 360;
+	};
+	std::atomic<float> angular_output;
+	pros::Task angular_pid_process_task{[&] {
+		pid_process(
+				&heading,
+				&target_heading,
+				120000,
+				&angular_pid,
+				&angular_output,
+				normalize_rotation
+		);
+	}};
+
+	std::atomic<float> target_dist (0);
+	std::atomic<float> lateral_output;
+	pros::Task lateral_pid_process_task{[&] {
+		pid_process(
+				&dist,
+				&target_dist,
+				120000,
+				&lateral_pid,
+				&lateral_output
+		);
+	}};
+
+	pros::Task pid_output_manager_task([&]{
+		while (true) {
+			dt_left_motors.move(angular_output.load() + lateral_output.load());
+			dt_right_motors.move(lateral_output.load() - angular_output.load());
+		}
+	});
+
+	// target_heading.store(-90);
+
+	// pros::delay(5000);
+
+	// target_heading.store(180);
+	// pros::delay(10000);
+
 	mogo_piston.set_value(true);
 	target_dist.fetch_add(-500);
 	
@@ -770,68 +762,6 @@ void skills_auton_17pts(std::atomic<float>& target_dist, std::atomic<float>& tar
 
 	target_dist.fetch_add(-2500);
 	pros::delay(3000);
-}
-
-void autonomous() {
-	dt_left_motors.tare_position_all();
-	dt_right_motors.tare_position_all();
-
-	std::atomic<float> target_heading (0);
-	auto normalize_rotation = [](float target, float current) {
-		// Normalize current and target to the range [-180, 180]
-		target = fmod((target + 180), 360) - 180;
-		current = fmod((current + 180), 360) - 180;
-
-		// Calculate the raw error
-		float error = target - current;
-
-		// Normalize the error to [-180, 180]
-		error = fmod((error + 180), 360) - 180;
-
-		float absErr = std::abs(error);
-		float absPErr = std::abs(error + 360);
-		float absSErr = std::abs(error - 360);
-
-		if (absErr < absPErr && absErr < absSErr) return error;
-		if (absPErr < absSErr && absPErr < absSErr) return error + 360;
-		if (absSErr < absPErr && absSErr < absErr) return error - 360;
-	};
-	std::atomic<float> angular_output;
-	pros::Task angular_pid_process_task{[&] {
-		pid_process(
-				&heading,
-				&target_heading,
-				120000,
-				&angular_pid,
-				&angular_output,
-				normalize_rotation
-		);
-	}};
-
-	std::atomic<float> target_dist (0);
-	std::atomic<float> lateral_output;
-	pros::Task lateral_pid_process_task{[&] {
-		pid_process(
-				&dist,
-				&target_dist,
-				120000,
-				&lateral_pid,
-				&lateral_output
-		);
-	}};
-
-	pros::Task pid_output_manager_task([&]{
-		while (true) {
-			dt_left_motors.move(angular_output.load() + lateral_output.load());
-			dt_right_motors.move(lateral_output.load() - angular_output.load());
-		}
-	});
-
-	switch (AUTON_SELECT) {
-		case 0: break;
-		case 1: pranav_norm_auton(target_dist, target_heading);
-		case 11: skills_auton_17pts(target_dist, target_heading);
-	}
 
 	mogo_piston.set_value(false);
 
@@ -879,9 +809,9 @@ void opcontrol() {
         int turn_value = master.get_analog(TURN_JOYSTICK);
 
 		float drive_power = calcPowerCurve(
-				drive_value, turn_value, drive_curve, DRIVE_RATIO, TURN_RATIO);
+				drive_value, turn_value, drive_curve, drive_ratio, turn_ratio);
 		float turn_power = calcPowerCurve(
-				turn_value, drive_value, turn_curve, TURN_RATIO, DRIVE_RATIO);
+				turn_value, drive_value, turn_curve, turn_ratio, drive_ratio);
 
 		dt_left_motors.move(drive_power + turn_power);
 		dt_right_motors.move(drive_power - turn_power);
