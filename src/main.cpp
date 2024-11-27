@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <queue>
 #include <atomic>
+#include <regex>
 #include <string>
 #include <sys/_stdint.h>
 #include <type_traits>
@@ -50,7 +51,7 @@
 // If these are changed they will probably screw up the entire PID system, so
 // unless you desperately need to, don't.
 constexpr long PROCESS_DELAY = 15;
-constexpr long LONG_DELAY = 34;
+constexpr long LONG_DELAY = 200;
 
 /**
  * Returns the sign of a value
@@ -98,8 +99,8 @@ constexpr int IMU_PORT = 21;
 constexpr pros::anal_button DRIVE_JOYSTICK = pros::CTRL_ANAL_LY;
 constexpr pros::anal_button TURN_JOYSTICK = pros::CTRL_ANAL_RX;
 
-constexpr pros::digi_button INTAKE_FWD_BUTTON = pros::CTRL_DIGI_L2;
-constexpr pros::digi_button INTAKE_REV_BUTTON = pros::CTRL_DIGI_L1;
+constexpr pros::digi_button INTAKE_FWD_BUTTON = pros::CTRL_DIGI_L1;
+constexpr pros::digi_button INTAKE_REV_BUTTON = pros::CTRL_DIGI_L2;
 
 constexpr pros::digi_button MOGO_ON_BUTTON = pros::CTRL_DIGI_A;
 constexpr pros::digi_button MOGO_OFF_BUTTON = pros::CTRL_DIGI_B;
@@ -107,8 +108,8 @@ constexpr pros::digi_button MOGO_OFF_BUTTON = pros::CTRL_DIGI_B;
 constexpr pros::digi_button BAR_ON_BUTTON = pros::CTRL_DIGI_X;
 constexpr pros::digi_button BAR_OFF_BUTTON = pros::CTRL_DIGI_Y;
 
-constexpr pros::digi_button ARM_UP_BUTTON = pros::CTRL_DIGI_UP;
-constexpr pros::digi_button ARM_DOWN_BUTTON = pros::CTRL_DIGI_DOWN;
+constexpr pros::digi_button ARM_UP_BUTTON = pros::CTRL_DIGI_R1;
+constexpr pros::digi_button ARM_DOWN_BUTTON = pros::CTRL_DIGI_R2;
 
 constexpr pros::digi_button ARM_END_ON_BUTTON = pros::CTRL_DIGI_RIGHT;
 constexpr pros::digi_button ARM_END_OFF_BUTTON = pros::CTRL_DIGI_LEFT;
@@ -290,6 +291,8 @@ void pid_process(
 		if (sgn(prev_error) != sgn(error)) {
 			// if we did, reset integral
 			integral = 0;
+
+			printf("reset integral\n");
 		}
 
 		// check if the error is in the range of the integral windup
@@ -326,10 +329,11 @@ void pid_process(
 	p.status = 3;
 }
 
-PIDController lateral_pid ({1, 0, 0});
-PIDController angular_pid ({0.5, 0.02, 5});
+PIDController lateral_pid ({0.07, 0.005, 0, 300, 999});
+PIDController angular_pid ({0.8, 0.1, 3, 30, 999});
 
-PIDController arm_pid ({0.3, 0, 0, 0, 999});
+
+PIDController arm_pid ({0.3, 0.02, 0, 90, 999});
 
 // DRIVING
 
@@ -339,13 +343,13 @@ struct DriveCurve {
 	float expoCurve = 1;
 };
 
-DriveCurve drive_curve ({3, 10, 2});
-DriveCurve turn_curve ({3, 10, 2});
+DriveCurve drive_curve ({3, 10, 3});
+DriveCurve turn_curve ({3, 10, 4});
 
 constexpr int drive_ratio = 1;
 constexpr int turn_ratio = 1;
 
-constexpr bool speed_comp = true;
+constexpr bool speed_comp = false;
 
 constexpr int INTAKE_MOTOR_SPEED = 127;
 
@@ -462,7 +466,11 @@ void solve_imu_bias(int32_t timeout) {
 std::atomic<float> xPos (0);
 std::atomic<float> yPos (0);
 std::atomic<float> zPos (0);
+std::atomic<float> dist (0);
 std::atomic<float> heading (0);
+
+int left_motors_prev_pos = 0;
+int right_motors_prev_pos = 0;
 
 long last_pos_update = 0;
 
@@ -472,6 +480,10 @@ void get_robot_position(long last_update) {
 	xPos.fetch_add(imu.get_accel().x - imu_bias_x);
 	yPos.fetch_add(imu.get_accel().y - imu_bias_y);
 	zPos.fetch_add(imu.get_accel().z - imu_bias_z);
+
+	dist.fetch_add(((dt_left_motors.get_position() - left_motors_prev_pos) + (dt_right_motors.get_position() - right_motors_prev_pos)) / 2.0f);
+	left_motors_prev_pos = dt_left_motors.get_position();
+	right_motors_prev_pos = dt_right_motors.get_position();
 
 	heading.store(imu.get_heading());
 }
@@ -483,6 +495,11 @@ void get_robot_position(long last_update) {
 /*****************************************************************************/
 
 void initialize() {
+	pros::Task telemetry([&](){
+		update_telemetry();
+		pros::delay(LONG_DELAY);
+	});
+
 	pros::lcd::initialize();
 
 	process init = add_process("Initialize");
@@ -509,7 +526,8 @@ void initialize() {
 			
             pros::lcd::print(0, "xPos: %f", xPos.load());
             pros::lcd::print(1, "yPos: %f", yPos.load());
-            pros::lcd::print(2, "head: %f", heading.load());
+			pros::lcd::print(2, "dist: %f", dist.load());
+            pros::lcd::print(3, "head: %f", heading.load());
 
             pros::delay(PROCESS_DELAY);
         }
@@ -532,8 +550,19 @@ struct Pose {
 void turn_to_heading(float target_heading, int32_t timeout) {
 	// error normalization function to deal with 0-360 wrap around
 	auto normalize_rotation = [](float target, float current) {
+		// Normalize current and target to [-180, 180]
+		target = fmod((target + 180), 360) - 180;
+		current = fmod((current + 180), 360) - 180;
+
+		// Calculate the error (still in the range [-180, 180])
 		float error = target - current;
-		return fmod((error + 180), 360) - 180;
+
+		// Ensure the error is also in [-180, 180]
+		error = fmod((error + 180), 360) - 180;
+	
+		return error;
+		
+
 	};
 
 	// atomic instance of target heading cause that is that the PID process
@@ -574,10 +603,173 @@ void turn_to_heading(float target_heading, int32_t timeout) {
 	pid_process_task.remove();
 }
 
-void autonomous() {
-	turn_to_heading(90, 3000);
+void move_a_distance(float distance, int32_t timeout) {
+	// atomic instance of target heading cause that is that the PID process
+	// requires
+	std::atomic<float> atomic_distance (distance);
+	// records the output of the PID process
+	std::atomic<float> output (0);
 
-	turn_to_heading(0, 3000);
+	// start time of process
+	int32_t start_time = pros::millis();
+
+	// start the PID process
+	pros::Task pid_process_task{[&] {
+		pid_process(
+				&dist,
+				&atomic_distance,
+				timeout,
+				&lateral_pid,
+				&output
+		);
+	}};
+	
+	// apply the motor values
+	while (pros::millis() < start_time + timeout) {
+		dt_left_motors.move(output.load());
+		dt_right_motors.move(output.load());
+
+		// delay to save resources
+		pros::delay(PROCESS_DELAY);
+	}
+
+	// brake motors at end of process
+	dt_left_motors.brake();
+	dt_right_motors.brake();
+
+	// remove task
+	pid_process_task.remove();
+}
+
+float prev_rotational_error = 0;
+
+void autonomous() {
+	dt_left_motors.tare_position_all();
+	dt_right_motors.tare_position_all();
+
+	std::atomic<float> target_heading (0);
+	auto normalize_rotation = [](float target, float current) {
+		// Normalize current and target to the range [-180, 180]
+		target = fmod((target + 180), 360) - 180;
+		current = fmod((current + 180), 360) - 180;
+
+		// Calculate the raw error
+		float error = target - current;
+
+		// Normalize the error to [-180, 180]
+		error = fmod((error + 180), 360) - 180;
+
+		float absErr = std::abs(error);
+		float absPErr = std::abs(error + 360);
+		float absSErr = std::abs(error - 360);
+
+		if (absErr < absPErr && absErr < absSErr) return error;
+		if (absPErr < absSErr && absPErr < absSErr) return error + 360;
+		if (absSErr < absPErr && absSErr < absErr) return error - 360;
+	};
+	std::atomic<float> angular_output;
+	pros::Task angular_pid_process_task{[&] {
+		pid_process(
+				&heading,
+				&target_heading,
+				120000,
+				&angular_pid,
+				&angular_output,
+				normalize_rotation
+		);
+	}};
+
+	std::atomic<float> target_dist (0);
+	std::atomic<float> lateral_output;
+	pros::Task lateral_pid_process_task{[&] {
+		pid_process(
+				&dist,
+				&target_dist,
+				120000,
+				&lateral_pid,
+				&lateral_output
+		);
+	}};
+
+	pros::Task pid_output_manager_task([&]{
+		while (true) {
+			dt_left_motors.move(angular_output.load() + lateral_output.load());
+			dt_right_motors.move(lateral_output.load() - angular_output.load());
+		}
+	});
+
+	// target_heading.store(-90);
+
+	// pros::delay(5000);
+
+	// target_heading.store(180);
+	// pros::delay(10000);
+
+	mogo_piston.set_value(true);
+	target_dist.fetch_add(-500);
+	
+	intake_motor.move(127);
+	pros::delay(500);
+
+	mogo_piston.set_value(false);
+	intake_motor.brake();
+
+	target_heading.store(0);
+
+	target_dist.fetch_add(1100);
+	pros::delay(1500);
+
+	target_heading.store(90);
+	pros::delay(1500);
+
+	target_dist.fetch_add(-1250); 
+	pros::delay(2000);
+
+	mogo_piston.set_value(true);
+	target_heading.store(-5);
+	pros::delay(1500);
+
+	target_dist.fetch_add(1600);
+	intake_motor.move(127);
+	pros::delay(3000);
+
+	target_heading.store(-90);
+	pros::delay(1650);
+
+	target_dist.fetch_add(1500);
+	pros::delay(3000);
+
+	target_heading.store(-173);
+	pros::delay(3000);
+
+	target_dist.fetch_add(2250);
+	pros::delay(3000);
+
+	target_dist.fetch_add(-1500);
+	pros::delay(1500);
+
+	target_heading.store(-135);
+	pros::delay(1500);
+
+	target_dist.fetch_add(750);
+	pros::delay(1000);
+
+	target_heading.store(-90);
+	pros::delay(1500);
+
+	target_heading.store(35);
+	pros::delay(2000);
+
+	target_dist.fetch_add(-2500);
+	pros::delay(3000);
+
+	mogo_piston.set_value(false);
+
+	intake_motor.brake();
+
+	angular_pid_process_task.remove();
+	lateral_pid_process_task.remove();
+	pid_output_manager_task.remove();
 
 	dt_left_motors.brake();
 	dt_right_motors.brake();
