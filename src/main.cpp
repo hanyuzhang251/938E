@@ -53,6 +53,9 @@
 constexpr long PROCESS_DELAY = 15;
 constexpr long LONG_DELAY = 200;
 
+constexpr float MOTOR_TICKS_PER_INCH = 0.03839724289f;
+constexpr float MOTOR_TICKS_PER_MM = 0.9752899694f;
+
 /**
  * Returns the sign of a value
  *
