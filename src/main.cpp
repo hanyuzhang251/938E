@@ -541,8 +541,6 @@ void move_a_distance(float distance, int32_t timeout) {
 	pid_process_task.remove();
 }
 
-float prev_rotational_error = 0;
-
 void pranav_norm_auton(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
 
 }
