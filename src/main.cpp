@@ -2,7 +2,7 @@
 #include <atomic>
 
 #define digi_button controller_digital_e_t
-#define ANLG_button controller_analog_e_t
+#define anlg_button controller_analog_e_t
 
 #define CTRL_ANLG_LX E_CONTROLLER_ANALOG_LEFT_X
 #define CTRL_ANLG_LY E_CONTROLLER_ANALOG_LEFT_Y
@@ -25,19 +25,14 @@
 #define CTRL_DIGI_LEFT E_CONTROLLER_DIGITAL_LEFT
 #define CTRL_DIGI_RIGHT E_CONTROLLER_DIGITAL_RIGHT
 
-#define Cartridge MotorGearset
 
-/**
- * Returns the sign of a value
- *
- * @param val value
- */
+
+/*****************************************************************************/
+/*                                   UTIL                                    */
+/*****************************************************************************/
+
 template <typename T> int sgn(T val) {
     return (T(0) < val) - (val < T(0));
-}
-
-void printc_bulk(char c, int n) {
-	for (int i = 0; i < n; ++i) printf("%c", c);
 }
 
 
@@ -48,13 +43,6 @@ void printc_bulk(char c, int n) {
 
 constexpr long PROCESS_DELAY = 15;
 constexpr long LONG_DELAY = 200;
-
-/**
- * 0		no auton
- * 1-10		reserved for auton
- * 11-20 	reserved for skills
-*/
-constexpr int AUTON_SELECT = 1;
 
 // PORTS
 
@@ -77,8 +65,8 @@ constexpr int IMU_PORT = 21;
 
 // BUTTONS
 
-constexpr pros::ANLG_button DRIVE_JOYSTICK = pros::CTRL_ANLG_LY;
-constexpr pros::ANLG_button TURN_JOYSTICK = pros::CTRL_ANLG_RX;
+constexpr pros::anlg_button DRIVE_JOYSTICK = pros::CTRL_ANLG_LY;
+constexpr pros::anlg_button TURN_JOYSTICK = pros::CTRL_ANLG_RX;
 
 constexpr pros::digi_button INTAKE_FWD_BUTTON = pros::CTRL_DIGI_L1;
 constexpr pros::digi_button INTAKE_REV_BUTTON = pros::CTRL_DIGI_L2;
@@ -122,9 +110,9 @@ constexpr int TURN_RATIO = 1;
 
 constexpr bool SPEED_COMP = false;
 
-constexpr int INTAKE_MOTOR_SPEED = 127;
+constexpr int intake_SPEED = 127;
 
-constexpr int ARM_SPEED = 50;
+constexpr float ARM_SPEED = 50;
 constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
 constexpr float MIN_ARM_HEIGHT = 0;
 constexpr float MAX_ARM_HEIGHT = 2700;
@@ -174,6 +162,31 @@ float calcPowerPID(
 ) {
 	return error * pid->kP + integral * pid->kI + derivative * pid->kD;
 }
+
+PIDController lateral_pid ({
+		LATERAL_PID_KP,
+		LATERAL_PID_KI,
+		LATERAL_PID_KD,
+		LATERAL_PID_WIND,
+		LATERAL_PID_SLEW
+});
+
+PIDController angular_pid ({
+		ANGULAR_PID_KP,
+		ANGULAR_PID_KI,
+		ANGULAR_PID_KD,
+		ANGULAR_PID_WIND,
+		ANGULAR_PID_SLEW
+});
+
+
+PIDController arm_pid ({
+		ARM_PID_KP,
+		ARM_PID_KI,
+		ARM_PID_KD,
+		ARM_PID_WIND,
+		ARM_PID_SLEW
+});
 
 int pid_process_counter = 0;
 
@@ -255,31 +268,6 @@ void pid_process(
 	}
 }
 
-PIDController lateral_pid ({
-		LATERAL_PID_KP,
-		LATERAL_PID_KI,
-		LATERAL_PID_KD,
-		LATERAL_PID_WIND,
-		LATERAL_PID_SLEW
-});
-
-PIDController angular_pid ({
-		ANGULAR_PID_KP,
-		ANGULAR_PID_KI,
-		ANGULAR_PID_KD,
-		ANGULAR_PID_WIND,
-		ANGULAR_PID_SLEW
-});
-
-
-PIDController arm_pid ({
-		ARM_PID_KP,
-		ARM_PID_KI,
-		ARM_PID_KD,
-		ARM_PID_WIND,
-		ARM_PID_SLEW
-});
-
 
 
 /*****************************************************************************/
@@ -342,19 +330,19 @@ pros::MotorGroup dt_left_motors ({
 	DT_FL_PORT,
 	DT_LM_PORT,
 	DT_BL_PORT
-}, pros::Cartridge::blue);
+});
 
 pros::MotorGroup dt_right_motors ({
 	DT_FR_PORT,
 	DT_MR_PORT,
 	DT_BR_PORT
-}, pros::Cartridge::blue);
+});
 
-pros::Motor intake_motor (INTAKE_PORT, pros::Cartridge::green);
+pros::Motor intake (INTAKE_PORT);
 
-pros::adi::DigitalOut mogo_piston (MOGO_PORT);
+pros::adi::DigitalOut mogo (MOGO_PORT);
 
-pros::Motor arm (ARM_PORT, pros::Cartridge::red);
+pros::Motor arm (ARM_PORT);
 pros::adi::DigitalOut arm_end (ARM_END_PORT);
 
 pros::IMU imu (IMU_PORT);
@@ -560,14 +548,14 @@ void pranav_norm_auton(std::atomic<float>& target_dist, std::atomic<float>& targ
 }
 
 void skills_auton_17pts(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
-	mogo_piston.set_value(true);
+	mogo.set_value(true);
 	target_dist.fetch_add(-500);
 	
-	intake_motor.move(127);
+	intake.move(127);
 	pros::delay(500);
 
-	mogo_piston.set_value(false);
-	intake_motor.brake();
+	mogo.set_value(false);
+	intake.brake();
 
 	target_heading.store(0);
 
@@ -580,12 +568,12 @@ void skills_auton_17pts(std::atomic<float>& target_dist, std::atomic<float>& tar
 	target_dist.fetch_add(-1250); 
 	pros::delay(2000);
 
-	mogo_piston.set_value(true);
+	mogo.set_value(true);
 	target_heading.store(-5);
 	pros::delay(1500);
 
 	target_dist.fetch_add(1600);
-	intake_motor.move(127);
+	intake.move(127);
 	pros::delay(3000);
 
 	target_heading.store(-90);
@@ -674,15 +662,9 @@ void autonomous() {
 		}
 	});
 
-	switch (AUTON_SELECT) {
-		case 0: break;
-		case 1: pranav_norm_auton(target_dist, target_heading);
-		case 11: skills_auton_17pts(target_dist, target_heading);
-	}
+	mogo.set_value(false);
 
-	mogo_piston.set_value(false);
-
-	intake_motor.brake();
+	intake.brake();
 
 	angular_pid_process_task.remove();
 	lateral_pid_process_task.remove();
@@ -735,16 +717,16 @@ void opcontrol() {
 
 		// intake
 		if (master.get_digital(INTAKE_FWD_BUTTON))
-			intake_motor.move(INTAKE_MOTOR_SPEED);
+			intake.move(intake_SPEED);
 		else if (master.get_digital(INTAKE_REV_BUTTON))
-			intake_motor.move(-INTAKE_MOTOR_SPEED);
-		else intake_motor.brake();
+			intake.move(-intake_SPEED);
+		else intake.brake();
 		
 		// mogo
 		if (master.get_digital(MOGO_ON_BUTTON))
-			mogo_piston.set_value(true);
+			mogo.set_value(true);
 		else if (master.get_digital(MOGO_OFF_BUTTON))
-			mogo_piston.set_value(false);
+			mogo.set_value(false);
 
 		// arm
 		if (master.get_digital(ARM_UP_BUTTON))
