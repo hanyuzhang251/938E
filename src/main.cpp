@@ -628,7 +628,9 @@ void autonomous() {
 		if (absErr < absPErr && absErr < absSErr) return error;
 		if (absPErr < absSErr && absPErr < absSErr) return error + 360;
 		if (absSErr < absPErr && absSErr < absErr) return error - 360;
+		return error;
 	};
+	
 	std::atomic<float> angular_output;
 	pros::Task angular_pid_process_task{[&] {
 		pid_process(
