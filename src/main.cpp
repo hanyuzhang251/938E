@@ -1,31 +1,14 @@
 #include "main.h"
-#include "pros/adi.hpp"
-#include "pros/misc.h"
-#include "pros/rtos.hpp"
-#include <charconv>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
-#include <queue>
 #include <atomic>
-#include <regex>
-#include <string>
-#include <sys/_stdint.h>
-#include <type_traits>
-#include <unordered_map>
-#include <sstream>
-#include <stdarg.h>
-#include "tsl/ordered_map.h"
 
 #define digi_button controller_digital_e_t
-#define anal_button controller_analog_e_t
+#define anlg_button controller_analog_e_t
 
-#define CTRL_ANAL_LX E_CONTROLLER_ANALOG_LEFT_X
-#define CTRL_ANAL_LY E_CONTROLLER_ANALOG_LEFT_Y
+#define CTRL_ANLG_LX E_CONTROLLER_ANALOG_LEFT_X
+#define CTRL_ANLG_LY E_CONTROLLER_ANALOG_LEFT_Y
 
-#define CTRL_ANAL_RX E_CONTROLLER_ANALOG_RIGHT_X
-#define CTRL_ANAL_RY E_CONTROLLER_ANALOG_RIGHT_Y
+#define CTRL_ANLG_RX E_CONTROLLER_ANALOG_RIGHT_X
+#define CTRL_ANLG_RY E_CONTROLLER_ANALOG_RIGHT_Y
 
 #define CTRL_DIGI_L1 E_CONTROLLER_DIGITAL_L1
 #define CTRL_DIGI_L2 E_CONTROLLER_DIGITAL_L2
@@ -42,31 +25,14 @@
 #define CTRL_DIGI_LEFT E_CONTROLLER_DIGITAL_LEFT
 #define CTRL_DIGI_RIGHT E_CONTROLLER_DIGITAL_RIGHT
 
-#define Cartridge MotorGearset
 
-#define str(n) std::to_string(n)
 
-#define CLEAR_TERMINAL printf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
+/*****************************************************************************/
+/*                                   UTIL                                    */
+/*****************************************************************************/
 
-// If these are changed they will probably screw up the entire PID system, so
-// unless you desperately need to, don't.
-constexpr long PROCESS_DELAY = 15;
-constexpr long LONG_DELAY = 200;
-
-constexpr float MOTOR_TICKS_PER_INCH = 0.03839724289f;
-constexpr float MOTOR_TICKS_PER_MM = 0.9752899694f;
-
-/**
- * Returns the sign of a value
- *
- * @param val value
- */
 template <typename T> int sgn(T val) {
     return (T(0) < val) - (val < T(0));
-}
-
-void printc_bulk(char c, int n) {
-	for (int i = 0; i < n; ++i) printf("%c", c);
 }
 
 
@@ -75,10 +41,8 @@ void printc_bulk(char c, int n) {
 /*                                  CONFIG                                   */
 /*****************************************************************************/
 
-// 0	NO AUTON
-// 1    pranav normal auton
-// 11	skills auton 17 pts
-constexpr int AUTON_SELECT = 1;
+constexpr long PROCESS_DELAY = 15;
+constexpr long LONG_DELAY = 200;
 
 // PORTS
 
@@ -93,7 +57,6 @@ constexpr int DT_BR_PORT = 16;
 constexpr int INTAKE_PORT = -2;
 
 constexpr int MOGO_PORT = 1;
-constexpr int BAR_PORT = 3;
 
 constexpr int ARM_PORT = -5;
 constexpr int ARM_END_PORT = 8;
@@ -102,17 +65,14 @@ constexpr int IMU_PORT = 21;
 
 // BUTTONS
 
-constexpr pros::anal_button DRIVE_JOYSTICK = pros::CTRL_ANAL_LY;
-constexpr pros::anal_button TURN_JOYSTICK = pros::CTRL_ANAL_RX;
+constexpr pros::anlg_button DRIVE_JOYSTICK = pros::CTRL_ANLG_LY;
+constexpr pros::anlg_button TURN_JOYSTICK = pros::CTRL_ANLG_RX;
 
 constexpr pros::digi_button INTAKE_FWD_BUTTON = pros::CTRL_DIGI_L1;
 constexpr pros::digi_button INTAKE_REV_BUTTON = pros::CTRL_DIGI_L2;
 
 constexpr pros::digi_button MOGO_ON_BUTTON = pros::CTRL_DIGI_A;
 constexpr pros::digi_button MOGO_OFF_BUTTON = pros::CTRL_DIGI_B;
-
-constexpr pros::digi_button BAR_ON_BUTTON = pros::CTRL_DIGI_X;
-constexpr pros::digi_button BAR_OFF_BUTTON = pros::CTRL_DIGI_Y;
 
 constexpr pros::digi_button ARM_UP_BUTTON = pros::CTRL_DIGI_R1;
 constexpr pros::digi_button ARM_DOWN_BUTTON = pros::CTRL_DIGI_R2;
@@ -150,9 +110,9 @@ constexpr int TURN_RATIO = 1;
 
 constexpr bool SPEED_COMP = false;
 
-constexpr int INTAKE_MOTOR_SPEED = 127;
+constexpr int intake_SPEED = 127;
 
-constexpr int ARM_SPEED = 50;
+constexpr float ARM_SPEED = 50;
 constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
 constexpr float MIN_ARM_HEIGHT = 0;
 constexpr float MAX_ARM_HEIGHT = 2700;
@@ -164,91 +124,6 @@ constexpr float DRIVE_CURVE_EXPO_CURVE = 3;
 constexpr float TURN_CURVE_DEADBAND = 3;
 constexpr float TURN_CURVE_MIN_OUT = 10;
 constexpr float TURN_CURVE_EXPO_CURVE = 3;
-
-
-
-/*****************************************************************************/
-/*                                 TELEMETRY                                 */
-/*****************************************************************************/
-
-constexpr int32_t PROCESS_DECAY_DELAY = 5000;
-
-struct process {
-	int status = 0;
-	int32_t start_time = pros::millis();
-	int32_t end_time = INT32_MAX;
-	int32_t decay_time = INT32_MAX;
-	tsl::ordered_map<std::string, std::string> data;
-
-	void log_data(const std::string& key, const std::string& value) {
-		data.insert_or_assign(key, value);
-	}
-};
-
-tsl::ordered_map<std::string, process> telemetry;
-
-process add_process(const std::string& name) {
-	process p;
-	telemetry.insert({name, p});
-	return p;
-}
-
-process remove_process(const std::string& name) {
-	process p = telemetry.at(name);
-	telemetry.erase(name);
-	return p;
-}
-
-void update_telemetry() {
-	CLEAR_TERMINAL
-
-	for (const auto& process : telemetry) {
-		std::string process_name = process.first;
-		auto p = process.second;
-
-		if (pros::millis() >= p.decay_time) {
-			remove_process(process_name);
-			continue;
-		}
-
-		printf("[");
-		printc_bulk('=', std::floor((74 - process_name.length() / 2)));
-		printf("  %s  ", process_name.c_str());
-		printc_bulk('=', std::ceil((74 - process_name.length() / 2)));
-		printf("]\n");
-
-		printf("status: ");
-		switch(p.status) {
-			case 0: {
-				printf("not started\n");
-				break;
-			}
-			case 1: {
-				printf("waiting...\n");
-				break;
-			}
-			case 2: {
-				int32_t elapsed_ms = pros::millis() - p.start_time;
-				printf("running... %dms elapsed\n", elapsed_ms);
-				p.end_time = p.start_time + elapsed_ms;
-				break;
-			}
-			case 3: {
-				p.decay_time = p.end_time + PROCESS_DECAY_DELAY;
-				p.status = 4;
-			}
-			case 4: {
-				printf("completed, took %dms\n", p.end_time - p.start_time);
-			}
-		}
-
-		for (const auto& data : process.second.data) {
-			printf("%s: %s\n", data.first.c_str(), data.second.c_str());
-		}
-
-		printf("\n\n");
-	}
-}
 
 
 
@@ -288,6 +163,31 @@ float calcPowerPID(
 	return error * pid->kP + integral * pid->kI + derivative * pid->kD;
 }
 
+PIDController lateral_pid ({
+		LATERAL_PID_KP,
+		LATERAL_PID_KI,
+		LATERAL_PID_KD,
+		LATERAL_PID_WIND,
+		LATERAL_PID_SLEW
+});
+
+PIDController angular_pid ({
+		ANGULAR_PID_KP,
+		ANGULAR_PID_KI,
+		ANGULAR_PID_KD,
+		ANGULAR_PID_WIND,
+		ANGULAR_PID_SLEW
+});
+
+
+PIDController arm_pid ({
+		ARM_PID_KP,
+		ARM_PID_KI,
+		ARM_PID_KD,
+		ARM_PID_WIND,
+		ARM_PID_SLEW
+});
+
 int pid_process_counter = 0;
 
 /**
@@ -310,9 +210,6 @@ void pid_process(
 		std::atomic<float>* output,
 		std::function<float(float, float)> normalize_func = nullptr
 ) {
-	std::string process_name = "PID Process " + std::to_string(pid_process_counter++);
-	process p = add_process(process_name);
-
 	// start time of process
 	int32_t start_time = pros::millis();
 	
@@ -325,7 +222,6 @@ void pid_process(
 
 	// while the process has not exceeded the time limit
 	while(pros::millis() < start_time + timeout) {
-		p.status = 2;
 
 		// update previous output
 		prev_output = *output;
@@ -367,43 +263,10 @@ void pid_process(
 		// set output power
 		*output = calc_power;
 
-		p.log_data("p-output", std::to_string(prev_output));
-		p.log_data("output", std::to_string(calc_power));
-		p.log_data("p-error", std::to_string(prev_error));
-		p.log_data("error", std::to_string(error));
-		p.log_data("integral", std::to_string(integral));
-		p.log_data("derivative", std::to_string(derivative));
-
 		// delay to save resources
 		pros::delay(PROCESS_DELAY);
 	}
-	p.status = 3;
 }
-
-PIDController lateral_pid ({
-		LATERAL_PID_KP,
-		LATERAL_PID_KI,
-		LATERAL_PID_KD,
-		LATERAL_PID_WIND,
-		LATERAL_PID_SLEW
-});
-
-PIDController angular_pid ({
-		ANGULAR_PID_KP,
-		ANGULAR_PID_KI,
-		ANGULAR_PID_KD,
-		ANGULAR_PID_WIND,
-		ANGULAR_PID_SLEW
-});
-
-
-PIDController arm_pid ({
-		ARM_PID_KP,
-		ARM_PID_KI,
-		ARM_PID_KD,
-		ARM_PID_WIND,
-		ARM_PID_SLEW
-});
 
 
 
@@ -467,20 +330,19 @@ pros::MotorGroup dt_left_motors ({
 	DT_FL_PORT,
 	DT_LM_PORT,
 	DT_BL_PORT
-}, pros::Cartridge::blue);
+});
 
 pros::MotorGroup dt_right_motors ({
 	DT_FR_PORT,
 	DT_MR_PORT,
 	DT_BR_PORT
-}, pros::Cartridge::blue);
+});
 
-pros::Motor intake_motor (INTAKE_PORT, pros::Cartridge::green);
+pros::Motor intake (INTAKE_PORT);
 
-pros::adi::DigitalOut mogo_piston (MOGO_PORT);
-pros::adi::DigitalOut bar_piston (BAR_PORT);
+pros::adi::DigitalOut mogo (MOGO_PORT);
 
-pros::Motor arm (ARM_PORT, pros::Cartridge::red);
+pros::Motor arm (ARM_PORT);
 pros::adi::DigitalOut arm_end (ARM_END_PORT);
 
 pros::IMU imu (IMU_PORT);
@@ -498,11 +360,6 @@ float imu_bias_y = 0;
 float imu_bias_z = 0;
 
 void solve_imu_bias(int32_t timeout) {
-	process p = add_process("Solve IMU Bias");
-	p.log_data("X bias", "waiting...");
-	p.log_data("Y bias", "waiting...");
-	p.log_data("Z bias", "waiting...");
-
 	int32_t start_time = pros::millis();
 
 	imu_bias_x = 0;
@@ -510,8 +367,6 @@ void solve_imu_bias(int32_t timeout) {
 	imu_bias_z = 0;
 
 	int cycle_count = 0;
-
-	p.status = 2;
 	while(pros::millis() <= start_time + timeout) {
 		imu_bias_x += imu.get_accel().x;
 		imu_bias_y += imu.get_accel().y;
@@ -525,12 +380,6 @@ void solve_imu_bias(int32_t timeout) {
 	imu_bias_x /= cycle_count;
 	imu_bias_y /= cycle_count;
 	imu_bias_z /= cycle_count;
-
-	p.log_data("X bias", str(imu_bias_x));
-	p.log_data("Y bias", str(imu_bias_y));
-	p.log_data("Z bias", str(imu_bias_z));
-
-	p.status = 3;
 }
 
 // robot position
@@ -566,28 +415,10 @@ void get_robot_position(long last_update) {
 /*****************************************************************************/
 
 void initialize() {
-	pros::Task telemetry([&](){
-		update_telemetry();
-		pros::delay(LONG_DELAY);
-	});
-
 	pros::lcd::initialize();
 
-	process init = add_process("Initialize");
-	init.log_data("reset imu" , "waiting...");
-	init.log_data("solve imu bias" , "waiting...");
-
-	auto start = pros::millis();
-
-	process reset_imu = add_process("Reset IMU");
 	imu.reset(true);
-	reset_imu.status = 3;
-
-	init.log_data("reset imu", "completed");
-
 	solve_imu_bias(1000);
-
-	init.log_data("solve imu bias", "completed");
 
     pros::Task pos_tracking_task([&]() {
 		last_pos_update = pros::millis();
@@ -603,8 +434,6 @@ void initialize() {
             pros::delay(PROCESS_DELAY);
         }
     });
-
-	init.status = 3;
 }
 
 void disabled() {}
@@ -712,21 +541,19 @@ void move_a_distance(float distance, int32_t timeout) {
 	pid_process_task.remove();
 }
 
-float prev_rotational_error = 0;
-
 void pranav_norm_auton(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
 
 }
 
 void skills_auton_17pts(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
-	mogo_piston.set_value(true);
+	mogo.set_value(true);
 	target_dist.fetch_add(-500);
 	
-	intake_motor.move(127);
+	intake.move(127);
 	pros::delay(500);
 
-	mogo_piston.set_value(false);
-	intake_motor.brake();
+	mogo.set_value(false);
+	intake.brake();
 
 	target_heading.store(0);
 
@@ -739,12 +566,12 @@ void skills_auton_17pts(std::atomic<float>& target_dist, std::atomic<float>& tar
 	target_dist.fetch_add(-1250); 
 	pros::delay(2000);
 
-	mogo_piston.set_value(true);
+	mogo.set_value(true);
 	target_heading.store(-5);
 	pros::delay(1500);
 
 	target_dist.fetch_add(1600);
-	intake_motor.move(127);
+	intake.move(127);
 	pros::delay(3000);
 
 	target_heading.store(-90);
@@ -801,7 +628,9 @@ void autonomous() {
 		if (absErr < absPErr && absErr < absSErr) return error;
 		if (absPErr < absSErr && absPErr < absSErr) return error + 360;
 		if (absSErr < absPErr && absSErr < absErr) return error - 360;
+		return error;
 	};
+	
 	std::atomic<float> angular_output;
 	pros::Task angular_pid_process_task{[&] {
 		pid_process(
@@ -833,15 +662,9 @@ void autonomous() {
 		}
 	});
 
-	switch (AUTON_SELECT) {
-		case 0: break;
-		case 1: pranav_norm_auton(target_dist, target_heading);
-		case 11: skills_auton_17pts(target_dist, target_heading);
-	}
+	mogo.set_value(false);
 
-	mogo_piston.set_value(false);
-
-	intake_motor.brake();
+	intake.brake();
 
 	angular_pid_process_task.remove();
 	lateral_pid_process_task.remove();
@@ -894,22 +717,16 @@ void opcontrol() {
 
 		// intake
 		if (master.get_digital(INTAKE_FWD_BUTTON))
-			intake_motor.move(INTAKE_MOTOR_SPEED);
+			intake.move(intake_SPEED);
 		else if (master.get_digital(INTAKE_REV_BUTTON))
-			intake_motor.move(-INTAKE_MOTOR_SPEED);
-		else intake_motor.brake();
+			intake.move(-intake_SPEED);
+		else intake.brake();
 		
 		// mogo
 		if (master.get_digital(MOGO_ON_BUTTON))
-			mogo_piston.set_value(true);
+			mogo.set_value(true);
 		else if (master.get_digital(MOGO_OFF_BUTTON))
-			mogo_piston.set_value(false);
-		
-		// bar
-		// if (master.get_digital(BAR_ON_BUTTON))
-		// 	bar_piston.set_value(true);
-		// else if (master.get_digital(BAR_OFF_BUTTON))
-		// 	bar_piston.set_value(false);
+			mogo.set_value(false);
 
 		// arm
 		if (master.get_digital(ARM_UP_BUTTON))

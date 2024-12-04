@@ -1,0 +1,37 @@
+{
+    "competition": {
+        "auton": 0
+    },
+
+    "ports": {
+        "drive": {
+            "front-left": -15,
+            "mid-left": -1,
+            "rear-left": -20,
+
+            "front-right": 14,
+            "mid-right": 18,
+            "rear-right": 16
+        },
+
+        "actuator": {
+            "intake": -2,
+
+            "mogo": 1,
+
+            "arm": -5,
+            "arm_end": 8
+        },
+
+        "sensor": {
+            "imu": 21
+        }
+    },
+
+    "controls": {
+        "drive": {
+            "lateral": "left-joystick-y",
+            "angular": "right-joystick-x"
+        }
+    }
+}
