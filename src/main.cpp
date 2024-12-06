@@ -474,7 +474,7 @@ void initialize() {
 
 	pros::lcd::print(0, "Select auton:");
 
-	auton = auton_select();
+	// auton = auton_select();
 
     pros::Task pos_tracking_task([&]() {
 		last_pos_update = pros::millis();
@@ -600,18 +600,25 @@ void move_a_distance(float distance, int32_t timeout) {
 void match_auton(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
 	mogo.set_value(false);
 
-	target_dist.fetch_add(-1250);
-	pros::delay(2000);
-
-	target_heading.fetch_add(60);
-	pros::delay(2000);
-
-	target_dist.fetch_add(-750);
+	target_dist.fetch_add(-600);
 	pros::delay(1500);
 
+	target_heading.store(32);
+	pros::delay(1500);
+
+	target_dist.fetch_add(-950);
+	pros::delay(2000);
+
 	mogo.set_value(true);
+	pros::delay(500);
 
 	intake.move(127);
+	pros::delay(500);
+
+	target_heading.store(108);
+	pros::delay(1500);
+
+	target_dist.fetch_add(750);
 
 	pros::delay(5000);
 
@@ -735,8 +742,17 @@ void autonomous() {
 		}
 	});
 
-	if (auton == 0) match_auton(target_dist, target_heading);
-	else if (auton == 1) skills_auton(target_dist, target_heading);
+	target_dist.fetch_add(500);
+	pros::delay(3000);
+	target_dist.fetch_add(1000);
+	pros::delay(3000);
+	target_dist.fetch_add(-1500);
+	pros::delay(3000);
+
+	// match_auton(target_dist, target_heading);
+
+	// if (auton == 0) 
+	// else if (auton == 1) skills_auton(target_dist, target_heading);
 
 	mogo.set_value(false);
 
