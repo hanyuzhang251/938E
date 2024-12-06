@@ -86,9 +86,9 @@ constexpr pros::digi_button FORCE_ARM_POS_BUTTON = pros::CTRL_DIGI_Y;
 
 // PID CONTROLLERS
 
-constexpr float LATERAL_PID_KP = 0.07;
-constexpr float LATERAL_PID_KI = 0.005;
-constexpr float LATERAL_PID_KD = 0;
+constexpr float LATERAL_PID_KP = 0.08;
+constexpr float LATERAL_PID_KI = 0.003;
+constexpr float LATERAL_PID_KD = 0.035;
 constexpr float LATERAL_PID_WIND = 300;
 constexpr float LATERAL_PID_SLEW = 999;
 
