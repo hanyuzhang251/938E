@@ -92,9 +92,9 @@ constexpr float LATERAL_PID_KD = 0.035;
 constexpr float LATERAL_PID_WIND = 300;
 constexpr float LATERAL_PID_SLEW = 999;
 
-constexpr float ANGULAR_PID_KP = 0.8;
+constexpr float ANGULAR_PID_KP = 0.7;
 constexpr float ANGULAR_PID_KI = 0.1;
-constexpr float ANGULAR_PID_KD = 3;
+constexpr float ANGULAR_PID_KD = 5;
 constexpr float ANGULAR_PID_WIND = 30;
 constexpr float ANGULAR_PID_SLEW = 999;
 
@@ -600,10 +600,10 @@ void move_a_distance(float distance, int32_t timeout) {
 void match_auton(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
 	mogo.set_value(false);
 
-	target_dist.fetch_add(-600);
+	target_dist.fetch_add(-575);
 	pros::delay(1500);
 
-	target_heading.store(32);
+	target_heading.store(35);
 	pros::delay(1500);
 
 	target_dist.fetch_add(-950);
@@ -742,12 +742,12 @@ void autonomous() {
 		}
 	});
 
-	target_dist.fetch_add(500);
-	pros::delay(3000);
-	target_dist.fetch_add(1000);
-	pros::delay(3000);
-	target_dist.fetch_add(-1500);
-	pros::delay(3000);
+	target_heading.store(45);
+	pros::delay(1500);
+	target_heading.store(-90);
+	pros::delay(1500);
+	target_heading.store(0);
+	pros::delay(1500);
 
 	// match_auton(target_dist, target_heading);
 
