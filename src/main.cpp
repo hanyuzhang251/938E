@@ -1,4 +1,5 @@
 #include "main.h"
+#include "pros/misc.h"
 #include <atomic>
 
 #define digi_button controller_digital_e_t
@@ -414,11 +415,66 @@ void get_robot_position(long last_update) {
 /*                                COMPETITION                                */
 /*****************************************************************************/
 
+int auton_select() {
+	master.clear();
+
+	choose_auton:
+	int auton = 0;
+
+	master.print(0, 0, "CHOOSE AUTON:");
+	master.print(0, 1, "[A]	match");
+	master.print(0, 2, "[B] skills");
+	
+	while(true) {
+		if (master.get_digital(DIGITAL_A)) {
+			auton = 0;
+			break;
+		}
+		if (master.get_digital(DIGITAL_B)) {
+			auton = 1;
+			break;
+		}
+	}
+
+	master.print(0, 0, "CONFIRM:");
+	master.print(0, 1, auton == 0 ? "match" : "skills");
+	master.print(0, 2, "[Y/X] yes/no");
+
+	while(true) {
+		if (master.get_digital(DIGITAL_Y)) {
+			master.print(0, 0, "auton: %s", auton == 0 ? "match" : "skills");
+			master.print(0, 1, "[B] OK");
+			master.print(0, 2, "");
+			
+			int end = pros::millis() + 5000;
+			while (pros::millis() < end) {
+				if (DIGITAL_B) {
+					master.clear();
+					break;
+				}
+			}
+			return auton;
+		}
+		if (master.get_digital(DIGITAL_B)) {
+			goto choose_auton;
+			break;
+		}
+	}
+}
+
+int auton = 0;
+
 void initialize() {
 	pros::lcd::initialize();
 
+	pros::lcd::print(0, "Initializing...");
+
 	imu.reset(true);
 	solve_imu_bias(1000);
+
+	pros::lcd::print(0, "Select auton:");
+
+	auton = auton_select();
 
     pros::Task pos_tracking_task([&]() {
 		last_pos_update = pros::millis();
@@ -541,11 +597,28 @@ void move_a_distance(float distance, int32_t timeout) {
 	pid_process_task.remove();
 }
 
-void pranav_norm_auton(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
+void match_auton(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
+	mogo.set_value(false);
 
+	target_dist.fetch_add(-1250);
+	pros::delay(2000);
+
+	target_heading.fetch_add(60);
+	pros::delay(2000);
+
+	target_dist.fetch_add(-750);
+	pros::delay(1500);
+
+	mogo.set_value(true);
+
+	intake.move(127);
+
+	pros::delay(5000);
+
+	return;
 }
 
-void skills_auton_17pts(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
+void skills_auton(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
 	mogo.set_value(true);
 	target_dist.fetch_add(-500);
 	
@@ -661,6 +734,9 @@ void autonomous() {
 			dt_right_motors.move(lateral_output.load() - angular_output.load());
 		}
 	});
+
+	if (auton == 0) match_auton(target_dist, target_heading);
+	else if (auton == 1) skills_auton(target_dist, target_heading);
 
 	mogo.set_value(false);
 
