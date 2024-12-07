@@ -626,31 +626,63 @@ void match_auton(std::atomic<float>& target_dist, std::atomic<float>& target_hea
 }
 
 void skills_auton(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
-	mogo.set_value(false);
-
-	target_dist.fetch_add(-575);
-	pros::delay(1500);
-
-	target_heading.store(35);
-	pros::delay(1500);
-
-	target_dist.fetch_add(-950);
-	pros::delay(2000);
-
 	mogo.set_value(true);
-	pros::delay(500);
-
+	target_dist.fetch_add(-500);
+	
 	intake.move(127);
 	pros::delay(500);
 
-	target_heading.store(108);
+	mogo.set_value(false);
+	intake.brake();
+
+	target_heading.store(0);
+
+	target_dist.fetch_add(1100);
+	pros::delay(1500);
+
+	target_heading.store(90);
+	pros::delay(1500);
+
+	target_dist.fetch_add(-1250); 
+	pros::delay(2000);
+
+	mogo.set_value(true);
+	target_heading.store(-5);
+	pros::delay(1500);
+
+	target_dist.fetch_add(1600);
+	intake.move(127);
+	pros::delay(3000);
+
+	target_heading.store(-90);
+	pros::delay(1650);
+
+	target_dist.fetch_add(1500);
+	pros::delay(3000);
+
+	target_heading.store(-173);
+	pros::delay(3000);
+
+	target_dist.fetch_add(2250);
+	pros::delay(3000);
+
+	target_dist.fetch_add(-1500);
+	pros::delay(1500);
+
+	target_heading.store(-135);
 	pros::delay(1500);
 
 	target_dist.fetch_add(750);
+	pros::delay(1000);
 
-	pros::delay(5000);
+	target_heading.store(-90);
+	pros::delay(1500);
 
-	return;
+	target_heading.store(35);
+	pros::delay(2000);
+
+	target_dist.fetch_add(-2500);
+	pros::delay(3000);
 }
 
 void autonomous() {
