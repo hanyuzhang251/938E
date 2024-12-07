@@ -106,17 +106,17 @@ constexpr float ARM_PID_SLEW = 999;
 
 // DRIVING
 
-constexpr int INTAKE_SPEED = 127;
+constexpr int DRIVE_RATIO = 1;
+constexpr int TURN_RATIO = 1;
+
+constexpr bool SPEED_COMP = false;
+
+constexpr int intake_SPEED = 127;
 
 constexpr float ARM_SPEED = 50;
 constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
 constexpr float MIN_ARM_HEIGHT = 0;
 constexpr float MAX_ARM_HEIGHT = 2600;
-
-constexpr int DRIVE_RATIO = 1;
-constexpr int TURN_RATIO = 1;
-
-constexpr bool SPEED_COMP = false;
 
 constexpr float DRIVE_CURVE_DEADBAND = 3;
 constexpr float DRIVE_CURVE_MIN_OUT = 10;
@@ -150,6 +150,20 @@ struct PIDController {
 	float slew = 0;
 };
 
+/**
+ * Calculates the power output of a PID given the current status
+ *
+ * @param error difference between current and target values
+ * @param integral error accumulated over time
+ * @param derivative dampener based on predicted future error
+ * @param pid PID controller to calculate power with
+ */
+float calcPowerPID(
+	int error, int integral, int derivative, const PIDController* pid
+) {
+	return error * pid->kP + integral * pid->kI + derivative * pid->kD;
+}
+
 PIDController lateral_pid ({
 		LATERAL_PID_KP,
 		LATERAL_PID_KI,
@@ -174,18 +188,6 @@ PIDController arm_pid ({
 		ARM_PID_WIND,
 		ARM_PID_SLEW
 });
-
-/**
- * Calculates the power output of a PID given the current status
- *
- * @param error difference between current and target values
- * @param integral error accumulated over time
- * @param derivative dampener based on predicted future error
- * @param pid PID controller to calculate power with
- */
-float calcPowerPID(int error, int integral, int derivative, const PIDController* pid) {
-	return error * pid->kP + integral * pid->kI + derivative * pid->kD;
-}
 
 int pid_process_counter = 0;
 
@@ -462,15 +464,15 @@ int auton_select() {
 
 int auton = 0;
 
-bool init_done = false;
-
-void init() {
-	if (init_done) return;
-
+void initialize() {
 	pros::lcd::initialize();
+
+	// pros::lcd::print(0, "Initializing...");
 
 	imu.reset(true);
 	solve_imu_bias(1000);
+
+	// pros::lcd::print(0, "Select auton:");
 
 	// auton = auton_select();
 
@@ -488,19 +490,11 @@ void init() {
             pros::delay(PROCESS_DELAY);
         }
     });
-
-	init_done = true;
-}
-
-void initialize() {
-	init();
 }
 
 void disabled() {}
 
-void competition_initialize() {
-	init();
-}
+void competition_initialize() {}
 
 struct Pose {
 	float xPos = 0;
@@ -607,27 +601,24 @@ void match_auton(std::atomic<float>& target_dist, std::atomic<float>& target_hea
 	mogo.set_value(false);
 
 	target_dist.fetch_add(-300);
-	pros::delay(750);
+	pros::delay(1500);
 
 	target_heading.store(35);
 	pros::delay(1500);
 
-	target_dist.fetch_add(-1020);
-	pros::delay(1500);
+	target_dist.fetch_add(-1100);
+	pros::delay(2000);
 
 	mogo.set_value(true);
-	pros::delay(1000);
+	pros::delay(500);
 
-	intake.move(INTAKE_SPEED);
-	pros::delay(1000);
+	intake.move(127);
+	pros::delay(500);
 
 	target_heading.store(108);
 	pros::delay(1500);
 
 	target_dist.fetch_add(750);
-	pros::delay(1000);
-	
-	target_dist.fetch_add(-250);
 
 	pros::delay(5000);
 
@@ -768,7 +759,6 @@ void autonomous() {
 
 	// if (auton == 0) 
 	// else if (auton == 1) skills_auton(target_dist, target_heading);
-	// pros::delay(500);
 
 	mogo.set_value(false);
 
@@ -825,9 +815,9 @@ void opcontrol() {
 
 		// intake
 		if (master.get_digital(INTAKE_FWD_BUTTON))
-			intake.move(INTAKE_SPEED);
+			intake.move(intake_SPEED);
 		else if (master.get_digital(INTAKE_REV_BUTTON))
-			intake.move(-INTAKE_SPEED);
+			intake.move(-intake_SPEED);
 		else intake.brake();
 		
 		// mogo
