@@ -92,9 +92,9 @@ constexpr float LATERAL_PID_KD = 0.035;
 constexpr float LATERAL_PID_WIND = 300;
 constexpr float LATERAL_PID_SLEW = 999;
 
-constexpr float ANGULAR_PID_KP = 0.7;
+constexpr float ANGULAR_PID_KP = 0.8;
 constexpr float ANGULAR_PID_KI = 0.1;
-constexpr float ANGULAR_PID_KD = 5;
+constexpr float ANGULAR_PID_KD = 1;
 constexpr float ANGULAR_PID_WIND = 30;
 constexpr float ANGULAR_PID_SLEW = 999;
 
@@ -467,12 +467,12 @@ int auton = 0;
 void initialize() {
 	pros::lcd::initialize();
 
-	pros::lcd::print(0, "Initializing...");
+	// pros::lcd::print(0, "Initializing...");
 
 	imu.reset(true);
 	solve_imu_bias(1000);
 
-	pros::lcd::print(0, "Select auton:");
+	// pros::lcd::print(0, "Select auton:");
 
 	// auton = auton_select();
 
@@ -742,14 +742,20 @@ void autonomous() {
 		}
 	});
 
-	target_heading.store(45);
-	pros::delay(1500);
-	target_heading.store(-90);
-	pros::delay(1500);
-	target_heading.store(0);
-	pros::delay(1500);
+	// target_heading.store(-45);
+	// pros::delay(2000);
+	// printf("%f\n", imu.get_heading());
+	// target_heading.store(90);
+	// pros::delay(3000);
+	// printf("%f\n", imu.get_heading());
+	// target_heading.store(0);
+	// pros::delay(3000);
+	// printf("%f\n", imu.get_heading());
+	// pros::delay(500);
 
 	// match_auton(target_dist, target_heading);
+		skills_auton(target_dist, target_heading);
+
 
 	// if (auton == 0) 
 	// else if (auton == 1) skills_auton(target_dist, target_heading);
