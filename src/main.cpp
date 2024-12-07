@@ -1,5 +1,4 @@
 #include "main.h"
-#include "pros/misc.h"
 #include <atomic>
 
 #define digi_button controller_digital_e_t
@@ -86,15 +85,15 @@ constexpr pros::digi_button FORCE_ARM_POS_BUTTON = pros::CTRL_DIGI_Y;
 
 // PID CONTROLLERS
 
-constexpr float LATERAL_PID_KP = 0.08;
-constexpr float LATERAL_PID_KI = 0.003;
-constexpr float LATERAL_PID_KD = 0.035;
+constexpr float LATERAL_PID_KP = 0.07;
+constexpr float LATERAL_PID_KI = 0.005;
+constexpr float LATERAL_PID_KD = 0;
 constexpr float LATERAL_PID_WIND = 300;
 constexpr float LATERAL_PID_SLEW = 999;
 
 constexpr float ANGULAR_PID_KP = 0.8;
 constexpr float ANGULAR_PID_KI = 0.1;
-constexpr float ANGULAR_PID_KD = 1;
+constexpr float ANGULAR_PID_KD = 3;
 constexpr float ANGULAR_PID_WIND = 30;
 constexpr float ANGULAR_PID_SLEW = 999;
 
@@ -106,17 +105,17 @@ constexpr float ARM_PID_SLEW = 999;
 
 // DRIVING
 
-constexpr int INTAKE_SPEED = 127;
-
-constexpr float ARM_SPEED = 50;
-constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
-constexpr float MIN_ARM_HEIGHT = 0;
-constexpr float MAX_ARM_HEIGHT = 2600;
-
 constexpr int DRIVE_RATIO = 1;
 constexpr int TURN_RATIO = 1;
 
 constexpr bool SPEED_COMP = false;
+
+constexpr int intake_SPEED = 127;
+
+constexpr float ARM_SPEED = 50;
+constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
+constexpr float MIN_ARM_HEIGHT = 0;
+constexpr float MAX_ARM_HEIGHT = 2700;
 
 constexpr float DRIVE_CURVE_DEADBAND = 3;
 constexpr float DRIVE_CURVE_MIN_OUT = 10;
@@ -150,6 +149,20 @@ struct PIDController {
 	float slew = 0;
 };
 
+/**
+ * Calculates the power output of a PID given the current status
+ *
+ * @param error difference between current and target values
+ * @param integral error accumulated over time
+ * @param derivative dampener based on predicted future error
+ * @param pid PID controller to calculate power with
+ */
+float calcPowerPID(
+	int error, int integral, int derivative, const PIDController* pid
+) {
+	return error * pid->kP + integral * pid->kI + derivative * pid->kD;
+}
+
 PIDController lateral_pid ({
 		LATERAL_PID_KP,
 		LATERAL_PID_KI,
@@ -174,18 +187,6 @@ PIDController arm_pid ({
 		ARM_PID_WIND,
 		ARM_PID_SLEW
 });
-
-/**
- * Calculates the power output of a PID given the current status
- *
- * @param error difference between current and target values
- * @param integral error accumulated over time
- * @param derivative dampener based on predicted future error
- * @param pid PID controller to calculate power with
- */
-float calcPowerPID(int error, int integral, int derivative, const PIDController* pid) {
-	return error * pid->kP + integral * pid->kI + derivative * pid->kD;
-}
 
 int pid_process_counter = 0;
 
@@ -413,66 +414,11 @@ void get_robot_position(long last_update) {
 /*                                COMPETITION                                */
 /*****************************************************************************/
 
-int auton_select() {
-	master.clear();
-
-	choose_auton:
-	int auton = 0;
-
-	master.print(0, 0, "CHOOSE AUTON:");
-	master.print(0, 1, "[A]	match");
-	master.print(0, 2, "[B] skills");
-	
-	while(true) {
-		if (master.get_digital(DIGITAL_A)) {
-			auton = 0;
-			break;
-		}
-		if (master.get_digital(DIGITAL_B)) {
-			auton = 1;
-			break;
-		}
-	}
-
-	master.print(0, 0, "CONFIRM:");
-	master.print(0, 1, auton == 0 ? "match" : "skills");
-	master.print(0, 2, "[Y/X] yes/no");
-
-	while(true) {
-		if (master.get_digital(DIGITAL_Y)) {
-			master.print(0, 0, "auton: %s", auton == 0 ? "match" : "skills");
-			master.print(0, 1, "[B] OK");
-			master.print(0, 2, "");
-			
-			int end = pros::millis() + 5000;
-			while (pros::millis() < end) {
-				if (DIGITAL_B) {
-					master.clear();
-					break;
-				}
-			}
-			return auton;
-		}
-		if (master.get_digital(DIGITAL_B)) {
-			goto choose_auton;
-			break;
-		}
-	}
-}
-
-int auton = 0;
-
-bool init_done = false;
-
-void init() {
-	if (init_done) return;
-
+void initialize() {
 	pros::lcd::initialize();
 
 	imu.reset(true);
 	solve_imu_bias(1000);
-
-	// auton = auton_select();
 
     pros::Task pos_tracking_task([&]() {
 		last_pos_update = pros::millis();
@@ -488,19 +434,11 @@ void init() {
             pros::delay(PROCESS_DELAY);
         }
     });
-
-	init_done = true;
-}
-
-void initialize() {
-	init();
 }
 
 void disabled() {}
 
-void competition_initialize() {
-	init();
-}
+void competition_initialize() {}
 
 struct Pose {
 	float xPos = 0;
@@ -603,38 +541,11 @@ void move_a_distance(float distance, int32_t timeout) {
 	pid_process_task.remove();
 }
 
-void match_auton(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
-	mogo.set_value(false);
+void pranav_norm_auton(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
 
-	target_dist.fetch_add(-300);
-	pros::delay(750);
-
-	target_heading.store(35);
-	pros::delay(1500);
-
-	target_dist.fetch_add(-1020);
-	pros::delay(1500);
-
-	mogo.set_value(true);
-	pros::delay(1000);
-
-	intake.move(90);
-	pros::delay(1000);
-
-	target_heading.store(108);
-	pros::delay(1500);
-
-	target_dist.fetch_add(750);
-	pros::delay(1000);
-	
-	target_dist.fetch_add(-250);
-
-	pros::delay(5000);
-
-	return;
 }
 
-void skills_auton(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
+void skills_auton_17pts(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
 	mogo.set_value(true);
 	target_dist.fetch_add(-500);
 	
@@ -751,25 +662,6 @@ void autonomous() {
 		}
 	});
 
-	// target_heading.store(-45);
-	// pros::delay(2000);
-	// printf("%f\n", imu.get_heading());
-	// target_heading.store(90);
-	// pros::delay(3000);
-	// printf("%f\n", imu.get_heading());
-	// target_heading.store(0);
-	// pros::delay(3000);
-	// printf("%f\n", imu.get_heading());
-	// pros::delay(500);
-
-	// match_auton(target_dist, target_heading);
-		skills_auton(target_dist, target_heading);
-
-
-	// if (auton == 0) 
-	// else if (auton == 1) skills_auton(target_dist, target_heading);
-	// pros::delay(500);
-
 	mogo.set_value(false);
 
 	intake.brake();
@@ -803,7 +695,7 @@ void opcontrol() {
 		pid_process(
 				&arm_pos,
 				&arm_target_pos,
-				1200000, // 20 min time cause max said so
+				120000, // bombastically long timeout to cover entire period
 				&arm_pid,
 				&output,
 				error_mod
@@ -825,9 +717,9 @@ void opcontrol() {
 
 		// intake
 		if (master.get_digital(INTAKE_FWD_BUTTON))
-			intake.move(INTAKE_SPEED);
+			intake.move(intake_SPEED);
 		else if (master.get_digital(INTAKE_REV_BUTTON))
-			intake.move(-INTAKE_SPEED);
+			intake.move(-intake_SPEED);
 		else intake.brake();
 		
 		// mogo
