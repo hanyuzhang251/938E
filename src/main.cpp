@@ -600,13 +600,13 @@ void move_a_distance(float distance, int32_t timeout) {
 void match_auton(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
 	mogo.set_value(false);
 
-	target_dist.fetch_add(-575);
+	target_dist.fetch_add(-300);
 	pros::delay(1500);
 
 	target_heading.store(35);
 	pros::delay(1500);
 
-	target_dist.fetch_add(-950);
+	target_dist.fetch_add(-1100);
 	pros::delay(2000);
 
 	mogo.set_value(true);
@@ -736,10 +736,11 @@ void autonomous() {
 	}};
 
 	pros::Task pid_output_manager_task([&]{
+		while (true) {
 			dt_left_motors.move(angular_output.load() + lateral_output.load());
 			dt_right_motors.move(lateral_output.load() - angular_output.load());
 		}
-	);
+	});
 
 	// target_heading.store(-45);
 	// pros::delay(2000);
@@ -752,8 +753,8 @@ void autonomous() {
 	// printf("%f\n", imu.get_heading());
 	// pros::delay(500);
 
-	// match_auton(target_dist, target_heading);
-		skills_auton(target_dist, target_heading);
+	match_auton(target_dist, target_heading);
+		// skills_auton(target_dist, target_heading);
 
 
 	// if (auton == 0) 
@@ -792,7 +793,7 @@ void opcontrol() {
 		pid_process(
 				&arm_pos,
 				&arm_target_pos,
-				120000, // bombastically long timeout to cover entire period
+				1200000, // 20 min time cause max said so
 				&arm_pid,
 				&output,
 				error_mod
