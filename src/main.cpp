@@ -618,7 +618,7 @@ void match_auton(std::atomic<float>& target_dist, std::atomic<float>& target_hea
 	mogo.set_value(true);
 	pros::delay(1000);
 
-	intake.move(90);
+	intake.move(INTAKE_SPEED);
 	pros::delay(1000);
 
 	target_heading.store(108);
