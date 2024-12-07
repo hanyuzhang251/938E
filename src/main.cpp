@@ -626,48 +626,34 @@ void match_auton(std::atomic<float>& target_dist, std::atomic<float>& target_hea
 }
 
 void skills_auton(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
-	
+	mogo.set_value(false);
+
+	target_dist.fetch_add(-575);
+	pros::delay(1500);
+
+	target_heading.store(35);
+	pros::delay(1500);
+
+	target_dist.fetch_add(-950);
+	pros::delay(2000);
+
+	mogo.set_value(true);
+	pros::delay(500);
+
+	intake.move(127);
+	pros::delay(500);
+
+	target_heading.store(108);
+	pros::delay(1500);
+
+	target_dist.fetch_add(750);
+
+	pros::delay(5000);
+
+	return;
 }
 
 void autonomous() {
-
-	std::atomic<float> arm_target_pos = 0;
-	arm.tare_position();
-
-	// dampens the error when moving downward to prevent dropping the arm
-	auto error_mod = [](float target, float current) {
-		float error = target - current;
-		if (error < 0) error *= ARM_DOWN_SPEED_MULTI;
-		return error;
-	};
-	// records the output of the arm PID process
-	std::atomic<float> output (0);
-	// records position of the arm throughout the PID process
-	std::atomic<float> arm_pos (0);
-
-	// start arm PID process
-	pros::Task arm_pid_task([&] {
-		pid_process(
-				&arm_pos,
-				&arm_target_pos,
-				120000, // bombastically long timeout to cover entire period
-				&arm_pid,
-				&output,
-				error_mod
-		);
-	});
-
-	// constrain the target arm pos if we're not forcing it
-		if (!master.get_digital(FORCE_ARM_POS_BUTTON)) {
-			arm_target_pos.store(std::min(MAX_ARM_HEIGHT, std::max(MIN_ARM_HEIGHT,
-					arm_target_pos.load()
-			)));
-		}
-		// update current arm pos
-		arm_pos.store(arm.get_position());
-		// move arm to PID output
-		arm.move(output.load());
-
 	dt_left_motors.tare_position_all();
 	dt_right_motors.tare_position_all();
 
@@ -718,11 +704,10 @@ void autonomous() {
 	}};
 
 	pros::Task pid_output_manager_task([&]{
-		while (true) {
 			dt_left_motors.move(angular_output.load() + lateral_output.load());
 			dt_right_motors.move(lateral_output.load() - angular_output.load());
 		}
-	});
+	);
 
 	// target_heading.store(-45);
 	// pros::delay(2000);
@@ -749,7 +734,6 @@ void autonomous() {
 	angular_pid_process_task.remove();
 	lateral_pid_process_task.remove();
 	pid_output_manager_task.remove();
-	arm_pid_task.remove();
 
 	dt_left_motors.brake();
 	dt_right_motors.brake();
