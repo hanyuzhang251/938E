@@ -1,7 +1,7 @@
 {
   "py/object": "pros.conductor.project.Project",
   "py/state": {
-    "project_name": "VEX-938E",
+    "project_name": "SKILLS",
     "target": "v5",
     "templates": {
       "LemLib": {
@@ -298,7 +298,8 @@
       }
     },
     "upload_options": {
-      "icon": "clawbot"
+      "icon": "pros",
+      "slot": 4
     },
     "use_early_access": false
   }
