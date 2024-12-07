@@ -116,7 +116,7 @@ constexpr int intake_SPEED = 127;
 constexpr float ARM_SPEED = 50;
 constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
 constexpr float MIN_ARM_HEIGHT = 0;
-constexpr float MAX_ARM_HEIGHT = 2700;
+constexpr float MAX_ARM_HEIGHT = 2600;
 
 constexpr float DRIVE_CURVE_DEADBAND = 3;
 constexpr float DRIVE_CURVE_MIN_OUT = 10;
