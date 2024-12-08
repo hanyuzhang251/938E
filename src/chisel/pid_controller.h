@@ -16,19 +16,19 @@ namespace chisel {
         float kd = 0;
         float i_clamp = 999;
         float i_range = 999;
+        float i_decay = 0;
         float slew = 999;
 
         std::atomic<float>& value;
         std::atomic<float>& target;
-        std::atomic<float>& output;
 
         std::function<float(float, float)> normalize_func = nullptr;
 
         pid_controller(
-                float kp, float ki, float kd, float i_clamp, float i_range, float slew,
+                float kp, float ki, float kd, float i_clamp, float i_range, float i_decay, float slew,
                 std::atomic<float>& value, std::atomic<float>& target, std::atomic<float>& output):
-                        kp(kp), ki(ki), kd(kd), i_clamp(i_clamp), i_range(i_range), slew(slew),
-                        value(value), target(target), output(output) {};
+                        kp(kp), ki(ki), kd(kd), i_clamp(i_clamp), i_range(i_range), i_decay(i_decay), slew(slew),
+                        value(value), target(target) {};
 
         float calculate(float error, float integral, float derivative) {
             return error * kp + integral * ki + derivative * kd;
@@ -41,16 +41,13 @@ namespace chisel {
         float integral = 0;
         float derivative = 0;
 
-        void update() {
-            prev_output = output.load();
-            prev_error = error;
-
+        float calculate() {
             error = target.load() - value.load();
             if (normalize_func) error = normalize_func(target.load(), value.load());
 
             if (sgn(prev_error) != sgn(error)) integral = 0;
             if (std::abs(error) <= i_range) integral += error;
-            else integral = 0;
+            else integral *= i_decay;
             std::clamp(integral, -i_clamp, i_clamp);
 
             derivative = error - prev_error;
@@ -58,7 +55,10 @@ namespace chisel {
             float calc_power = calculate(error, integral, derivative);
             calc_power = std::max(prev_output - slew, std::min(prev_output + slew, calc_power));
 
-            output.store(calc_power);
+            prev_output = calc_power;
+            prev_error = error;
+
+            return calc_power;
         }
     };
 }
