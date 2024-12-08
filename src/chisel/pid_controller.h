@@ -1,5 +1,5 @@
-#ifndef PID_H
-#define PID_H
+#ifndef PID_CONTROLLER_H
+#define PID_CONTROLLER_H
 
 #include "util.h"
 
@@ -63,4 +63,4 @@ namespace chisel {
     };
 }
 
-#endif //PID_H
+#endif //PID_CONTROLLER_H
