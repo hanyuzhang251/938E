@@ -111,7 +111,7 @@ constexpr int TURN_RATIO = 1;
 
 constexpr bool SPEED_COMP = false;
 
-constexpr int intake_SPEED = 127;
+constexpr int INTAKE_SPEED = 115;
 
 constexpr float ARM_SPEED = 50;
 constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
@@ -462,9 +462,11 @@ int auton_select() {
 	}
 }
 
-int auton = 0;
+bool init_done = false;
 
-void initialize() {
+void init() {
+	if (init_done) return;
+
 	pros::lcd::initialize();
 
 	// pros::lcd::print(0, "Initializing...");
@@ -490,11 +492,19 @@ void initialize() {
             pros::delay(PROCESS_DELAY);
         }
     });
+
+	init_done = true;
+}
+
+void initialize() {
+	init();
 }
 
 void disabled() {}
 
-void competition_initialize() {}
+void competition_initialize() {
+	init();
+}
 
 struct Pose {
 	float xPos = 0;
@@ -597,28 +607,31 @@ void move_a_distance(float distance, int32_t timeout) {
 	pid_process_task.remove();
 }
 
-void match_auton(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
+void match_auton(std::atomic<float>& target_dist, std::atomic<float>& target_heading, bool right) {
 	mogo.set_value(false);
 
 	target_dist.fetch_add(-300);
+	pros::delay(750);
+
+	target_heading.store(35 * (right ? -1 : 1));
 	pros::delay(1500);
 
-	target_heading.store(35);
+	target_dist.fetch_add(-1020);
 	pros::delay(1500);
-
-	target_dist.fetch_add(-1100);
-	pros::delay(2000);
 
 	mogo.set_value(true);
-	pros::delay(500);
+	pros::delay(1000);
 
-	intake.move(127);
-	pros::delay(500);
+	intake.move(INTAKE_SPEED);
+	pros::delay(1000);
 
-	target_heading.store(108);
+	target_heading.store(108 * (right ? -1 : 1));
 	pros::delay(1500);
 
 	target_dist.fetch_add(750);
+	pros::delay(1000);
+	
+	target_dist.fetch_add(-250);
 
 	pros::delay(5000);
 
@@ -753,8 +766,8 @@ void autonomous() {
 	// printf("%f\n", imu.get_heading());
 	// pros::delay(500);
 
-	match_auton(target_dist, target_heading);
-		// skills_auton(target_dist, target_heading);
+	pros::delay(500);
+	// match_auton(target_dist, target_heading, true);
 
 
 	// if (auton == 0) 
@@ -815,9 +828,9 @@ void opcontrol() {
 
 		// intake
 		if (master.get_digital(INTAKE_FWD_BUTTON))
-			intake.move(intake_SPEED);
+			intake.move(INTAKE_SPEED);
 		else if (master.get_digital(INTAKE_REV_BUTTON))
-			intake.move(-intake_SPEED);
+			intake.move(-INTAKE_SPEED);
 		else intake.brake();
 		
 		// mogo
