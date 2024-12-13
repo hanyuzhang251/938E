@@ -19,16 +19,13 @@ namespace chisel {
         float i_decay = 0;
         float slew = 999;
 
-        std::atomic<float>& value;
-        std::atomic<float>& target;
+        at_f& value;
+        at_f& target;
 
         std::function<float(float, float)> normalize_func = nullptr;
 
-        pid_controller(
-                float kp, float ki, float kd, float i_clamp, float i_range, float i_decay, float slew,
-                std::atomic<float>& value, std::atomic<float>& target, std::atomic<float>& output):
-                        kp(kp), ki(ki), kd(kd), i_clamp(i_clamp), i_range(i_range), i_decay(i_decay), slew(slew),
-                        value(value), target(target) {};
+        pid_controller(float kp, float ki, float kd, float i_clamp, float i_range, float i_decay, float slew, at_f& value, at_f& target, at_f& output):
+                kp(kp), ki(ki), kd(kd), i_clamp(i_clamp), i_range(i_range), i_decay(i_decay), slew(slew), value(value), target(target) {};
 
         float calculate(float error, float integral, float derivative) {
             return error * kp + integral * ki + derivative * kd;
@@ -41,7 +38,7 @@ namespace chisel {
         float integral = 0;
         float derivative = 0;
 
-        float calculate() {
+        float update() {
             error = target.load() - value.load();
             if (normalize_func) error = normalize_func(target.load(), value.load());
 
