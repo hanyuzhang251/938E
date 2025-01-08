@@ -1,7 +1,7 @@
 {
   "py/object": "pros.conductor.project.Project",
   "py/state": {
-    "project_name": "no AUTon",
+    "project_name": "LEFT AUT",
     "target": "v5",
     "templates": {
       "LemLib": {
@@ -298,8 +298,8 @@
       }
     },
     "upload_options": {
-      "icon": "pros",
-      "slot": 3
+      "icon": "robot",
+      "slot": 1
     },
     "use_early_access": false
   }

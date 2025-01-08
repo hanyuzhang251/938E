@@ -48,12 +48,12 @@ constexpr long LONG_DELAY = 200;
 // PORTS
 
 constexpr int DT_FL_PORT = -15;
-constexpr int DT_LM_PORT = -1;
-constexpr int DT_BL_PORT = 20;
+constexpr int DT_LM_PORT = 1;
+constexpr int DT_BL_PORT = -20;
 
 constexpr int DT_FR_PORT = 14;
-constexpr int DT_MR_PORT = 18;
-constexpr int DT_BR_PORT = -16;
+constexpr int DT_MR_PORT = -18;
+constexpr int DT_BR_PORT = 16;
 
 constexpr int INTAKE_PORT = -2;
 
@@ -110,7 +110,7 @@ constexpr int TURN_RATIO = 1;
 
 constexpr bool SPEED_COMP = false;
 
-constexpr int INTAKE_SPEED = 115;
+constexpr int intake_SPEED = 127;
 
 constexpr float ARM_SPEED = 50;
 constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
@@ -413,53 +413,6 @@ void get_robot_position(long last_update) {
 /*                                COMPETITION                                */
 /*****************************************************************************/
 
-int auton_select() {
-	master.clear();
-
-	choose_auton:
-	int auton = 0;
-
-	master.print(0, 0, "CHOOSE AUTON:");
-	master.print(0, 1, "[A]	match");
-	master.print(0, 2, "[B] skills");
-	
-	while(true) {
-		if (master.get_digital(DIGITAL_A)) {
-			auton = 0;
-			break;
-		}
-		if (master.get_digital(DIGITAL_B)) {
-			auton = 1;
-			break;
-		}
-	}
-
-	master.print(0, 0, "CONFIRM:");
-	master.print(0, 1, auton == 0 ? "match" : "skills");
-	master.print(0, 2, "[Y/X] yes/no");
-
-	while(true) {
-		if (master.get_digital(DIGITAL_Y)) {
-			master.print(0, 0, "auton: %s", auton == 0 ? "match" : "skills");
-			master.print(0, 1, "[B] OK");
-			master.print(0, 2, "");
-			
-			int end = pros::millis() + 5000;
-			while (pros::millis() < end) {
-				if (DIGITAL_B) {
-					master.clear();
-					break;
-				}
-			}
-			return auton;
-		}
-		if (master.get_digital(DIGITAL_B)) {
-			goto choose_auton;
-			break;
-		}
-	}
-}
-
 bool init_done = false;
 
 void init() {
@@ -605,31 +558,28 @@ void move_a_distance(float distance, int32_t timeout) {
 	pid_process_task.remove();
 }
 
-void match_auton(std::atomic<float>& target_dist, std::atomic<float>& target_heading, bool right) {
+void match_auton(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
 	mogo.set_value(false);
 
 	target_dist.fetch_add(-300);
-	pros::delay(750);
-
-	target_heading.store(35 * (right ? -1 : 1));
 	pros::delay(1500);
 
-	target_dist.fetch_add(-1020);
+	target_heading.store(35);
 	pros::delay(1500);
+
+	target_dist.fetch_add(-1100);
+	pros::delay(2000);
 
 	mogo.set_value(true);
-	pros::delay(1000);
+	pros::delay(500);
 
-	intake.move(INTAKE_SPEED);
-	pros::delay(1000);
+	intake.move(127);
+	pros::delay(500);
 
-	target_heading.store(108 * (right ? -1 : 1));
+	target_heading.store(108);
 	pros::delay(1500);
 
 	target_dist.fetch_add(750);
-	pros::delay(1000);
-	
-	target_dist.fetch_add(-250);
 
 	pros::delay(5000);
 
@@ -764,8 +714,8 @@ void autonomous() {
 	// printf("%f\n", imu.get_heading());
 	// pros::delay(500);
 
-	pros::delay(500);
-	// match_auton(target_dist, target_heading, true);
+	match_auton(target_dist, target_heading);
+		// skills_auton(target_dist, target_heading);
 
 
 	// if (auton == 0) 
@@ -826,9 +776,9 @@ void opcontrol() {
 
 		// intake
 		if (master.get_digital(INTAKE_FWD_BUTTON))
-			intake.move(INTAKE_SPEED);
+			intake.move(intake_SPEED);
 		else if (master.get_digital(INTAKE_REV_BUTTON))
-			intake.move(-INTAKE_SPEED);
+			intake.move(-intake_SPEED);
 		else intake.brake();
 		
 		// mogo
@@ -848,8 +798,6 @@ void opcontrol() {
 		arm_pos.store(arm.get_position());
 		// move arm to PID output
 		arm.move(output.load());
-
-		if (master.get_digital(RESET_ARM_POS_BUTTON)) arm.tare_position();
 
 		// arm end
 		if(master.get_digital(ARM_END_ON_BUTTON))
