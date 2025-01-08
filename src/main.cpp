@@ -1,6 +1,7 @@
 #include "main.h"
 #include "pros/misc.h"
 #include <atomic>
+#include <cmath>
 
 #define digi_button controller_digital_e_t
 #define anlg_button controller_analog_e_t
@@ -35,6 +36,13 @@
 template <typename T> int sgn(T val) {
     return (T(0) < val) - (val < T(0));
 }
+
+struct Pose {
+	float xPos = 0;
+	float yPos = 0;
+	float head = 0;
+	bool forward = true;
+};
 
 
 
@@ -450,12 +458,16 @@ void competition_initialize() {
 	init();
 }
 
-struct Pose {
-	float xPos = 0;
-	float yPos = 0;
-	float head = 0;
-	bool forward = true;
-};
+/*****************************************************************************/
+/*                                   AUTON                                   */
+/*****************************************************************************/
+
+std::atomic<float>&& set_td (0);
+std::atomic<float>&& set_th (0);
+
+void turn_to_point(float x, float z) {
+	set_th.store(std::atan2(x - xPos.load(), z - zPos.load()) * 180 / M_PI);
+}
 
 void match_auton(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
 	mogo.set_value(false);
@@ -618,6 +630,9 @@ void autonomous() {
 			arm.move(arm_pos_output.load());
 		}
 	});
+
+	set_td = target_dist;
+	set_th = target_heading;
 
 	// target_heading.store(-45);
 	// pros::delay(2000);
