@@ -570,7 +570,6 @@ void autonomous() {
 		if (absSErr < absPErr && absSErr < absErr) return error - 360;
 		return error;
 	};
-	
 	std::atomic<float> angular_output;
 	pros::Task angular_pid_process_task{[&] {
 		pid_process(
@@ -595,10 +594,28 @@ void autonomous() {
 		);
 	}};
 
+	std::atomic<float> arm_pos (0);
+	std::atomic<float> target_arm_pos (0);
+	std::atomic<float> arm_pos_output;
+	pros::Task arm_pid_process_task{[&] {
+		pid_process(
+			&arm_pos,
+			&target_arm_pos,
+			120000,
+			&arm_pid,
+			&arm_pos_output
+		);
+	}};
+
 	pros::Task pid_output_manager_task([&]{
 		while (true) {
 			dt_left_motors.move(angular_output.load() + lateral_output.load());
 			dt_right_motors.move(lateral_output.load() - angular_output.load());
+
+			// update current arm pos
+			arm_pos.store(arm.get_position());
+			// move arm to PID output
+			arm.move(arm_pos_output.load());
 		}
 	});
 
