@@ -178,7 +178,6 @@ PIDController angular_pid ({
 		ANGULAR_PID_SLEW
 });
 
-
 PIDController arm_pid ({
 		ARM_PID_KP,
 		ARM_PID_KI,
@@ -420,14 +419,8 @@ void init() {
 
 	pros::lcd::initialize();
 
-	// pros::lcd::print(0, "Initializing...");
-
 	imu.reset(true);
 	solve_imu_bias(1000);
-
-	// pros::lcd::print(0, "Select auton:");
-
-	// auton = auton_select();
 
     pros::Task pos_tracking_task([&]() {
 		last_pos_update = pros::millis();
@@ -463,100 +456,6 @@ struct Pose {
 	float head = 0;
 	bool forward = true;
 };
-
-void turn_to_heading(float target_heading, int32_t timeout) {
-	// error normalization function to deal with 0-360 wrap around
-	auto normalize_rotation = [](float target, float current) {
-		// Normalize current and target to [-180, 180]
-		target = fmod((target + 180), 360) - 180;
-		current = fmod((current + 180), 360) - 180;
-
-		// Calculate the error (still in the range [-180, 180])
-		float error = target - current;
-
-		// Ensure the error is also in [-180, 180]
-		error = fmod((error + 180), 360) - 180;
-	
-		return error;
-		
-
-	};
-
-	// atomic instance of target heading cause that is that the PID process
-	// requires
-	std::atomic<float> atomic_target_heading (target_heading);
-	// records the output of the PID process
-	std::atomic<float> output (0);
-
-	// start time of process
-	int32_t start_time = pros::millis();
-
-	// start the PID process
-	pros::Task pid_process_task{[&] {
-		pid_process(
-				&heading,
-				&atomic_target_heading,
-				timeout,
-				&angular_pid,
-				&output,
-				normalize_rotation
-		);
-	}};
-	
-	// apply the motor values
-	while (pros::millis() < start_time + timeout) {
-		dt_left_motors.move(output.load());
-		dt_right_motors.move(-output.load());
-
-		// delay to save resources
-		pros::delay(PROCESS_DELAY);
-	}
-
-	// brake motors at end of process
-	dt_left_motors.brake();
-	dt_right_motors.brake();
-
-	// remove task
-	pid_process_task.remove();
-}
-
-void move_a_distance(float distance, int32_t timeout) {
-	// atomic instance of target heading cause that is that the PID process
-	// requires
-	std::atomic<float> atomic_distance (distance);
-	// records the output of the PID process
-	std::atomic<float> output (0);
-
-	// start time of process
-	int32_t start_time = pros::millis();
-
-	// start the PID process
-	pros::Task pid_process_task{[&] {
-		pid_process(
-				&dist,
-				&atomic_distance,
-				timeout,
-				&lateral_pid,
-				&output
-		);
-	}};
-	
-	// apply the motor values
-	while (pros::millis() < start_time + timeout) {
-		dt_left_motors.move(output.load());
-		dt_right_motors.move(output.load());
-
-		// delay to save resources
-		pros::delay(PROCESS_DELAY);
-	}
-
-	// brake motors at end of process
-	dt_left_motors.brake();
-	dt_right_motors.brake();
-
-	// remove task
-	pid_process_task.remove();
-}
 
 void match_auton(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
 	mogo.set_value(false);
