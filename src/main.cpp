@@ -122,7 +122,7 @@ constexpr int TURN_RATIO = 1;
 
 constexpr bool SPEED_COMP = false;
 
-constexpr int intake_SPEED = 127;
+constexpr int INTAKE_SPEED = 127;
 
 constexpr float ARM_SPEED = 50;
 constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
@@ -517,63 +517,10 @@ void match_auton(std::atomic<float>& target_dist, std::atomic<float>& target_hea
 }
 
 void skills_auton(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
-	mogo.set_value(true);
-	target_dist.fetch_add(-500);
-	
-	intake.move(127);
-	pros::delay(500);
+	x_pos.store(-60);
+	y_pos.store(0);
 
-	mogo.set_value(false);
-	intake.brake();
-
-	target_heading.store(0);
-
-	target_dist.fetch_add(1100);
-	pros::delay(1500);
-
-	target_heading.store(90);
-	pros::delay(1500);
-
-	target_dist.fetch_add(-1250); 
-	pros::delay(2000);
-
-	mogo.set_value(true);
-	target_heading.store(-5);
-	pros::delay(1500);
-
-	target_dist.fetch_add(1600);
-	intake.move(127);
-	pros::delay(3000);
-
-	target_heading.store(-90);
-	pros::delay(1650);
-
-	target_dist.fetch_add(1500);
-	pros::delay(3000);
-
-	target_heading.store(-173);
-	pros::delay(3000);
-
-	target_dist.fetch_add(2250);
-	pros::delay(3000);
-
-	target_dist.fetch_add(-1500);
-	pros::delay(1500);
-
-	target_heading.store(-135);
-	pros::delay(1500);
-
-	target_dist.fetch_add(750);
-	pros::delay(1000);
-
-	target_heading.store(-90);
-	pros::delay(1500);
-
-	target_heading.store(35);
-	pros::delay(2000);
-
-	target_dist.fetch_add(-2500);
-	pros::delay(3000);
+	intake.move(INTAKE_SPEED)
 }
 
 void autonomous() {
@@ -659,23 +606,7 @@ void autonomous() {
 
 	set_th = &target_heading;
 
-	// target_heading.store(-45);
-	// pros::delay(2000);
-	// printf("%f\n", imu.get_heading());
-	// target_heading.store(90);
-	// pros::delay(3000);
-	// printf("%f\n", imu.get_heading());
-	// target_heading.store(0);
-	// pros::delay(3000);
-	// printf("%f\n", imu.get_heading());
-	// pros::delay(500);
-
-	match_auton(target_dist, target_heading);
-		// skills_auton(target_dist, target_heading);
-
-
-	// if (auton == 0) 
-	// else if (auton == 1) skills_auton(target_dist, target_heading);
+	skills_auton(target_dist, target_heading);
 
 	mogo.set_value(false);
 
@@ -732,9 +663,9 @@ void opcontrol() {
 
 		// intake
 		if (master.get_digital(INTAKE_FWD_BUTTON))
-			intake.move(intake_SPEED);
+			intake.move(INTAKE_SPEED);
 		else if (master.get_digital(INTAKE_REV_BUTTON))
-			intake.move(-intake_SPEED);
+			intake.move(-INTAKE_SPEED);
 		else intake.brake();
 		
 		// mogo
