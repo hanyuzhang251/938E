@@ -38,8 +38,8 @@ template <typename T> int sgn(T val) {
 }
 
 struct Pose {
-	float xPos = 0;
-	float yPos = 0;
+	float x_pos = 0;
+	float y_pos = 0;
 	float head = 0;
 	bool forward = true;
 };
@@ -110,6 +110,10 @@ constexpr float ARM_PID_KI = 0.02;
 constexpr float ARM_PID_KD = 0;
 constexpr float ARM_PID_WIND = 90;
 constexpr float ARM_PID_SLEW = 999;
+
+// AUTON
+
+constexpr float DIST_MULTI = 1;
 
 // DRIVING
 
@@ -389,9 +393,9 @@ void solve_imu_bias(int32_t timeout) {
 }
 
 // robot position
-std::atomic<float> xPos (0);
-std::atomic<float> yPos (0);
-std::atomic<float> zPos (0);
+std::atomic<float> x_pos (0);
+std::atomic<float> y_pos (0);
+std::atomic<float> z_pos (0);
 std::atomic<float> dist (0);
 std::atomic<float> heading (0);
 
@@ -403,9 +407,9 @@ long last_pos_update = 0;
 void get_robot_position(long last_update) {
 	last_pos_update = last_update;
 
-	xPos.fetch_add(imu.get_accel().x - imu_bias_x);
-	yPos.fetch_add(imu.get_accel().y - imu_bias_y);
-	zPos.fetch_add(imu.get_accel().z - imu_bias_z);
+	x_pos.fetch_add(imu.get_accel().x - imu_bias_x);
+	y_pos.fetch_add(imu.get_accel().y - imu_bias_y);
+	z_pos.fetch_add(imu.get_accel().z - imu_bias_z);
 
 	dist.fetch_add(((dt_left_motors.get_position() - left_motors_prev_pos) + (dt_right_motors.get_position() - right_motors_prev_pos)) / 2.0f);
 	left_motors_prev_pos = dt_left_motors.get_position();
@@ -436,8 +440,8 @@ void init() {
         while (true) {
 			get_robot_position(last_pos_update);
 			
-            pros::lcd::print(0, "xPos: %f", xPos.load());
-            pros::lcd::print(1, "yPos: %f", yPos.load());
+            pros::lcd::print(0, "x_pos: %f", x_pos.load());
+            pros::lcd::print(1, "y_pos: %f", y_pos.load());
 			pros::lcd::print(2, "dist: %f", dist.load());
             pros::lcd::print(3, "head: %f", heading.load());
 
@@ -462,11 +466,26 @@ void competition_initialize() {
 /*                                   AUTON                                   */
 /*****************************************************************************/
 
-std::atomic<float>&& set_td (0);
-std::atomic<float>&& set_th (0);
+std::atomic<float>* set_th (0);
+
+std::atomic<float> target_x (0);
+std::atomic<float> target_z (0);
 
 void turn_to_point(float x, float z) {
-	set_th.store(std::atan2(x - xPos.load(), z - zPos.load()) * 180 / M_PI);
+	x *= DIST_MULTI;
+	z *= DIST_MULTI;
+
+	set_th->store(std::atan2(x - x_pos.load(), z - z_pos.load()) * 180 / M_PI);
+}
+
+void move_to_point(float x, float z) {
+	turn_to_point(x, z);
+
+	x *= DIST_MULTI;
+	z *= DIST_MULTI;
+
+	target_x.store(x);
+	target_z.store(z);
 }
 
 void match_auton(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
@@ -621,6 +640,13 @@ void autonomous() {
 
 	pros::Task pid_output_manager_task([&]{
 		while (true) {
+			float x_dif = target_x.load() - x_pos.load();
+			float z_dif = target_z.load() - z_pos.load();
+
+			float dist_to_target = std::sqrt(x_dif * x_dif + z_dif * z_dif);
+
+			target_dist.store(dist_to_target);
+
 			dt_left_motors.move(angular_output.load() + lateral_output.load());
 			dt_right_motors.move(lateral_output.load() - angular_output.load());
 
@@ -631,8 +657,7 @@ void autonomous() {
 		}
 	});
 
-	set_td = target_dist;
-	set_th = target_heading;
+	set_th = &target_heading;
 
 	// target_heading.store(-45);
 	// pros::delay(2000);
