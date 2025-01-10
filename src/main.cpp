@@ -69,7 +69,7 @@ constexpr int INTAKE_PORT = -2;
 
 constexpr int MOGO_PORT = 1;
 
-constexpr int ARM_PORT = -5;
+constexpr int ARM_PORT = 5;
 constexpr int ARM_END_PORT = 8;
 
 constexpr int IMU_PORT = 21;
@@ -107,7 +107,7 @@ constexpr float ANGULAR_PID_KD = 1;
 constexpr float ANGULAR_PID_WIND = 30;
 constexpr float ANGULAR_PID_SLEW = 999;
 
-constexpr float ARM_PID_KP = 0.3;
+constexpr float ARM_PID_KP = 0.5;
 constexpr float ARM_PID_KI = 0.02;
 constexpr float ARM_PID_KD = 0;
 constexpr float ARM_PID_WIND = 90;
@@ -128,7 +128,10 @@ constexpr int INTAKE_SPEED = 127;
 
 constexpr float ARM_SPEED = 50;
 constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
-constexpr float ARM_LOAD_POS = 300;
+constexpr float ARM_LOAD_POS = 180;
+
+constexpr float ARM_BOTTOM_LIMIT = 0;
+constexpr float ARM_TOP_LIMIT = 2100;
 
 constexpr float DRIVE_CURVE_DEADBAND = 3;
 constexpr float DRIVE_CURVE_MIN_OUT = 10;
@@ -539,11 +542,27 @@ void skills_auton(std::atomic<float>& target_dist, std::atomic<float>& target_he
 
 	intake.move(INTAKE_SPEED);
 	pros::delay(1000);
+	intake.brake();
 
 	move_to_point(-47, 0);
 	wait(1000);
 
+	turn_to_deg(90);
+	wait(1000);
 
+	move_to_point(-47, 12.5, false);
+	wait(3000);
+
+	mogo.set_value(true);
+	wait(500);
+
+	turn_to_point(-23.5, 23.5);
+	wait(1000);
+
+	intake.move(INTAKE_SPEED);
+
+	move_to_point(-23.5, 23.5);
+	
 }
 
 void autonomous() {
@@ -630,6 +649,14 @@ void autonomous() {
 
 	set_th = &target_heading;
 
+	move_to_point(0, 24);
+
+	wait(5000);
+
+	move_to_point(0, 0, false);
+	
+	wait(5000);
+
 	// skills_auton(target_dist, target_heading);
 
 	mogo.set_value(false);
@@ -703,8 +730,12 @@ void opcontrol() {
 			arm_target_pos += ARM_SPEED;
 		else if (master.get_digital(ARM_DOWN_BUTTON))
 			arm_target_pos -= ARM_SPEED;
+		// arm load macro
 		if (master.get_digital(ARM_LOAD_POS_BUTTON))
 			arm_target_pos = ARM_LOAD_POS;
+		// arm limiters
+		if (arm_pos.load() < ARM_BOTTOM_LIMIT) arm_target_pos.store(ARM_BOTTOM_LIMIT);
+		if (arm_pos.load() > ARM_TOP_LIMIT) arm_target_pos.store(ARM_TOP_LIMIT);
 		// update current arm pos
 		arm_pos.store(arm.get_position());
 		// move arm to PID output
