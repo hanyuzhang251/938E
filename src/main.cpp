@@ -544,11 +544,42 @@ void match_auton(std::atomic<float>& target_dist, std::atomic<float>& target_hea
 }
 
 void skills_auton(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
+	// start facing the alliance stake, flush with the wall
 	x_pos.store(-60);
 	y_pos.store(0);
 
-	set_t_arm->
+	// raise arm to put ring on alliance stake
+	set_arm_to(ARM_TOP_LIMIT);
+	wait(1000);
+
+	// lower arm
+	set_arm_to(ARM_BOTTOM_LIMIT);
+
+	// move backwards in line with mogos
+	move_to_point(-47, 0, false);	
+	wait(1500);
+
+	// turn so back is facing upper/left mogo
+	turn_to_point(-47, 23.5);
+	wait(1000);
+
+	// backwards to mogo
+	move_to_point(-47, 12.5, false);
+	wait(1500);
+
+	// clip mogo
+	mogo.set_value(true);
+	wait(250);
+
+	// face toward ring
+	turn_to_point(-23.5, 23.5);
+	wait(1000);
+
 	
+	move_to_point(23.5, 47);
+	wait(3000);
+
+	move_to_point(0, 47)
 }
 
 void autonomous() {
