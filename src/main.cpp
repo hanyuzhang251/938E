@@ -473,15 +473,20 @@ void competition_initialize() {
 /*                                   AUTON                                   */
 /*****************************************************************************/
 
-std::atomic<float>* set_th (0);
+std::atomic<float>* set_t_head (0);
+std::atomic<float>* set_t_arm (0);
 
 std::atomic<float> target_x (0);
 std::atomic<float> target_z (0);
 
 std::atomic<bool> fwd (true);
 
+void set_arm_to(float value) {
+	set_t_arm->store(value);
+}
+
 void turn_to_deg(float deg) {
-	set_th->store(deg);
+	set_t_head->store(deg);
 }
 
 float deg_to_point(float x, float z) {
@@ -492,7 +497,7 @@ void turn_to_point(float x, float z) {
 	x *= DIST_MULTI;
 	z *= DIST_MULTI;
 
-	set_th->store(deg_to_point(x, z));
+	set_t_head->store(deg_to_point(x, z));
 }
 
 void move_to_point(float x, float z, bool forward = true) {
@@ -501,7 +506,7 @@ void move_to_point(float x, float z, bool forward = true) {
 	float deg = deg_to_point(x, z);
 	if (!forward) deg *= -1;
 
-	set_th->store(deg);
+	set_t_head->store(deg);
 
 	x *= DIST_MULTI;
 	z *= DIST_MULTI;
@@ -542,28 +547,7 @@ void skills_auton(std::atomic<float>& target_dist, std::atomic<float>& target_he
 	x_pos.store(-60);
 	y_pos.store(0);
 
-	intake.move(INTAKE_SPEED);
-	pros::delay(1000);
-	intake.brake();
-
-	move_to_point(-47, 0);
-	wait(1000);
-
-	turn_to_deg(90);
-	wait(1000);
-
-	move_to_point(-47, 12.5, false);
-	wait(3000);
-
-	mogo.set_value(true);
-	wait(500);
-
-	turn_to_point(-23.5, 23.5);
-	wait(1000);
-
-	intake.move(INTAKE_SPEED);
-
-	move_to_point(-23.5, 23.5);
+	set_t_arm->
 	
 }
 
@@ -649,7 +633,8 @@ void autonomous() {
 		}
 	});
 
-	set_th = &target_heading;
+	set_t_head = &target_heading;
+	set_t_arm = &target_arm_pos;
 
 	master.print(0, 0, "move fwd");
 	move_to_point(0, 24);
