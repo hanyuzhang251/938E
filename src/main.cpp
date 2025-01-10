@@ -485,7 +485,7 @@ void turn_to_deg(float deg) {
 }
 
 float deg_to_point(float x, float z) {
-	return std::atan2(x - x_pos.load(), z - z_pos.load()) * 180 / M_PI - 90;
+	return std::atan2(x - x_pos.load(), z - z_pos.load()) * 180 / M_PI;
 }
 
 void turn_to_point(float x, float z) {
