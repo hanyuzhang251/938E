@@ -46,6 +46,18 @@ struct Pose {
 	bool forward = true;
 };
 
+double normalizeDegree(double degree) {
+    double normalized = fmod(degree, 360.0);
+
+    if (normalized > 180.0) {
+        normalized -= 360.0;
+    } else if (normalized < -180.0) {
+        normalized += 360.0;
+    }
+
+    return normalized;
+}
+
 
 
 /*****************************************************************************/
@@ -650,7 +662,9 @@ void autonomous() {
 			float z_dif = target_z.load() - z_pos.load();
 
 			float dist_to_target = std::sqrt(x_dif * x_dif + z_dif * z_dif);
-			if (!fwd.load()) dist_to_target *= -1;
+
+			float deg_to_target = deg_to_point(target_x.load(), target_z.load());
+			
 
 			target_dist.store(dist_to_target);
 
