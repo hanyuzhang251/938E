@@ -81,6 +81,7 @@ constexpr pros::anlg_button TURN_JOYSTICK = pros::CTRL_ANLG_RX;
 
 constexpr pros::digi_button INTAKE_FWD_BUTTON = pros::CTRL_DIGI_L1;
 constexpr pros::digi_button INTAKE_REV_BUTTON = pros::CTRL_DIGI_L2;
+constexpr pros::digi_button EJECT_RING_BUTTON = pros::CTRL_DIGI_X;
 
 constexpr pros::digi_button MOGO_ON_BUTTON = pros::CTRL_DIGI_A;
 constexpr pros::digi_button MOGO_OFF_BUTTON = pros::CTRL_DIGI_B;
@@ -115,7 +116,7 @@ constexpr float ARM_PID_SLEW = 999;
 
 // AUTON
 
-constexpr float DIST_MULTI = 1;
+constexpr float DIST_MULTI = 5;
 
 // DRIVING
 
@@ -125,6 +126,7 @@ constexpr int TURN_RATIO = 1;
 constexpr bool SPEED_COMP = false;
 
 constexpr int INTAKE_SPEED = 127;
+constexpr int EJECT_BRAKE_CYCLES = 16;
 
 constexpr float ARM_SPEED = 50;
 constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
@@ -649,15 +651,24 @@ void autonomous() {
 
 	set_th = &target_heading;
 
-	move_to_point(0, 24);
+	// master.print(0, 0, "move fwd");
+	// move_to_point(0, 24);
+	// target_z.store(24 * DIST_MULTI);
 
-	wait(5000);
+	// wait(5000);
 
-	move_to_point(0, 0, false);
-	
-	wait(5000);
+	// master.print(0, 0, "move rev");
 
-	// skills_auton(target_dist, target_heading);
+	// move_to_point(0, 0, false);
+	// fwd = false;
+	// target_z.store(0);
+
+	// wait(5000);
+	// fwd = true;
+
+	// master.print(0, 0, "move done");
+
+	// skills_auton(target_dist, target_heading);  
 
 	mogo.set_value(false);
 
@@ -674,6 +685,7 @@ void autonomous() {
 std::atomic<float> arm_target_pos = 0;
 
 void opcontrol() {
+	// autonomous();
 	printf("op control start\n");
 
 	// dampens the error when moving downward to prevent dropping the arm
@@ -699,6 +711,8 @@ void opcontrol() {
 		);
 	});
 
+	int intake_brake_timer = 0;
+
     while (true) {
 		// driving
         int drive_value = master.get_analog(DRIVE_JOYSTICK);
@@ -713,11 +727,19 @@ void opcontrol() {
 		dt_right_motors.move(drive_power - turn_power);
 
 		// intake
-		if (master.get_digital(INTAKE_FWD_BUTTON))
-			intake.move(INTAKE_SPEED);
-		else if (master.get_digital(INTAKE_REV_BUTTON))
-			intake.move(-INTAKE_SPEED);
-		else intake.brake();
+		if (master.get_digital(EJECT_RING_BUTTON) && intake_brake_timer <= 0) {
+			intake_brake_timer = EJECT_BRAKE_CYCLES;
+		}
+		if (intake_brake_timer > 0) {
+			intake.brake();
+			--intake_brake_timer;
+		} else {
+			if (master.get_digital(INTAKE_FWD_BUTTON))
+				intake.move(INTAKE_SPEED);
+			else if (master.get_digital(INTAKE_REV_BUTTON))
+				intake.move(-INTAKE_SPEED);
+			else intake.brake();
+		}
 		
 		// mogo
 		if (master.get_digital(MOGO_ON_BUTTON))
