@@ -72,7 +72,7 @@ constexpr int MOGO_PORT = 1;
 constexpr int ARM_PORT = 5;
 constexpr int ARM_END_PORT = 8;
 
-constexpr int IMU_PORT = 21;
+constexpr int IMU_PORT = 8;
 
 // BUTTONS
 
@@ -116,7 +116,7 @@ constexpr float ARM_PID_SLEW = 999;
 
 // AUTON
 
-constexpr float DIST_MULTI = 5;
+constexpr float DIST_MULTI = 35.5;
 
 // DRIVING
 
@@ -485,7 +485,7 @@ void turn_to_deg(float deg) {
 }
 
 float deg_to_point(float x, float z) {
-	return std::atan2(x - x_pos.load(), z - z_pos.load()) * 180 / M_PI;
+	return std::atan2(x - x_pos.load(), z - z_pos.load()) * 180 / M_PI - 90;
 }
 
 void turn_to_point(float x, float z) {
@@ -651,22 +651,22 @@ void autonomous() {
 
 	set_th = &target_heading;
 
-	// master.print(0, 0, "move fwd");
-	// move_to_point(0, 24);
-	// target_z.store(24 * DIST_MULTI);
+	master.print(0, 0, "move fwd");
+	move_to_point(0, 24);
+	target_z.store(24 * DIST_MULTI);
 
-	// wait(5000);
+	wait(5000);
 
-	// master.print(0, 0, "move rev");
+	master.print(0, 0, "move rev");
 
-	// move_to_point(0, 0, false);
-	// fwd = false;
-	// target_z.store(0);
+	move_to_point(0, 0, false);
+	fwd = false;
+	target_z.store(0);
 
-	// wait(5000);
-	// fwd = true;
+	wait(5000);
+	fwd = true;
 
-	// master.print(0, 0, "move done");
+	master.print(0, 0, "move done");
 
 	// skills_auton(target_dist, target_heading);  
 
@@ -685,7 +685,7 @@ void autonomous() {
 std::atomic<float> arm_target_pos = 0;
 
 void opcontrol() {
-	// autonomous();
+	autonomous();
 	printf("op control start\n");
 
 	// dampens the error when moving downward to prevent dropping the arm
