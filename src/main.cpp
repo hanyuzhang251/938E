@@ -3,6 +3,8 @@
 #include <atomic>
 #include <cmath>
 
+#define wait pros::delay
+
 #define digi_button controller_digital_e_t
 #define anlg_button controller_analog_e_t
 
@@ -471,15 +473,30 @@ std::atomic<float>* set_th (0);
 std::atomic<float> target_x (0);
 std::atomic<float> target_z (0);
 
+std::atomic<bool> fwd (true);
+
+void turn_to_deg(float deg) {
+	set_th->store(deg);
+}
+
+float deg_to_point(float x, float z) {
+	return std::atan2(x - x_pos.load(), z - z_pos.load()) * 180 / M_PI;
+}
+
 void turn_to_point(float x, float z) {
 	x *= DIST_MULTI;
 	z *= DIST_MULTI;
 
-	set_th->store(std::atan2(x - x_pos.load(), z - z_pos.load()) * 180 / M_PI);
+	set_th->store(deg_to_point(x, z));
 }
 
-void move_to_point(float x, float z) {
-	turn_to_point(x, z);
+void move_to_point(float x, float z, bool forward = true) {
+	fwd.store(forward);
+
+	float deg = deg_to_point(x, z);
+	if (!forward) deg *= -1;
+
+	set_th->store(deg);
 
 	x *= DIST_MULTI;
 	z *= DIST_MULTI;
@@ -520,7 +537,13 @@ void skills_auton(std::atomic<float>& target_dist, std::atomic<float>& target_he
 	x_pos.store(-60);
 	y_pos.store(0);
 
-	intake.move(INTAKE_SPEED)
+	intake.move(INTAKE_SPEED);
+	pros::delay(1000);
+
+	move_to_point(-47, 0);
+	wait(1000);
+
+
 }
 
 void autonomous() {
@@ -591,6 +614,7 @@ void autonomous() {
 			float z_dif = target_z.load() - z_pos.load();
 
 			float dist_to_target = std::sqrt(x_dif * x_dif + z_dif * z_dif);
+			if (!fwd.load()) dist_to_target *= -1;
 
 			target_dist.store(dist_to_target);
 
@@ -606,7 +630,7 @@ void autonomous() {
 
 	set_th = &target_heading;
 
-	skills_auton(target_dist, target_heading);
+	// skills_auton(target_dist, target_heading);
 
 	mogo.set_value(false);
 
