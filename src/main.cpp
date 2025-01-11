@@ -58,11 +58,16 @@ float normalize_deg(float degree) {
     return normalized;
 }
 
-float normalize_dif(float a, float b) {
-    float diff = a - b;
-    diff = std::fmod(diff + 180.0f, 360.0f); // Wrap into [0, 360)
-    if (diff < 0) diff += 360.0f;           // Handle negative modulus
-    return diff - 180.0f;                   // Shift to [-180, 180)
+float normalize_dif(float angle1, float angle2) {
+    // Compute the raw difference
+    float diff = angle1 - angle2;
+
+    diff = fmod(diff + 180, 360);
+    if (diff < 0) {
+        diff += 360;
+    }
+    diff -= 180;
+    return normalize_deg(std::abs(diff));
 }
 
 
@@ -149,9 +154,9 @@ constexpr int EJECT_BRAKE_CYCLES = 16;
 
 constexpr float ARM_SPEED = 50;
 constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
-constexpr float ARM_LOAD_POS = 200;
+constexpr float ARM_LOAD_POS = 215;
 
-constexpr float ARM_BOTTOM_LIMIT = 60;
+constexpr float ARM_BOTTOM_LIMIT = 50;
 constexpr float ARM_TOP_LIMIT = 1900;
 
 constexpr float DRIVE_CURVE_DEADBAND = 3;
@@ -473,6 +478,8 @@ void get_robot_position(long last_update) {
 bool init_done = false;
 
 void init() {
+	printf("%f\n", normalize_deg(359));
+
 	if (init_done) return;
 
 	imu_bias_x = 0;
@@ -491,7 +498,7 @@ void init() {
 	pros::lcd::initialize();
 
 	imu.reset(true);
-	solve_imu_bias(1000);
+	solve_imu_bias(900);
 
     pros::Task pos_tracking_task([&]() {
 		last_pos_update = pros::millis();
@@ -557,7 +564,11 @@ void turn_to_point(float x, float z, bool forward = true) {
 	z *= DIST_MULTI;
 
 	float deg = deg_to_point(x, z);
-	if (!forward) deg *= -1;
+	if (!forward) {
+		printf("turn to point flipping deg (%f -> %f)\n", deg, deg * -1);
+		deg *= -1;
+	}
+
 
 	set_t_head->store(deg);
 }
@@ -787,7 +798,13 @@ void skills_auton(std::atomic<float>& target_dist, std::atomic<float>& target_he
 	wait(1500);
 }
 
+bool auton_ran = false;
+
 void autonomous() {
+	if (auton_ran) return;
+
+	auton_ran = true;
+
 	dt_left_motors.tare_position_all();
 	dt_right_motors.tare_position_all();
 
@@ -854,11 +871,13 @@ void autonomous() {
 			float x_dif = target_x.load() - x_pos.load();
 			float z_dif = target_z.load() - y_pos.load();
 
+			heading.store(normalize_deg(heading.load()));
+
 			float dist_to_target = std::sqrt(x_dif * x_dif + z_dif * z_dif);
 
 			float deg_to_target = normalize_deg(deg_to_point(target_x.load(), target_z.load()));
-			bool fwd = (std::abs(normalize_dif(deg_to_target, heading.load())) <= 90);
-			printf("deg to target: (%f, %f) %f\n", deg_to_target, heading.load(), std::abs(normalize_dif(deg_to_target, heading.load())));
+			bool fwd = (normalize_deg(std::abs(normalize_dif(deg_to_target, heading.load()))) <= 90);
+			printf("deg to target: (%f, %f) %f\n", deg_to_target, heading.load(), normalize_deg(std::abs(normalize_dif(deg_to_target, heading.load()))));
 			printf("fwd?: %s\n", fwd ? "yessir" : "hell nah");
 
 			// printf("%f\n", std::abs(normalize_deg(deg_to_target - heading.load())));
@@ -882,6 +901,8 @@ void autonomous() {
 			// move arm to PID output
 			arm.move(arm_pos_output.load());
 
+			printf("target head:%f\n", target_heading.load());
+
 			pros::delay(PROCESS_DELAY);
 		}
 	});
@@ -891,7 +912,7 @@ void autonomous() {
 
 	// skills_auton(target_dist, target_heading); 
 
-	move_to_point(0, 48);
+	move_to_point(0, -48, false);
 	printf("t-head:%f\n", set_t_head->load());
 	printf("t-arm:%f\n", set_t_arm->load());
 	printf("t-x:%f", target_x.load());
@@ -928,6 +949,7 @@ std::atomic<float> arm_target_pos = 0;
 
 
 void opcontrol() {
+	// autonomous();
 	
 	printf("op control start\n");
 
