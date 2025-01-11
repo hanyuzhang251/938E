@@ -541,7 +541,7 @@ void turn_to_point(float x, float z, bool forward = true) {
 
 	float temp = x;
 	x = z;
-	z = x;
+	z = temp;
 
 	x *= DIST_MULTI;
 	z *= DIST_MULTI;
@@ -556,7 +556,7 @@ void move_to_point(float x, float z, bool forward = true) {
 
 	float temp = x;
 	x = z;
-	z = x;
+	z = temp;
 
 	turn_to_point(z, x, forward);
 
