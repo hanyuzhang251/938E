@@ -120,7 +120,7 @@ constexpr float ANGULAR_PID_KD = 1;
 constexpr float ANGULAR_PID_WIND = 30;
 constexpr float ANGULAR_PID_SLEW = 999;
 
-constexpr float ARM_PID_KP = 0.5;
+constexpr float ARM_PID_KP = 0.6;
 constexpr float ARM_PID_KI = 0.02;
 constexpr float ARM_PID_KD = 0;
 constexpr float ARM_PID_WIND = 90;
@@ -140,7 +140,7 @@ constexpr bool SPEED_COMP = false;
 constexpr int INTAKE_SPEED = 127;
 constexpr int EJECT_BRAKE_CYCLES = 16;
 
-constexpr float ARM_SPEED = 50;
+constexpr float ARM_SPEED = 65;
 constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
 constexpr float ARM_LOAD_POS = 180;
 
@@ -300,7 +300,7 @@ void pid_process(
 
 
 /*****************************************************************************/
-/*                                  DRIVING                                  */
+/*                                DRIVECURVE                                 */
 /*****************************************************************************/
 
 struct DriveCurve {
@@ -839,10 +839,13 @@ void autonomous() {
 	dt_right_motors.brake();
 }
 
+/*****************************************************************************/
+/*                                  DRIVING                                  */
+/*****************************************************************************/
+
 std::atomic<float> arm_target_pos = 0;
 
 void opcontrol() {
-	autonomous();
 	printf("op control start\n");
 
 	// dampens the error when moving downward to prevent dropping the arm
