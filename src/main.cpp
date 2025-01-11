@@ -491,8 +491,8 @@ void init() {
         while (true) {
 			get_robot_position(last_pos_update);
 			
-            pros::lcd::print(0, "x_pos: %f", x_pos.load() * DIST_MULTI);
-            pros::lcd::print(1, "y_pos: %f", y_pos.load() * DIST_MULTI);
+            pros::lcd::print(0, "x_pos: %f", x_pos.load() / DIST_MULTI);
+            pros::lcd::print(1, "y_pos: %f", y_pos.load() / DIST_MULTI);
 			pros::lcd::print(2, "dist: %f", dist.load());
             pros::lcd::print(3, "head: %f", heading.load());
 
@@ -525,16 +525,18 @@ std::atomic<float> target_z (0);
 
 void set_arm_to(float value) {
 	set_t_arm->store(value);
+	printf("set_t_arm: %f\n", value);
 }
 
 void turn_to_deg(float deg) {
 	set_t_head->store(deg);
+	printf("turn_to_deg: %f\n", deg);
 }
 
 float deg_to_point(float x, float z) {
-	printf("%f\n", normalize_deg((std::atan2(x - x_pos.load(), z - y_pos.load()) * 180 / M_PI) - 45));
-
-	return normalize_deg((std::atan2(x - x_pos.load(), z - y_pos.load()) * 180 / M_PI) - 45);
+	float deg = normalize_deg((std::atan2(x - x_pos.load(), z - y_pos.load()) * 180 / M_PI) -90);
+	printf("deg_to_point:(%f, %f) %f\n", x, z, deg);
+	return deg;
 }
 
 void turn_to_point(float x, float z, bool forward = true) {
@@ -859,13 +861,15 @@ void autonomous() {
 
 			target_dist.store(dist_to_target);
 
-			dt_left_motors.move(angular_output.load() + lateral_output.load());
-			dt_right_motors.move(lateral_output.load() - angular_output.load());
+			// dt_left_motors.move(angular_output.load() + lateral_output.load());
+			// dt_right_motors.move(lateral_output.load() - angular_output.load());
 
 			// update current arm pos
 			arm_pos.store(arm.get_position());
 			// move arm to PID output
 			arm.move(arm_pos_output.load());
+
+			pros::delay(PROCESS_DELAY);
 		}
 	});
 
@@ -875,10 +879,24 @@ void autonomous() {
 	// skills_auton(target_dist, target_heading); 
 
 	move_to_point(0, 24);
+	printf("t-head:%f\n", set_t_head->load());
+	printf("t-arm:%f\n", set_t_arm->load());
+	printf("t-x:%f", target_x.load());
+	printf("t-yz:%f", target_z.load());
 	pros::delay(4000);
 
-	move_to_point(0, 0, false);
-	pros::delay(2000);
+	move_to_point(0, -24, false);
+	printf("t-head:%f\n", set_t_head->load());
+	printf("t-arm:%f\n", set_t_arm->load());
+	printf("t-x:%f", target_x.load());
+	printf("t-yz:%f", target_z.load());
+	pros::delay(4000);
+
+	move_to_point(24, 0, false);
+	printf("t-head:%f\n", set_t_head->load());
+	printf("t-arm:%f\n", set_t_arm->load());
+	printf("t-x:%f", target_x.load());
+	printf("t-yz:%f", target_z.load());
 
 	pros::delay(2000);	
 	
