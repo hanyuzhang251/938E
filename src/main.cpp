@@ -825,20 +825,7 @@ void autonomous() {
 	set_t_head = &target_heading;
 	set_t_arm = &target_arm_pos;
 
-	master.print(0, 0, "move fwd");
-	move_to_point(0, 24);
-
-	wait(5000);
-
-	master.print(0, 0, "move rev");
-
-	move_to_point(0, 0, false);
-
-	wait(5000);
-
-	master.print(0, 0, "move done");
-
-	// skills_auton(target_dist, target_heading);  
+	skills_auton(target_dist, target_heading);  
 
 	mogo.set_value(false);
 
