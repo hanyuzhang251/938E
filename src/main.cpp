@@ -46,16 +46,23 @@ struct Pose {
 	bool forward = true;
 };
 
-double normalize_deg(double degree) {
-    double normalized = fmod(degree, 360.0);
+float normalize_deg(float degree) {
+    float normalized = fmod(degree, 360.0f);
 
-    if (normalized > 180.0) {
-        normalized -= 360.0;
-    } else if (normalized < -180.0) {
-        normalized += 360.0;
+    if (normalized > 180.0f) {
+        normalized -= 360.0f;
+    } else if (normalized < -180.0f) {
+        normalized += 360.0f;
     }
 
     return normalized;
+}
+
+float normalize_dif(float a, float b) {
+    float diff = a - b;
+    diff = std::fmod(diff + 180.0f, 360.0f); // Wrap into [0, 360)
+    if (diff < 0) diff += 360.0f;           // Handle negative modulus
+    return diff - 180.0f;                   // Shift to [-180, 180)
 }
 
 
@@ -140,12 +147,12 @@ constexpr bool SPEED_COMP = false;
 constexpr int INTAKE_SPEED = 127;
 constexpr int EJECT_BRAKE_CYCLES = 16;
 
-constexpr float ARM_SPEED = 65;
+constexpr float ARM_SPEED = 50;
 constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
-constexpr float ARM_LOAD_POS = 180;
+constexpr float ARM_LOAD_POS = 190;
 
-constexpr float ARM_BOTTOM_LIMIT = 0;
-constexpr float ARM_TOP_LIMIT = 2100;
+constexpr float ARM_BOTTOM_LIMIT = 60;
+constexpr float ARM_TOP_LIMIT = 1900;
 
 constexpr float DRIVE_CURVE_DEADBAND = 3;
 constexpr float DRIVE_CURVE_MIN_OUT = 10;
@@ -416,6 +423,7 @@ std::atomic<float> x_pos (0);
 std::atomic<float> y_pos (0);
 std::atomic<float> z_pos (0);
 std::atomic<float> dist (0);
+std::atomic<float> prev_dist(0);
 std::atomic<float> heading (0);
 
 int left_motors_prev_pos = 0;
@@ -424,17 +432,28 @@ int right_motors_prev_pos = 0;
 long last_pos_update = 0;
 
 void get_robot_position(long last_update) {
+	prev_dist.store(dist.load());
+
 	last_pos_update = last_update;
 
-	x_pos.fetch_add(imu.get_accel().x - imu_bias_x);
-	y_pos.fetch_add(imu.get_accel().y - imu_bias_y);
-	z_pos.fetch_add(imu.get_accel().z - imu_bias_z);
+	// x_pos.fetch_add(imu.get_accel().x - imu_bias_x);
+	// y_pos.fetch_add(imu.get_accel().y - imu_bias_y);
+	// z_pos.fetch_add(imu.get_accel().z - imu_bias_z);
 
 	dist.fetch_add(((dt_left_motors.get_position() - left_motors_prev_pos) + (dt_right_motors.get_position() - right_motors_prev_pos)) / 2.0f);
 	left_motors_prev_pos = dt_left_motors.get_position();
 	right_motors_prev_pos = dt_right_motors.get_position();
 
+	// if (prev_dist.load() == dist.load()) {
+	// 	imu_bias_x = (imu_bias_x + imu.get_accel().x) / 2;
+	// 	imu_bias_y = (imu_bias_y + imu.get_accel().y) / 2;
+	// 	imu_bias_z = (imu_bias_z + imu.get_accel().z) / 2;
+	// }
+
 	heading.store(imu.get_heading());
+
+	x_pos.fetch_add(std::cos(heading * M_PI / 180) * (dist.load() - prev_dist.load()));
+	y_pos.fetch_add(std::sin(heading * M_PI / 180) * (dist.load() - prev_dist.load()));
 }
 
 
@@ -448,10 +467,23 @@ bool init_done = false;
 void init() {
 	if (init_done) return;
 
+	imu_bias_x = 0;
+	imu_bias_y = 0;
+	imu_bias_z = 0;
+	x_pos.store(0);
+	x_pos.store(0);
+	x_pos.store(0);
+	dist.store(0);
+	prev_dist.store(0);
+	heading.store(0);
+	left_motors_prev_pos = 0;
+	right_motors_prev_pos = 0;
+	last_pos_update = 0;
+
 	pros::lcd::initialize();
 
 	imu.reset(true);
-	solve_imu_bias(1000);
+	// solve_imu_bias(2000);
 
     pros::Task pos_tracking_task([&]() {
 		last_pos_update = pros::millis();
@@ -459,8 +491,8 @@ void init() {
         while (true) {
 			get_robot_position(last_pos_update);
 			
-            pros::lcd::print(0, "x_pos: %f", x_pos.load());
-            pros::lcd::print(1, "y_pos: %f", y_pos.load());
+            pros::lcd::print(0, "x_pos: %f", x_pos.load() * DIST_MULTI);
+            pros::lcd::print(1, "y_pos: %f", y_pos.load() * DIST_MULTI);
 			pros::lcd::print(2, "dist: %f", dist.load());
             pros::lcd::print(3, "head: %f", heading.load());
 
@@ -500,10 +532,17 @@ void turn_to_deg(float deg) {
 }
 
 float deg_to_point(float x, float z) {
-	return std::atan2(x - x_pos.load(), z - z_pos.load()) * 180 / M_PI;
+	printf("%f\n", normalize_deg((std::atan2(x - x_pos.load(), z - y_pos.load()) * 180 / M_PI) - 45));
+
+	return normalize_deg((std::atan2(x - x_pos.load(), z - y_pos.load()) * 180 / M_PI) - 45);
 }
 
 void turn_to_point(float x, float z, bool forward = true) {
+
+	float temp = x;
+	x = z;
+	z = x;
+
 	x *= DIST_MULTI;
 	z *= DIST_MULTI;
 
@@ -514,10 +553,12 @@ void turn_to_point(float x, float z, bool forward = true) {
 }
 
 void move_to_point(float x, float z, bool forward = true) {
-	float deg = deg_to_point(x, z);
-	if (!forward) deg *= -1;
 
-	set_t_head->store(deg);
+	float temp = x;
+	x = z;
+	z = x;
+
+	turn_to_point(z, x, forward);
 
 	x *= DIST_MULTI;
 	z *= DIST_MULTI;
@@ -801,14 +842,20 @@ void autonomous() {
 	pros::Task pid_output_manager_task([&]{
 		while (true) {
 			float x_dif = target_x.load() - x_pos.load();
-			float z_dif = target_z.load() - z_pos.load();
+			float z_dif = target_z.load() - y_pos.load();
 
 			float dist_to_target = std::sqrt(x_dif * x_dif + z_dif * z_dif);
 
 			float deg_to_target = normalize_deg(deg_to_point(target_x.load(), target_z.load()));
-			bool fwd = (std::abs(normalize_deg(deg_to_target - heading.load())) <= 90);
+			bool fwd = (normalize_dif(deg_to_target, heading.load()) <= 90);
+			// printf("deg to target: %f\n", std::abs(normalize_dif(deg_to_target, heading.load())));
+
+			// printf("%f\n", std::abs(normalize_deg(deg_to_target - heading.load())));
+			// printf("deg to 100, 0: %f\n", deg_to_point(100, 0));
 
 			if (!fwd) dist_to_target *= -1; 
+
+			// printf("dist_to_target: %f\n", dist_to_target);
 
 			target_dist.store(dist_to_target);
 
@@ -825,7 +872,17 @@ void autonomous() {
 	set_t_head = &target_heading;
 	set_t_arm = &target_arm_pos;
 
-	skills_auton(target_dist, target_heading);  
+	// skills_auton(target_dist, target_heading); 
+
+	move_to_point(0, 24);
+	pros::delay(4000);
+
+	move_to_point(0, 0, false);
+	pros::delay(2000);
+
+	pros::delay(2000);	
+	
+
 
 	mogo.set_value(false);
 
@@ -845,7 +902,9 @@ void autonomous() {
 
 std::atomic<float> arm_target_pos = 0;
 
+
 void opcontrol() {
+	
 	printf("op control start\n");
 
 	// dampens the error when moving downward to prevent dropping the arm
@@ -912,12 +971,12 @@ void opcontrol() {
 			arm_target_pos += ARM_SPEED;
 		else if (master.get_digital(ARM_DOWN_BUTTON))
 			arm_target_pos -= ARM_SPEED;
+		// arm limiters
+		if (arm_target_pos.load() < ARM_BOTTOM_LIMIT) arm_target_pos.store(ARM_BOTTOM_LIMIT);
+		if (arm_target_pos.load() > ARM_TOP_LIMIT) arm_target_pos.store(ARM_TOP_LIMIT);
 		// arm load macro
 		if (master.get_digital(ARM_LOAD_POS_BUTTON))
 			arm_target_pos = ARM_LOAD_POS;
-		// arm limiters
-		if (arm_pos.load() < ARM_BOTTOM_LIMIT) arm_target_pos.store(ARM_BOTTOM_LIMIT);
-		if (arm_pos.load() > ARM_TOP_LIMIT) arm_target_pos.store(ARM_TOP_LIMIT);
 		// update current arm pos
 		arm_pos.store(arm.get_position());
 		// move arm to PID output
