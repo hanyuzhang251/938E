@@ -46,7 +46,7 @@ struct Pose {
 	bool forward = true;
 };
 
-double normalizeDegree(double degree) {
+double normalize_deg(double degree) {
     double normalized = fmod(degree, 360.0);
 
     if (normalized > 180.0) {
@@ -491,8 +491,6 @@ std::atomic<float>* set_t_arm (0);
 std::atomic<float> target_x (0);
 std::atomic<float> target_z (0);
 
-std::atomic<bool> fwd (true);
-
 void set_arm_to(float value) {
 	set_t_arm->store(value);
 }
@@ -505,16 +503,17 @@ float deg_to_point(float x, float z) {
 	return std::atan2(x - x_pos.load(), z - z_pos.load()) * 180 / M_PI;
 }
 
-void turn_to_point(float x, float z) {
+void turn_to_point(float x, float z, bool forward = true) {
 	x *= DIST_MULTI;
 	z *= DIST_MULTI;
 
-	set_t_head->store(deg_to_point(x, z));
+	float deg = deg_to_point(x, z);
+	if (!forward) deg *= -1;
+
+	set_t_head->store(deg);
 }
 
 void move_to_point(float x, float z, bool forward = true) {
-	fwd.store(forward);
-
 	float deg = deg_to_point(x, z);
 	if (!forward) deg *= -1;
 
@@ -556,11 +555,11 @@ void match_auton(std::atomic<float>& target_dist, std::atomic<float>& target_hea
 }
 
 void skills_auton(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
-	// start facing the alliance stake, flush with the wall
+	// start facing the red alliance stake, flush with the wall
 	x_pos.store(-60);
 	y_pos.store(0);
 
-	// raise arm to put ring on alliance stake
+	// raise arm to put ring on red alliance stake
 	set_arm_to(ARM_TOP_LIMIT);
 	wait(1000);
 
@@ -571,7 +570,7 @@ void skills_auton(std::atomic<float>& target_dist, std::atomic<float>& target_he
 	move_to_point(-47, 0, false);	
 	wait(1500);
 
-	// turn so back is facing upper/left mogo
+	// turn so back is facing the q2 mogo
 	turn_to_point(-47, 23.5);
 	wait(1000);
 
@@ -583,15 +582,158 @@ void skills_auton(std::atomic<float>& target_dist, std::atomic<float>& target_he
 	mogo.set_value(true);
 	wait(250);
 
-	// face toward ring
+	// face ring q2m
 	turn_to_point(-23.5, 23.5);
 	wait(1000);
 
-	
+	intake.move(INTAKE_SPEED);
+
+	// move through ring q2m to ring q1f
 	move_to_point(23.5, 47);
 	wait(3000);
 
-	move_to_point(0, 47)
+	set_arm_to(ARM_LOAD_POS);
+
+	// move to ring ml
+	move_to_point(0, 55);
+	wait(1500);
+
+	// face left wall stake;
+	turn_to_point(0, 72);
+	wait(1000);
+
+	intake.brake();
+
+	// move into left wall stake
+	move_to_point(0, 61);
+	// deposit ring
+	set_arm_to(ARM_TOP_LIMIT);
+	wait(1500);
+
+	set_arm_to(ARM_BOTTOM_LIMIT);
+
+	// back away from wall stake
+	move_to_point(0, 47, false);
+	wait(1500);
+
+	// face ring q2f
+	turn_to_point(-23.5, 47);
+	wait(1000);
+
+	intake.move(INTAKE_SPEED);
+
+	// move through ring q2f and q2cm to q2cl
+	move_to_point(-60, 47);
+	wait(3000);
+
+	// face ring q2cr
+	turn_to_point(-47, 58.5);
+	wait(1000);
+
+	// move to ring q2cr;
+	move_to_point(-47, 58.5);
+	wait(1500);
+
+	// face away from q2 corner, err toward q3
+	turn_to_point(-66.5, 60, false);
+	wait(1000);
+
+	// back into q2 corner, err toward q3
+	move_to_point(-53, 60, false);
+	wait(1500);
+
+	// deposit rings (6 stack)
+	mogo.set_value(false);
+	wait(250);
+
+	// move back in line with mogos
+	move_to_point(-47, 0);
+	wait(3000);
+
+	// turn back to face q3 mogo
+	turn_to_point(-47, 0, false);
+	wait(1000);
+
+	// back into q3 mogo
+	move_to_point(-47, -12.5, false);
+	wait(1500);
+
+	mogo.set_value(true);
+	wait(250);
+
+	// face ring q3m
+	turn_to_point(-23.5, -23.5);
+	wait(1000);
+
+	// collect ring q3m
+	move_to_point(-23.5, -23.5);
+	wait(1500);
+
+	// face ring m
+	turn_to_point(0, 0);
+	wait(1000);
+
+	// collect ring m
+	move_to_point(0, 0);
+	wait(1500);
+
+	// move back to prev pos
+	move_to_point(-23.5, -23.5, false);
+	wait(1500);
+
+	// face ring q3f
+	turn_to_point(-23.5, -47);
+	wait(1000);
+
+	// collect ring q3f;
+	move_to_point(-23.5, -47);
+	wait(1500);
+
+	// face ring q3cm
+	turn_to_point(-47, -47);
+	wait(1000);
+
+	// move through ring q3cm to ring q3cr
+	move_to_point(-58.5, -47);
+	wait(1500);
+
+	// face ring q3cl
+	turn_to_point(-47, -58.5);
+	wait(1000);
+
+	// collect ring q3cl
+	move_to_point(-47, -58.5);
+	wait(1500);
+
+	// face q3 corner erring toward q2
+	turn_to_point(-66.5, -60, false);
+	wait(1000);
+
+	// back into q3 corner erring toward q2
+	move_to_point(-53, -60, false);
+	wait(1500);
+
+	// deposit mogo (6 stack)
+	mogo.set_value(false);
+	wait(250);
+
+	set_arm_to(ARM_LOAD_POS);
+
+	// collect ring mr
+	move_to_point(0, -55);
+	wait(3000);
+
+	// face right wall stake
+	turn_to_point(0, -72);
+	wait(1000);
+
+	intake.brake();
+
+	// move into right wall stake
+	move_to_point(0, -61);
+	// deposit ring
+	set_arm_to(ARM_TOP_LIMIT);
+	wait(1500);
 }
 
 void autonomous() {
@@ -663,8 +805,10 @@ void autonomous() {
 
 			float dist_to_target = std::sqrt(x_dif * x_dif + z_dif * z_dif);
 
-			float deg_to_target = deg_to_point(target_x.load(), target_z.load());
-			
+			float deg_to_target = normalize_deg(deg_to_point(target_x.load(), target_z.load()));
+			bool fwd = (std::abs(normalize_deg(deg_to_target - heading.load())) <= 90);
+
+			if (!fwd) dist_to_target *= -1; 
 
 			target_dist.store(dist_to_target);
 
@@ -683,18 +827,14 @@ void autonomous() {
 
 	master.print(0, 0, "move fwd");
 	move_to_point(0, 24);
-	target_z.store(24 * DIST_MULTI);
 
 	wait(5000);
 
 	master.print(0, 0, "move rev");
 
 	move_to_point(0, 0, false);
-	fwd = false;
-	target_z.store(0);
 
 	wait(5000);
-	fwd = true;
 
 	master.print(0, 0, "move done");
 
