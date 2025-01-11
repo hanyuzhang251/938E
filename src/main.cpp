@@ -394,6 +394,7 @@ pros::IMU imu (IMU_PORT);
 float imu_bias_x = 0;
 float imu_bias_y = 0;
 float imu_bias_z = 0;
+float imu_bias_h = 0;
 
 void solve_imu_bias(int32_t timeout) {
 	int32_t start_time = pros::millis();
@@ -401,12 +402,14 @@ void solve_imu_bias(int32_t timeout) {
 	imu_bias_x = 0;
 	imu_bias_y = 0;
 	imu_bias_z = 0;
+	float imu_bias_h = 0;
 
 	int cycle_count = 0;
 	while(pros::millis() <= start_time + timeout) {
 		imu_bias_x += imu.get_accel().x;
 		imu_bias_y += imu.get_accel().y;
 		imu_bias_z += imu.get_accel().z;
+		imu_bias_h += imu.get_heading();
 
 		++cycle_count;
 
@@ -416,6 +419,7 @@ void solve_imu_bias(int32_t timeout) {
 	imu_bias_x /= cycle_count;
 	imu_bias_y /= cycle_count;
 	imu_bias_z /= cycle_count;
+	imu_bias_h /= cycle_count;
 }
 
 // robot position
@@ -425,6 +429,8 @@ std::atomic<float> z_pos (0);
 std::atomic<float> dist (0);
 std::atomic<float> prev_dist(0);
 std::atomic<float> heading (0);
+
+float heading_adjust = 0;
 
 int left_motors_prev_pos = 0;
 int right_motors_prev_pos = 0;
@@ -450,7 +456,9 @@ void get_robot_position(long last_update) {
 	// 	imu_bias_z = (imu_bias_z + imu.get_accel().z) / 2;
 	// }
 
-	heading.store(imu.get_heading());
+	heading_adjust += imu_bias_h;
+
+	heading.store(imu.get_heading() + heading_adjust);
 
 	x_pos.fetch_add(std::cos(heading * M_PI / 180) * (dist.load() - prev_dist.load()));
 	y_pos.fetch_add(std::sin(heading * M_PI / 180) * (dist.load() - prev_dist.load()));
@@ -483,7 +491,7 @@ void init() {
 	pros::lcd::initialize();
 
 	imu.reset(true);
-	// solve_imu_bias(2000);
+	solve_imu_bias(1000);
 
     pros::Task pos_tracking_task([&]() {
 		last_pos_update = pros::millis();
@@ -850,12 +858,16 @@ void autonomous() {
 
 			float deg_to_target = normalize_deg(deg_to_point(target_x.load(), target_z.load()));
 			bool fwd = (normalize_dif(deg_to_target, heading.load()) <= 90);
-			// printf("deg to target: %f\n", std::abs(normalize_dif(deg_to_target, heading.load())));
+			printf("deg to target: (%f, %f) %f\n", deg_to_target, heading.load(), std::abs(normalize_dif(deg_to_target, heading.load())));
 
 			// printf("%f\n", std::abs(normalize_deg(deg_to_target - heading.load())));
 			// printf("deg to 100, 0: %f\n", deg_to_point(100, 0));
 
-			if (!fwd) dist_to_target *= -1; 
+			if (!fwd) {
+				dist_to_target *= -1; 
+			}
+
+			printf("dist to target: %f\n", dist_to_target);
 
 			// printf("dist_to_target: %f\n", dist_to_target);
 
