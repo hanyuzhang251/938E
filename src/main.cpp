@@ -149,7 +149,7 @@ constexpr int EJECT_BRAKE_CYCLES = 16;
 
 constexpr float ARM_SPEED = 50;
 constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
-constexpr float ARM_LOAD_POS = 190;
+constexpr float ARM_LOAD_POS = 200;
 
 constexpr float ARM_BOTTOM_LIMIT = 60;
 constexpr float ARM_TOP_LIMIT = 1900;
@@ -857,8 +857,9 @@ void autonomous() {
 			float dist_to_target = std::sqrt(x_dif * x_dif + z_dif * z_dif);
 
 			float deg_to_target = normalize_deg(deg_to_point(target_x.load(), target_z.load()));
-			bool fwd = (normalize_dif(deg_to_target, heading.load()) <= 90);
+			bool fwd = (std::abs(normalize_dif(deg_to_target, heading.load())) <= 90);
 			printf("deg to target: (%f, %f) %f\n", deg_to_target, heading.load(), std::abs(normalize_dif(deg_to_target, heading.load())));
+			printf("fwd?: %s\n", fwd ? "yessir" : "hell nah");
 
 			// printf("%f\n", std::abs(normalize_deg(deg_to_target - heading.load())));
 			// printf("deg to 100, 0: %f\n", deg_to_point(100, 0));
@@ -873,8 +874,8 @@ void autonomous() {
 
 			target_dist.store(dist_to_target);
 
-			// dt_left_motors.move(angular_output.load() + lateral_output.load());
-			// dt_right_motors.move(lateral_output.load() - angular_output.load());
+			dt_left_motors.move(angular_output.load() + lateral_output.load());
+			dt_right_motors.move(lateral_output.load() - angular_output.load());
 
 			// update current arm pos
 			arm_pos.store(arm.get_position());
@@ -890,28 +891,21 @@ void autonomous() {
 
 	// skills_auton(target_dist, target_heading); 
 
-	move_to_point(0, 24);
+	move_to_point(0, 48);
 	printf("t-head:%f\n", set_t_head->load());
 	printf("t-arm:%f\n", set_t_arm->load());
 	printf("t-x:%f", target_x.load());
 	printf("t-yz:%f", target_z.load());
-	pros::delay(4000);
+	pros::delay(3000);
 
-	move_to_point(0, -24, false);
-	printf("t-head:%f\n", set_t_head->load());
-	printf("t-arm:%f\n", set_t_arm->load());
-	printf("t-x:%f", target_x.load());
-	printf("t-yz:%f", target_z.load());
-	pros::delay(4000);
+	// move_to_point(0, -48);
+	// pros::delay(3000);
 
-	move_to_point(24, 0, false);
-	printf("t-head:%f\n", set_t_head->load());
-	printf("t-arm:%f\n", set_t_arm->load());
-	printf("t-x:%f", target_x.load());
-	printf("t-yz:%f", target_z.load());
+	// mogo.set_value(true);
+	// wait(1000);
 
-	pros::delay(2000);	
-	
+	// intake.move(INTAKE_SPEED);
+
 
 
 	mogo.set_value(false);
