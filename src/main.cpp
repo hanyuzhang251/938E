@@ -120,7 +120,7 @@ constexpr pros::digi_button ARM_LOAD_POS_BUTTON = pros::CTRL_DIGI_UP;
 
 // PID CONTROLLERS
 
-constexpr float LATERAL_PID_KP = 0.08;
+constexpr float LATERAL_PID_KP = 0.045;
 constexpr float LATERAL_PID_KI = 0.003;
 constexpr float LATERAL_PID_KD = 0.035;
 constexpr float LATERAL_PID_WIND = 300;
@@ -538,6 +538,9 @@ std::atomic<float>* set_t_arm (0);
 std::atomic<float> target_x (0);
 std::atomic<float> target_z (0);
 
+bool swapXZ = true;
+bool point_movement = true;
+
 void set_arm_to(float value) {
 	set_t_arm->store(value);
 	printf("set_t_arm: %f\n", value);
@@ -556,17 +559,19 @@ float deg_to_point(float x, float z) {
 
 void turn_to_point(float x, float z, bool forward = true) {
 
-	float temp = x;
-	x = z;
-	z = temp;
+	if (swapXZ) {
+		float temp = x;
+		x = z;
+		z = temp;
+	}
 
 	x *= DIST_MULTI;
 	z *= DIST_MULTI;
 
 	float deg = deg_to_point(x, z);
 	if (!forward) {
-		printf("turn to point flipping deg (%f -> %f)\n", deg, deg * -1);
-		deg *= -1;
+		printf("turn to point flipping deg (%f -> %f)\n", deg, normalize_deg(deg - 180));
+		deg = normalize_deg(deg - 180);
 	}
 
 
@@ -575,9 +580,11 @@ void turn_to_point(float x, float z, bool forward = true) {
 
 void move_to_point(float x, float z, bool forward = true) {
 
-	float temp = x;
-	x = z;
-	z = temp;
+	if (swapXZ) {
+		float temp = x;
+		x = z;
+		z = temp;
+	}
 
 	turn_to_point(z, x, forward);
 
@@ -589,31 +596,7 @@ void move_to_point(float x, float z, bool forward = true) {
 }
 
 void match_auton(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
-	mogo.set_value(false);
-
-	target_dist.fetch_add(-300);
-	pros::delay(1500);
-
-	target_heading.store(35);
-	pros::delay(1500);
-
-	target_dist.fetch_add(-1100);
-	pros::delay(2000);
-
-	mogo.set_value(true);
-	pros::delay(500);
-
-	intake.move(127);
-	pros::delay(500);
-
-	target_heading.store(108);
-	pros::delay(1500);
-
-	target_dist.fetch_add(750);
-
-	pros::delay(5000);
-
-	return;
+	
 }
 
 void skills_auton(std::atomic<float>& target_dist, std::atomic<float>& target_heading) {
@@ -621,12 +604,10 @@ void skills_auton(std::atomic<float>& target_dist, std::atomic<float>& target_he
 	x_pos.store(-60);
 	y_pos.store(0);
 
-	// raise arm to put ring on red alliance stake
-	set_arm_to(ARM_TOP_LIMIT);
+	intake.move(INTAKE_SPEED);
 	wait(1000);
 
-	// lower arm
-	set_arm_to(ARM_BOTTOM_LIMIT);
+	intake.brake();
 
 	// move backwards in line with mogos
 	move_to_point(-47, 0, false);	
@@ -891,7 +872,7 @@ void autonomous() {
 
 			// printf("dist_to_target: %f\n", dist_to_target);
 
-			target_dist.store(dist_to_target);
+			if (point_movement) target_dist.store(dist_to_target);
 
 			dt_left_motors.move(angular_output.load() + lateral_output.load());
 			dt_right_motors.move(lateral_output.load() - angular_output.load());
@@ -910,14 +891,35 @@ void autonomous() {
 	set_t_head = &target_heading;
 	set_t_arm = &target_arm_pos;
 
-	// skills_auton(target_dist, target_heading); 
+	// skills_auton(target_dist, target_heading);
 
-	move_to_point(0, -48, false);
-	printf("t-head:%f\n", set_t_head->load());
-	printf("t-arm:%f\n", set_t_arm->load());
-	printf("t-x:%f", target_x.load());
-	printf("t-yz:%f", target_z.load());
-	pros::delay(3000);
+
+	set_t_arm->store(ARM_BOTTOM_LIMIT);
+	
+
+	move_to_point(0, -85, false);
+	wait(2000);
+	mogo.set_value(true);
+	wait(500);
+	intake.move(INTAKE_SPEED);
+	wait(1000);
+	point_movement = false;
+	set_t_head->store(-85);
+	wait(2000);
+	target_dist.fetch_add(1100);
+	wait(3000);
+	set_t_head->store(100);
+	wait(2000);
+	target_dist.fetch_add(1500);
+	wait(3000);
+	
+
+	// move_to_point(0, -48, false);
+	// printf("t-head:%f\n", set_t_head->load());
+	// printf("t-arm:%f\n", set_t_arm->load());
+	// printf("t-x:%f", target_x.load());
+	// printf("t-yz:%f", target_z.load());
+	// pros::delay(3000);
 
 	// move_to_point(0, -48);
 	// pros::delay(3000);
@@ -929,7 +931,7 @@ void autonomous() {
 
 
 
-	mogo.set_value(false);
+	// mogo.set_value(false);
 
 	intake.brake();
 
@@ -949,7 +951,7 @@ std::atomic<float> arm_target_pos = 0;
 
 
 void opcontrol() {
-	// autonomous();
+	autonomous();
 	
 	printf("op control start\n");
 
