@@ -275,3 +275,29 @@ void pid_handle_process(PIDProcess& process) {
 	// set output power
 	output->store(calc_power);
 }
+
+
+
+/*****************************************************************************/
+/*                                DRIVECURVE                                 */
+/*****************************************************************************/
+
+float drivecurve_calc_power(int value, int other_value, DriveCurve curve, int ratio, int other_ratio) {
+	if (std::abs(value) <= curve.deadband) return 0;
+
+	float ratio_mult = (float) ratio / (ratio + other_ratio);
+	if (SPEED_COMP) {
+		float dynamic_ratio = (
+				(float) other_ratio * std::abs(other_value) / 127);
+		ratio_mult = (float) ratio / (ratio + dynamic_ratio);
+	}
+
+	int sign_mult = sgn(value);
+
+	float adj = 127 / std::pow(127, curve.expo_curve);
+	float expo = std::pow(std::abs(value), curve.expo_curve);
+
+	float output = (float) (adj * expo);
+	
+	return sign_mult * std::max(curve.min_out, output);
+}
