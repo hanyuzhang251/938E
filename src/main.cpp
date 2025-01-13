@@ -301,3 +301,32 @@ float drivecurve_calc_power(int value, int other_value, DriveCurve curve, int ra
 	
 	return sign_mult * std::max(curve.min_out, output);
 }
+
+
+
+/*****************************************************************************/
+/*                             MICROCONTROLLERS                              */
+/*****************************************************************************/
+
+pros::Controller master(pros::E_CONTROLLER_MASTER);
+
+pros::MotorGroup dt_left_motors ({
+	DT_FL_PORT,
+	DT_LM_PORT,
+	DT_BL_PORT
+});
+
+pros::MotorGroup dt_right_motors ({
+	DT_FR_PORT,
+	DT_MR_PORT,
+	DT_BR_PORT
+});
+
+pros::Motor intake (INTAKE_PORT);
+
+pros::adi::DigitalOut mogo (MOGO_PORT);
+
+pros::Motor arm (ARM_PORT);
+pros::adi::DigitalOut arm_end (ARM_END_PORT);
+
+pros::IMU imu (IMU_PORT);
