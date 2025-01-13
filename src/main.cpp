@@ -2,7 +2,9 @@
 #include "pros/misc.h"
 
 #include <cmath>
+#include <limits>
 #include <atomic>
+#include <tuple>
 
 #define wait(n) pros::delay(n)
 
@@ -65,21 +67,24 @@ float deg_dif(float angle1, float angle2) {
 /*                                   DATA                                    */
 /*****************************************************************************/
 
-struct pose {
+struct Pose {
     float x;
     float y;
     float h;
 };
 
-struct pid_controller {
+struct PIDController {
     float kp;
     float ki;
     float kd;
-    float wind;
-    float slew;
+    float wind; // range of error for integral accumulation
+	float clamp; // clamps the integral
+    float slew; // maximum acceleration and decelleration
+	float small_error; // range of acceptable error give or take a bit
+	float large_error // range of error for robot to start settling
 };
 
-struct drive_curve {
+struct DriveCurve {
     float deadband;
     float min_out;
     float expo_curve;
@@ -91,8 +96,8 @@ struct drive_curve {
 /*                                  CONFIG                                   */
 /*****************************************************************************/
 
-constexpr long PROCESS_DELAY = 15;
-constexpr long LONG_DELAY = 15;
+constexpr long PROCESS_DELAY = 10;
+constexpr long LONG_DELAY = 200;
 
 // PORTS
 
@@ -113,7 +118,7 @@ constexpr int ARM_END_PORT = 8;
 
 constexpr int IMU_PORT = 8;
 
-// BUTTONS
+// CONTROLS
 
 constexpr pros::anlg_button DRIVE_JOYSTICK = pros::CTRL_ANLG_LY;
 constexpr pros::anlg_button TURN_JOYSTICK = pros::CTRL_ANLG_RX;
@@ -130,17 +135,38 @@ constexpr pros::digi_button ARM_DOWN_BUTTON = pros::CTRL_DIGI_R2;
 
 constexpr pros::digi_button ARM_LOAD_POS_BUTTON = pros::CTRL_DIGI_UP;
 
-// PID CONTROLLERS
+// PID
 
-constexpr pid_controller lateral_pid (0.045, 0.003, 0.035, 300, 999);
-constexpr pid_controller angular_pid (0.8, 0.1, 1, 30, 999);
-constexpr pid_controller arm_pid (0.6, 0.02, 0, 90, 999);
+constexpr PIDController lateral_pid (
+		0.045, // kp
+		0.003, // ki
+		0.035, // kd
+		300, // wind
+		999, // clamp
+		15, // slew
+		100, // small error
+		500, // large error
+);
+
+constexpr PIDController angular_pid (
+		0.8, // kp
+		0.1, // ki
+		1, // kd
+		30, // wind
+		999, // clamp
+		999, // slew
+		3, // small error
+		500, // large error
+);
+
+constexpr PIDController angular_pid (0.8, 0.1, 1, 30, 999);
+constexpr PIDController arm_pid (0.6, 0.02, 0, 90, 999);
 
 // AUTON
 
 constexpr float DIST_MULTI = 35.5;
 
-// DRIVING
+// DRIVE
 
 constexpr int DRIVE_RATIO = 1;
 constexpr int TURN_RATIO = 1;
@@ -157,15 +183,53 @@ constexpr float ARM_LOAD_POS = 215;
 constexpr float ARM_BOTTOM_LIMIT = 50;
 constexpr float ARM_TOP_LIMIT = 1900;
 
-constexpr drive_curve lateral (3, 10, 3);
-constexpr drive_curve angular (3, 10, 3);
+constexpr DriveCurve lateral (3, 10, 3);
+constexpr DriveCurve angular (3, 10, 3);
 
 
 
 /*****************************************************************************/
-/*                              PID CONTROLLER                               */
+/*                                    PID                                    */
 /*****************************************************************************/
 
-float pid_calc_power(int error, int integral, int derivative, const pid_controller& pid) {
-    return error * pid.kp + integral * pid.ki + derivative * pid.kd;
+struct PIDProcess {
+	std::atomic<float>* value;
+	std::atomic<float>* target;
+	std::atomic<float>* output;
+	const PIDController* pid;
+	int32_t life;
+	std::function<float(float, float)> normalize_err;
+
+	float prev_output = 0;
+	float prev_error = 0;
+	float error = 0;
+	float integral = 0;
+	float derivative = 0;
+
+	PIDProcess(const std::function<float(float, float)> normalize_err = nullptr)
+			: value(value), target(target), output(output), pid(pid), life(life), normalize_err(normalize_err) {};
+
+	auto operator()() {
+        return std::tie(value, target, output, pid, life, normalize_err,
+				prev_output, prev_error, error, integral, derivative);
+    }
+};
+
+void pid_handle_process(PIDProcess& process) {
+	auto [value, target, output, pid, life, normalize_err,
+			prev_output, prev_error, error, integral, derivate] = process();
+
+	if (life <= 0) return;
+
+	life -= 1;
+
+	prev_output = output->load();
+	prev_error = error;
+
+	error = target->load() - value->load();
+
+	// normalize error if applicable
+	if (normalize_err) error = normaliz_err(target->load(), value->load());
+
+	if ()
 }
