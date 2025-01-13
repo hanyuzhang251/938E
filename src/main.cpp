@@ -79,9 +79,10 @@ struct PIDController {
     float kd;
     float wind; // range of error for integral accumulation
 	float clamp; // clamps the integral
+	float decay; // applied when needed to smoothly increase or decrease a value
     float slew; // maximum acceleration and decelleration
 	float small_error; // range of acceptable error give or take a bit
-	float large_error // range of error for robot to start settling
+	float large_error; // range of error for robot to start settling
 };
 
 struct DriveCurve {
@@ -97,7 +98,7 @@ struct DriveCurve {
 /*****************************************************************************/
 
 constexpr long PROCESS_DELAY = 10;
-constexpr long LONG_DELAY = 200;
+constexpr long LONG_DELAY = 50;
 
 // PORTS
 
@@ -143,9 +144,10 @@ constexpr PIDController lateral_pid (
 		0.035, // kd
 		300, // wind
 		999, // clamp
+		0.9, // decay
 		15, // slew
 		100, // small error
-		500, // large error
+		500 // large error
 );
 
 constexpr PIDController angular_pid (
@@ -154,13 +156,23 @@ constexpr PIDController angular_pid (
 		1, // kd
 		30, // wind
 		999, // clamp
+		0.9, // decay
 		999, // slew
 		3, // small error
-		500, // large error
+		500 // large error
 );
 
-constexpr PIDController angular_pid (0.8, 0.1, 1, 30, 999);
-constexpr PIDController arm_pid (0.6, 0.02, 0, 90, 999);
+constexpr PIDController arm_pid (
+		0.6, // kp
+		0.02, // ki
+		0, // kd
+		90, // wind
+		999, // clamp
+		0.9, // decay
+		999, // slew
+		3, // small error
+		8 // large error
+);
 
 // AUTON
 
@@ -217,7 +229,7 @@ struct PIDProcess {
 
 void pid_handle_process(PIDProcess& process) {
 	auto [value, target, output, pid, life, normalize_err,
-			prev_output, prev_error, error, integral, derivate] = process();
+			prev_output, prev_error, error, integral, derivative] = process();
 
 	if (life <= 0) return;
 
@@ -226,10 +238,40 @@ void pid_handle_process(PIDProcess& process) {
 	prev_output = output->load();
 	prev_error = error;
 
+	// error update
 	error = target->load() - value->load();
-
 	// normalize error if applicable
-	if (normalize_err) error = normaliz_err(target->load(), value->load());
+	if (normalize_err) error = normalize_err(target->load(), value->load());
 
-	if ()
+	// reset integral if we crossed target
+	if (sgn(prev_error) != sgn(error)) integral = 0;
+
+	// update integral if error in windup range
+	if (std::abs(error) <= pid->wind) integral += error;
+	// else decay integral
+	else integral *= pid->decay;
+
+	// clamp integral
+	integral = std::min(pid->clamp, std::max(-pid->clamp, integral));
+	
+	// derivative update
+	derivative = error - prev_error;
+
+	float real_error = error;
+	float real_integral = integral;
+	float real_derivative = derivative;
+
+	// scale integral on small error
+	real_integral *= (1 - std::min(1.0f, std::abs(error) / pid->small_error));
+	// scale derivative on large error
+	real_derivative *= (1 - std::min(1.0f, std::abs(error) / pid->large_error));
+
+	// calulate power
+	float calc_power = real_error * pid->kp + integral * pid->ki + derivative * pid->kd;
+
+	// constrain power to slew
+	calc_power = std::min(prev_output + pid->slew, std::max(prev_output - pid->slew, calc_power));
+
+	// set output power
+	output->store(calc_power);
 }
