@@ -68,9 +68,9 @@ float deg_dif(float angle1, float angle2) {
 /*****************************************************************************/
 
 struct Pose {
-    float x;
-    float y;
-    float h;
+    std::atomic<float> x;
+    std::atomic<float> y;
+    std::atomic<float> h;
 };
 
 struct PIDController {
@@ -305,7 +305,7 @@ float drivecurve_calc_power(int value, int other_value, DriveCurve curve, int ra
 
 
 /*****************************************************************************/
-/*                             MICROCONTROLLERS                              */
+/*                                  DEVICES                                  */
 /*****************************************************************************/
 
 pros::Controller master(pros::E_CONTROLLER_MASTER);
@@ -330,3 +330,73 @@ pros::Motor arm (ARM_PORT);
 pros::adi::DigitalOut arm_end (ARM_END_PORT);
 
 pros::IMU imu (IMU_PORT);
+
+
+
+/*****************************************************************************/
+/*                                    ODOM                                   */
+/*****************************************************************************/
+
+// imu bias
+
+float imu_bias_x = 0;
+float imu_bias_y = 0;
+float imu_bias_z = 0;
+float imu_bias_h = 0;
+
+void solve_imu_bias(int32_t life) {
+
+	imu_bias_x = 0;
+	imu_bias_y = 0;
+	imu_bias_z = 0;
+	imu_bias_h = 0;
+
+	float prev_heading = 0;
+
+	int cycle_count = 0;
+	while(life >= 0) {
+		--life;
+
+		imu_bias_x += imu.get_accel().x;
+		imu_bias_y += imu.get_accel().y;
+		imu_bias_z += imu.get_accel().z;
+		float curr_heading = imu.get_heading();
+		imu_bias_h += curr_heading - prev_heading;
+		prev_heading = curr_heading;
+
+		++cycle_count;
+
+		pros::delay(PROCESS_DELAY);
+	}
+
+	imu_bias_x /= cycle_count;
+	imu_bias_y /= cycle_count;
+	imu_bias_z /= cycle_count;
+	imu_bias_h /= cycle_count;
+}
+
+// robot position
+Pose robot_pose (0, 0, 0);
+std::atomic<float> dist (0);
+std::atomic<float> prev_dist(0);
+
+int left_motors_prev_pos = 0;
+int right_motors_prev_pos = 0;
+
+long last_pos_update = 0;
+
+void get_robot_position(long last_update) {
+	prev_dist.store(dist.load());
+
+	last_pos_update = last_update;
+
+	dist.fetch_add(((dt_left_motors.get_position() - left_motors_prev_pos) + (dt_right_motors.get_position() - right_motors_prev_pos)) / 2.0f);
+	left_motors_prev_pos = dt_left_motors.get_position();
+	right_motors_prev_pos = dt_right_motors.get_position();
+	heading_adjust += imu_bias_h;
+
+	heading.store(imu.get_heading() + heading_adjust);
+
+	x_pos.fetch_add(std::cos(heading * M_PI / 180) * (dist.load() - prev_dist.load()));
+	y_pos.fetch_add(std::sin(heading * M_PI / 180) * (dist.load() - prev_dist.load()));
+}
