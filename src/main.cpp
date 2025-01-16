@@ -186,6 +186,8 @@ constexpr PIDController arm_pid (
 
 // AUTON
 
+constexpr bool FORCE_AUTON = false; // if auton was did not run, try again at start of op control
+
 constexpr float DIST_MULTI = 35.5;
 
 // DRIVE
@@ -391,18 +393,15 @@ void solve_imu_bias(int32_t life) {
 Pose robot_pose (0, 0, 0);
 std::atomic<float> dist (0);
 std::atomic<float> prev_dist(0);
+float heading_adjust = 0;
 
 int left_motors_prev_pos = 0;
 int right_motors_prev_pos = 0;
 
-long last_pos_update = 0;
-
-void get_robot_position(long last_update) {
+void get_robot_position() {
 	auto [x_pos, y_pos, heading] = robot_pose();
 
 	prev_dist.store(dist.load());
-
-	last_pos_update = last_update;
 
 	dist.fetch_add(((dt_left_motors.get_position() - left_motors_prev_pos) + (dt_right_motors.get_position() - right_motors_prev_pos)) / 2.0f);
 	left_motors_prev_pos = dt_left_motors.get_position();
@@ -410,5 +409,103 @@ void get_robot_position(long last_update) {
 
 	x_pos.fetch_add(std::cos(heading * M_PI / 180) * (dist.load() - prev_dist.load()));
 	y_pos.fetch_add(std::sin(heading * M_PI / 180) * (dist.load() - prev_dist.load()));
+
+	heading_adjust += imu_bias_h;
+	heading.store(imu.get_heading() + heading_adjust);
 }
 
+
+
+/*****************************************************************************/
+/*                                COMPETITION                                */
+/*****************************************************************************/
+
+bool init_done = false;
+
+void init() {
+	if (init_done) return;
+
+	pros::lcd::initialize();
+
+	imu.reset(true);
+	solve_imu_bias(900);
+
+    pros::Task pos_tracking_task([&]() {
+		auto [x_pos, y_pos, heading] = robot_pose();
+
+        while (true) {
+			get_robot_position();
+			
+            pros::lcd::print(0, "x_pos: %f", x_pos.load());
+            pros::lcd::print(1, "y_pos: %f", y_pos.load());
+            pros::lcd::print(3, "head: %f", heading.load());
+
+            pros::delay(PROCESS_DELAY);
+        }
+    });
+
+	init_done = true;
+}
+
+void initialize() {
+	init();
+}
+
+void competition_initialize() {
+	init();
+}
+
+
+
+/*****************************************************************************/
+/*                                   AUTON                                   */
+/*****************************************************************************/
+
+bool auton_ran = false;
+
+void autonomous() {
+	if (auton_ran) return;
+
+	auton_ran = true;
+
+	dt_left_motors.tare_position_all();
+	dt_right_motors.tare_position_all();
+
+	std::atomic<float> target_heading (0);
+	std::atomic<float> angular_output;
+	pros::Task angular_pid_process_task{[&] {
+		pid_process(
+				&heading,
+				&target_heading,
+				120000,
+				&angular_pid,
+				&angular_output,
+				deg_dif
+		);
+	}};
+
+	std::atomic<float> target_dist (0);
+	std::atomic<float> lateral_output;
+	pros::Task lateral_pid_process_task{[&] {
+		pid_process(
+				&dist,
+				&target_dist,
+				120000,
+				&lateral_pid,
+				&lateral_output
+		);
+	}};
+
+	std::atomic<float> arm_pos (0);
+	std::atomic<float> target_arm_pos (0);
+	std::atomic<float> arm_pos_output;
+	pros::Task arm_pid_process_task{[&] {
+		pid_process(
+			&arm_pos,
+			&target_arm_pos,
+			120000,
+			&arm_pid,
+			&arm_pos_output
+		);
+	}};
+}
