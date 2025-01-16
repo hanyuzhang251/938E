@@ -71,6 +71,16 @@ struct Pose {
     std::atomic<float> x;
     std::atomic<float> y;
     std::atomic<float> h;
+
+	Pose(float x_pos, float y_pos, float head) {
+		x.store(x_pos);
+		y.store(y_pos);
+		h.store(head);
+	}
+
+	auto operator()() {
+        return std::tie(x, y, h);
+    }
 };
 
 struct PIDController {
@@ -209,6 +219,8 @@ struct PIDProcess {
 	std::atomic<float>* target;
 	std::atomic<float>* output;
 	const PIDController* pid;
+	float max_speed;
+	float min_speed;
 	int32_t life;
 	std::function<float(float, float)> normalize_err;
 
@@ -219,20 +231,19 @@ struct PIDProcess {
 	float derivative = 0;
 
 	PIDProcess(const std::function<float(float, float)> normalize_err = nullptr)
-			: value(value), target(target), output(output), pid(pid), life(life), normalize_err(normalize_err) {};
+			: value(value), target(target), output(output), pid(pid), min_speed(min_speed), max_speed(max_speed), life(life), normalize_err(normalize_err) {};
 
 	auto operator()() {
-        return std::tie(value, target, output, pid, life, normalize_err,
+        return std::tie(value, target, output, pid, min_speed, max_speed, life, normalize_err,
 				prev_output, prev_error, error, integral, derivative);
     }
 };
 
 void pid_handle_process(PIDProcess& process) {
-	auto [value, target, output, pid, life, normalize_err,
+	auto [value, target, output, pid, min_speed, max_speed, life, normalize_err,
 			prev_output, prev_error, error, integral, derivative] = process();
 
 	if (life <= 0) return;
-
 	life -= 1;
 
 	prev_output = output->load();
@@ -268,9 +279,10 @@ void pid_handle_process(PIDProcess& process) {
 
 	// calulate power
 	float calc_power = real_error * pid->kp + integral * pid->ki + derivative * pid->kd;
-
 	// constrain power to slew
 	calc_power = std::min(prev_output + pid->slew, std::max(prev_output - pid->slew, calc_power));
+	// contrain power to min max speed
+	calc_power = std::min(max_speed, std::max(min_speed, calc_power));
 
 	// set output power
 	output->store(calc_power);
@@ -386,6 +398,8 @@ int right_motors_prev_pos = 0;
 long last_pos_update = 0;
 
 void get_robot_position(long last_update) {
+	auto [x_pos, y_pos, heading] = robot_pose();
+
 	prev_dist.store(dist.load());
 
 	last_pos_update = last_update;
@@ -393,10 +407,8 @@ void get_robot_position(long last_update) {
 	dist.fetch_add(((dt_left_motors.get_position() - left_motors_prev_pos) + (dt_right_motors.get_position() - right_motors_prev_pos)) / 2.0f);
 	left_motors_prev_pos = dt_left_motors.get_position();
 	right_motors_prev_pos = dt_right_motors.get_position();
-	heading_adjust += imu_bias_h;
-
-	heading.store(imu.get_heading() + heading_adjust);
 
 	x_pos.fetch_add(std::cos(heading * M_PI / 180) * (dist.load() - prev_dist.load()));
 	y_pos.fetch_add(std::sin(heading * M_PI / 180) * (dist.load() - prev_dist.load()));
 }
+
