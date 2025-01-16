@@ -892,7 +892,9 @@ void autonomous() {
 	set_t_arm = &target_arm_pos;
 
 	// skills_auton(target_dist, target_heading);
-
+	bool right = true;
+	int multi = 1;
+	if (!right) multi = -1;
 
 	set_t_arm->store(ARM_BOTTOM_LIMIT);
 	
@@ -904,14 +906,15 @@ void autonomous() {
 	intake.move(INTAKE_SPEED);
 	wait(1000);
 	point_movement = false;
-	set_t_head->store(-85);
+	set_t_head->store(-85 * multi);
 	wait(2000);
-	target_dist.fetch_add(1100);
+	target_dist.fetch_add(1000);
 	wait(3000);
-	set_t_head->store(100);
+	set_t_head->store(100 * multi);
 	wait(2000);
-	target_dist.fetch_add(1500);
+	target_dist.fetch_add(1600);
 	wait(3000);
+	set_t_arm->store(ARM_LOAD_POS * 2);
 	
 
 	// move_to_point(0, -48, false);
