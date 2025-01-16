@@ -951,7 +951,7 @@ std::atomic<float> arm_target_pos = 0;
 
 
 void opcontrol() {
-	autonomous();
+	// autonomous();
 	
 	printf("op control start\n");
 
