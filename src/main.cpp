@@ -369,7 +369,7 @@ void solve_imu_bias(int32_t life) {
 
 	int cycle_count = 0;
 	while(life >= 0) {
-		--life;
+		life -= PROCESS_DELAY;
 
 		imu_bias_x += imu.get_accel().x;
 		imu_bias_y += imu.get_accel().y;
@@ -411,7 +411,23 @@ void get_robot_position() {
 	y_pos.fetch_add(std::sin(heading * M_PI / 180) * (dist.load() - prev_dist.load()));
 
 	heading_adjust += imu_bias_h;
-	heading.store(imu.get_heading() + heading_adjust);
+	heading.store(imu.get_heading());
+}
+
+
+
+/*****************************************************************************/
+/*                                  GLOBAL                                   */
+/*****************************************************************************/
+
+std::vector<std::function> tasks;
+
+void run_tasks() {
+	while (true) {
+		for (std::function task : tasks) {
+			task();
+		}
+	}
 }
 
 
@@ -471,41 +487,5 @@ void autonomous() {
 	dt_left_motors.tare_position_all();
 	dt_right_motors.tare_position_all();
 
-	std::atomic<float> target_heading (0);
-	std::atomic<float> angular_output;
-	pros::Task angular_pid_process_task{[&] {
-		pid_process(
-				&heading,
-				&target_heading,
-				120000,
-				&angular_pid,
-				&angular_output,
-				deg_dif
-		);
-	}};
-
-	std::atomic<float> target_dist (0);
-	std::atomic<float> lateral_output;
-	pros::Task lateral_pid_process_task{[&] {
-		pid_process(
-				&dist,
-				&target_dist,
-				120000,
-				&lateral_pid,
-				&lateral_output
-		);
-	}};
-
-	std::atomic<float> arm_pos (0);
-	std::atomic<float> target_arm_pos (0);
-	std::atomic<float> arm_pos_output;
-	pros::Task arm_pid_process_task{[&] {
-		pid_process(
-			&arm_pos,
-			&target_arm_pos,
-			120000,
-			&arm_pid,
-			&arm_pos_output
-		);
-	}};
+	
 }
