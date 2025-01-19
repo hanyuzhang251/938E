@@ -149,39 +149,39 @@ constexpr pros::digi_button ARM_LOAD_POS_BUTTON = pros::CTRL_DIGI_UP;
 // PID
 
 PIDController lateral_pid (
-		0.045, // kp
-		0.003, // ki
-		0.035, // kd
-		300, // wind
+		4, // kp
+		0, // ki
+		0, // kd
+		0, // wind
 		999, // clamp
 		0.9, // decay
-		15, // slew
-		100, // small error
-		500 // large error
+		999, // slew
+		0, // small error
+		0 // large error
 );
 
 PIDController angular_pid (
-		0.8, // kp
-		0.1, // ki
-		1, // kd
-		30, // wind
+		2, // kp
+		1, // ki
+		0, // kd
+		0, // wind
 		999, // clamp
-		0.9, // decay
+		0, // decay
 		999, // slew
-		3, // small error
-		500 // large error
+		0, // small error
+		0 // large error
 );
 
 PIDController arm_pid (
-		0.6, // kp
-		0.02, // ki
-		0, // kd
-		90, // wind
+		0.3, // kp
+		0.05, // ki
+		0.1, // kd
+		100, // wind
 		999, // clamp
 		0.9, // decay
 		999, // slew
-		3, // small error
-		8 // large error
+		0, // small error
+		50 // large error
 );
 
 // AUTON
@@ -204,7 +204,7 @@ constexpr float ARM_SPEED = 50;
 constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
 constexpr float ARM_LOAD_POS = 215;
 
-constexpr float ARM_BOTTOM_LIMIT = 50;
+constexpr float ARM_BOTTOM_LIMIT = 20;
 constexpr float ARM_TOP_LIMIT = 1900;
 
 constexpr DriveCurve drive_lateral (3, 10, 3);
@@ -219,7 +219,7 @@ constexpr DriveCurve drive_angular (3, 10, 3);
 struct PIDProcess {
     std::atomic<float>& value;
     std::atomic<float>& target;
-    std::atomic<float>& arm_pos_output;
+    std::atomic<float>& output;
     const PIDController& pid;
     float max_speed;
     float min_speed;
@@ -232,66 +232,93 @@ struct PIDProcess {
     float integral = 0;
     float derivative = 0;
 
-    PIDProcess(std::atomic<float>& value, std::atomic<float>& target, std::atomic<float>& arm_pos_output,
+    PIDProcess(std::atomic<float>& value, std::atomic<float>& target, std::atomic<float>& output,
                const PIDController& pid, float max_speed, float min_speed, uint32_t life,
                std::function<float(float, float)> normalize_err = [](float err, float maxErr) { return err / maxErr; })
-        : value(value), target(target), arm_pos_output(arm_pos_output), pid(pid), max_speed(max_speed),
+        : value(value), target(target), output(output), pid(pid), max_speed(max_speed),
           min_speed(min_speed), life(life), normalize_err(normalize_err) {}
 
     auto operator()() {
-        return std::tie(value, target, arm_pos_output, pid, min_speed, max_speed, life, normalize_err,
+        return std::tie(value, target, output, pid, min_speed, max_speed, life, normalize_err,
                         prev_output, prev_error, error, integral, derivative);
     }
 };
 
 
 void pid_handle_process(PIDProcess& process) {
-    auto [value, target, arm_pos_output, pid, min_speed, max_speed, life, normalize_err,
+
+    auto [value, target, output, pid, min_speed, max_speed, life, normalize_err,
           prev_output, prev_error, error, integral, derivative] = process();
+
+	printf("\nHANDLING PID PROCESS\n");
+	printf("> STATE: value: %f, target: %f, output: %f\n", value.load(), target.load(), output.load());
 
     if (life <= 0) return;
     life -= 1;
 
-    prev_output = arm_pos_output.load();
+    prev_output = output.load();
     prev_error = error;
 
     // error update
     error = target.load() - value.load();
+	printf("> ERROR CALC: target(%f) - value(%f) = error(%f)\n", target.load(), value.load(), error);
     // normalize error if applicable
-    if (normalize_err) error = normalize_err(target.load(), value.load());
+    if (normalize_err) {
+		error = normalize_err(target.load(), value.load());
+		printf("> CUST ERROR CALC: norm_error = error(%f)\n", error);
+	}
 
     // reset integral if we crossed target
-    if (sgn(prev_error) != sgn(error)) integral = 0;
+    if (sgn(prev_error) != sgn(error)) {
+		integral = 0;
+		printf("> RESET INTEGRAL\n");
+	}
 
     // update integral if error in windup range
-    if (std::abs(error) <= pid.wind) integral += error;
+    if (std::abs(error) <= pid.wind) {
+		integral += error;
+		printf("> ACCUMULATE INTEGRAL: +%f = %f\n", error, integral);
+	}
     // else decay integral
-    else integral *= pid.decay;
+    else {
+		integral *= pid.decay;
+		printf("> DECAY INTEGRAL: *%f = %f\n", pid.decay, integral);
+	}
 
     // clamp integral
     integral = std::min(pid.clamp, std::max(-pid.clamp, integral));
+	printf("> CLAMP INTEGRAL: range(%f) = %f\n", pid.clamp, integral);
     
     // derivative update
     derivative = error - prev_error;
+	printf("> UPDATE DERIV: error(%f) - prev_error(%f\n", error, prev_error);
 
     float real_error = error;
     float real_integral = integral;
     float real_derivative = derivative;
 
-    // scale integral on small error
-    real_integral *= (1 - std::min(1.0f, std::abs(error) / pid.small_error));
-    // scale derivative on large error
-    real_derivative *= (1 - std::min(1.0f, std::abs(error) / pid.large_error));
+    // // scale integral on small error
+	// printf("integral mult %f\n", (1 - std::min(1.0f, std::abs(error) / pid.small_error)));
+    // real_integral *= (1 - std::min(1.0f, std::abs(error) / pid.small_error));
+    // // scale derivative on large error
+    // printf("derivitave mult %f\n",  (1 - std::min(1.0f, std::abs(error) / pid.large_error)));
+	// real_derivative *= (1 - std::min(1.0f, std::abs(error) / pid.large_error));
+
+	printf("err %f, int %f, der %f\n", real_error, real_integral, real_derivative);
 
     // calculate power
     float calc_power = real_error * pid.kp + real_integral * pid.ki + real_derivative * pid.kd;
+	printf("> POWER CALC: %f\n", calc_power);
     // constrain power to slew
     calc_power = std::min(prev_output + pid.slew, std::max(prev_output - pid.slew, calc_power));
-    // constrain power to min/max speed
-    calc_power = std::min(max_speed, std::max(min_speed, calc_power));
+    printf("> SLEW CALC: %f\n", calc_power);
+	// constrain power to min/max speed
+    calc_power = std::min(max_speed, std::max(-max_speed, calc_power));
+	printf("> MAX SPEED CALC: %f\n", calc_power);
 
-    // set arm_pos_output power
-    arm_pos_output.store(calc_power);
+    // set output power
+    output.store(calc_power);
+	printf("> OUTPUT: %f\n", calc_power);
 }
 
 
@@ -415,7 +442,7 @@ void get_robot_position() {
 	x_pos.fetch_add(std::cos(heading * M_PI / 180) * (dist.load() - prev_dist.load()));
 	y_pos.fetch_add(std::sin(heading * M_PI / 180) * (dist.load() - prev_dist.load()));
 
-	heading.store(noramlize_deg(imu.get_heading()));
+	heading.store(normalize_deg(imu.get_heading()));
 
 	arm_pos.store(arm.get_position());
 }
@@ -469,7 +496,14 @@ void competition_initialize() {
 
 bool auton_ran = false;
 
-Pose target_pos (0, 0, 0);
+int auton_cycle_count = 0;
+
+Pose target_pose (0, 0, 0);
+
+float deg_to_point(float x, float z) {
+	float deg = normalize_deg((std::atan2(x, z) * 180 / M_PI));
+	return deg;
+}
 
 void autonomous() {
 	if (auton_ran) return;
@@ -488,22 +522,26 @@ void autonomous() {
 			target_heading,
 			angular_output,
 			angular_pid,
-			0, // min speed
 			127, // max speed
+			0, // min speed
 			120000, // life
 			deg_dif
 	);
-
+	auto error_mod = [](float target, float current) {
+		float error = target - current;
+		return error;
+	};
 	std::atomic<float> target_dist (0);
-	std::atomic<float> lateral_output;
+	std::atomic<float> lateral_output (0);
 	PIDProcess lateral_pid_process (
 			dist,
 			target_dist,
 			lateral_output,
 			lateral_pid,
-			0, // min speed
 			127, // max speed
-			120000 // life
+			0, // min speed
+			120000, // life
+			error_mod
 	);
 
 	std::atomic<float> target_arm_pos (0);
@@ -513,14 +551,31 @@ void autonomous() {
 			target_arm_pos,
 			arm_pos_output,
 			arm_pid,
-			0, // min speed
 			127, // max speed
-			120000 // life
+			0, // min speed
+			120000, // life
+			error_mod
 	);
 
 	pros::Task auton_task{[&] {
 		while (true) {
-			
+			int start = pros::millis();
+			// ++auton_cycle_count;
+
+			// float x_dif = target_pose.x - robot_pose.x;
+			// float y_dif = target_pose.y - robot_pose.y;
+
+			// float dist_to_target = std::sqrt(x_dif * x_dif + y_dif * y_dif);
+			// float deg_to_target = normalize_deg(deg_to_point(x_dif, y_dif));
+
+			// float deg_err = deg_dif(deg_to_target, robot_pose.h);
+			// bool fwd = (std::abs(deg_err) <= 90);
+
+			// dist_to_target *= (1 - ((int) (deg_err) % 90) / 90);
+			// if (!fwd) dist_to_target *= -1;
+
+			// target_heading.store(deg_to_target);
+			// target_dist.store(dist.load() + dist_to_target);
 
 			// pid
 
@@ -537,6 +592,12 @@ void autonomous() {
 			wait(PROCESS_DELAY);
 		}
 	}};
+	printf("e");
+	target_heading.store(90);
+
+	wait(10000);
+
+	auton_task.remove();
 }
 
 
@@ -553,7 +614,6 @@ void opcontrol() {
 	// dampens the error when moving downward to prevent dropping the arm
 	auto error_mod = [](float target, float current) {
 		float error = target - current;
-		if (error < 0) error *= ARM_DOWN_SPEED_MULTI;
 		return error;
 	};
 	PIDProcess arm_pid_process (
@@ -566,10 +626,6 @@ void opcontrol() {
 			1200000, // 20 min time cause max said so
 			error_mod
 	);
-
-	pros::Task opcontrol_task([&] {
-		pid_handle_process(arm_pid_process);
-	});
 
 	int intake_brake_timer = 0;
 
@@ -607,21 +663,32 @@ void opcontrol() {
 		else if (master.get_digital(MOGO_OFF_BUTTON))
 			mogo.set_value(false);
 
+		printf("CYCLE\n");
 		// arm
-		if (master.get_digital(ARM_UP_BUTTON))
+		if (master.get_digital(ARM_UP_BUTTON)) {
+			printf("\tarm up\n");
 			arm_target_pos += ARM_SPEED;
-		else if (master.get_digital(ARM_DOWN_BUTTON))
+		}
+		else if (master.get_digital(ARM_DOWN_BUTTON)) {
+			printf("\tarm down\n");
 			arm_target_pos -= ARM_SPEED;
+		}
+		printf("\tarm tp %f\n", arm_target_pos.load());
 		// arm limiters
 		if (arm_target_pos.load() < ARM_BOTTOM_LIMIT) arm_target_pos.store(ARM_BOTTOM_LIMIT);
 		if (arm_target_pos.load() > ARM_TOP_LIMIT) arm_target_pos.store(ARM_TOP_LIMIT);
+		printf("\tarm lim %f\n", arm_target_pos.load());
 		// arm load macro
-		if (master.get_digital(ARM_LOAD_POS_BUTTON))
+		if (master.get_digital(ARM_LOAD_POS_BUTTON)) {
 			arm_target_pos = ARM_LOAD_POS;
-		// update current arm pos
-		arm_pos.store(arm.get_position());
+			printf("\tarm macro %f\n", arm_target_pos.load());
+		}
+		// run pid
+		pid_handle_process(arm_pid_process);
 		// move arm to PID arm_pos_output
 		arm.move(arm_pos_output.load());
+		printf("\tarm out %f\n", arm_pos_output.load());
+		printf("\tarm pos %f\n", arm_pos.load());
 
         pros::delay(PROCESS_DELAY);
     }
