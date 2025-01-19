@@ -207,8 +207,8 @@ constexpr float ARM_LOAD_POS = 215;
 constexpr float ARM_BOTTOM_LIMIT = 50;
 constexpr float ARM_TOP_LIMIT = 1900;
 
-constexpr DriveCurve lateral (3, 10, 3);
-constexpr DriveCurve angular (3, 10, 3);
+constexpr DriveCurve drive_lateral (3, 10, 3);
+constexpr DriveCurve drive_angular (3, 10, 3);
 
 
 
@@ -219,7 +219,7 @@ constexpr DriveCurve angular (3, 10, 3);
 struct PIDProcess {
     std::atomic<float>& value;
     std::atomic<float>& target;
-    std::atomic<float>& output;
+    std::atomic<float>& arm_pos_output;
     const PIDController& pid;
     float max_speed;
     float min_speed;
@@ -232,27 +232,27 @@ struct PIDProcess {
     float integral = 0;
     float derivative = 0;
 
-    PIDProcess(std::atomic<float>& value, std::atomic<float>& target, std::atomic<float>& output,
+    PIDProcess(std::atomic<float>& value, std::atomic<float>& target, std::atomic<float>& arm_pos_output,
                const PIDController& pid, float max_speed, float min_speed, uint32_t life,
                std::function<float(float, float)> normalize_err = [](float err, float maxErr) { return err / maxErr; })
-        : value(value), target(target), output(output), pid(pid), max_speed(max_speed),
+        : value(value), target(target), arm_pos_output(arm_pos_output), pid(pid), max_speed(max_speed),
           min_speed(min_speed), life(life), normalize_err(normalize_err) {}
 
     auto operator()() {
-        return std::tie(value, target, output, pid, min_speed, max_speed, life, normalize_err,
+        return std::tie(value, target, arm_pos_output, pid, min_speed, max_speed, life, normalize_err,
                         prev_output, prev_error, error, integral, derivative);
     }
 };
 
 
 void pid_handle_process(PIDProcess& process) {
-    auto [value, target, output, pid, min_speed, max_speed, life, normalize_err,
+    auto [value, target, arm_pos_output, pid, min_speed, max_speed, life, normalize_err,
           prev_output, prev_error, error, integral, derivative] = process();
 
     if (life <= 0) return;
     life -= 1;
 
-    prev_output = output.load();
+    prev_output = arm_pos_output.load();
     prev_error = error;
 
     // error update
@@ -290,8 +290,8 @@ void pid_handle_process(PIDProcess& process) {
     // constrain power to min/max speed
     calc_power = std::min(max_speed, std::max(min_speed, calc_power));
 
-    // set output power
-    output.store(calc_power);
+    // set arm_pos_output power
+    arm_pos_output.store(calc_power);
 }
 
 
@@ -315,9 +315,9 @@ float drivecurve_calc_power(int value, int other_value, DriveCurve curve, int ra
 	float adj = 127 / std::pow(127, curve.expo_curve);
 	float expo = std::pow(std::abs(value), curve.expo_curve);
 
-	float output = (float) (adj * expo);
+	float arm_pos_output = (float) (adj * expo);
 	
-	return sign_mult * std::max(curve.min_out, output);
+	return sign_mult * std::max(curve.min_out, arm_pos_output);
 }
 
 
@@ -531,4 +531,92 @@ void autonomous() {
 			wait(PROCESS_DELAY);
 		}
 	}};
+}
+
+
+
+/*****************************************************************************/
+/*                                  DRIVING                                  */
+/*****************************************************************************/
+
+void opcontrol() {
+	if (FORCE_AUTON) autonomous();
+
+	std::atomic<float> arm_target_pos = 0;
+	std::atomic<float> arm_pos_output (0);
+	// dampens the error when moving downward to prevent dropping the arm
+	auto error_mod = [](float target, float current) {
+		float error = target - current;
+		if (error < 0) error *= ARM_DOWN_SPEED_MULTI;
+		return error;
+	};
+	PIDProcess arm_pid_process (
+			arm_pos,
+			arm_target_pos,
+			arm_pos_output,
+			arm_pid,
+			127,
+			0,
+			1200000, // 20 min time cause max said so
+			error_mod
+	);
+
+	pros::Task opcontrol_task([&] {
+		pid_handle_process(arm_pid_process);
+	});
+
+	int intake_brake_timer = 0;
+
+    while (true) {
+		// driving
+        int drive_value = master.get_analog(DRIVE_JOYSTICK);
+        int turn_value = master.get_analog(TURN_JOYSTICK);
+
+		float drive_power = drivecurve_calc_power(
+				drive_value, turn_value, drive_lateral, DRIVE_RATIO, TURN_RATIO);
+		float turn_power = drivecurve_calc_power(
+				turn_value, drive_value, drive_angular, TURN_RATIO, DRIVE_RATIO);
+
+		dt_left_motors.move(drive_power + turn_power);
+		dt_right_motors.move(drive_power - turn_power);
+
+		// intake
+		if (master.get_digital(EJECT_RING_BUTTON) && intake_brake_timer <= 0) {
+			intake_brake_timer = EJECT_BRAKE_CYCLES;
+		}
+		if (intake_brake_timer > 0) {
+			intake.brake();
+			--intake_brake_timer;
+		} else {
+			if (master.get_digital(INTAKE_FWD_BUTTON))
+				intake.move(INTAKE_SPEED);
+			else if (master.get_digital(INTAKE_REV_BUTTON))
+				intake.move(-INTAKE_SPEED);
+			else intake.brake();
+		}
+		
+		// mogo
+		if (master.get_digital(MOGO_ON_BUTTON))
+			mogo.set_value(true);
+		else if (master.get_digital(MOGO_OFF_BUTTON))
+			mogo.set_value(false);
+
+		// arm
+		if (master.get_digital(ARM_UP_BUTTON))
+			arm_target_pos += ARM_SPEED;
+		else if (master.get_digital(ARM_DOWN_BUTTON))
+			arm_target_pos -= ARM_SPEED;
+		// arm limiters
+		if (arm_target_pos.load() < ARM_BOTTOM_LIMIT) arm_target_pos.store(ARM_BOTTOM_LIMIT);
+		if (arm_target_pos.load() > ARM_TOP_LIMIT) arm_target_pos.store(ARM_TOP_LIMIT);
+		// arm load macro
+		if (master.get_digital(ARM_LOAD_POS_BUTTON))
+			arm_target_pos = ARM_LOAD_POS;
+		// update current arm pos
+		arm_pos.store(arm.get_position());
+		// move arm to PID arm_pos_output
+		arm.move(arm_pos_output.load());
+
+        pros::delay(PROCESS_DELAY);
+    }
 }
