@@ -51,14 +51,14 @@ float normalize_deg(float degree) {
     return normalized;
 }
 
-float deg_dif(float angle1, float angle2) {
-    float diff = angle1 - angle2;
+float deg_dif(float current, float target) {
+    float diff = current - target;
 
     diff = std::fmod(diff + 180, 360);
     if (diff < 0) diff += 360;
     diff -= 180;
 
-    return normalize_deg(std::abs(diff));
+    return diff;
 }
 
 
@@ -148,7 +148,7 @@ constexpr pros::digi_button ARM_LOAD_POS_BUTTON = pros::CTRL_DIGI_UP;
 
 // PID
 
-constexpr PIDController lateral_pid (
+PIDController lateral_pid (
 		0.045, // kp
 		0.003, // ki
 		0.035, // kd
@@ -160,7 +160,7 @@ constexpr PIDController lateral_pid (
 		500 // large error
 );
 
-constexpr PIDController angular_pid (
+PIDController angular_pid (
 		0.8, // kp
 		0.1, // ki
 		1, // kd
@@ -172,7 +172,7 @@ constexpr PIDController angular_pid (
 		500 // large error
 );
 
-constexpr PIDController arm_pid (
+PIDController arm_pid (
 		0.6, // kp
 		0.02, // ki
 		0, // kd
@@ -186,7 +186,7 @@ constexpr PIDController arm_pid (
 
 // AUTON
 
-constexpr bool FORCE_AUTON = false; // if auton was did not run, try again at start of op control
+constexpr bool FORCE_AUTON = false; // if auton was not run, try again at start of op control
 
 constexpr float DIST_MULTI = 35.5;
 
@@ -217,77 +217,81 @@ constexpr DriveCurve angular (3, 10, 3);
 /*****************************************************************************/
 
 struct PIDProcess {
-	std::atomic<float>* value;
-	std::atomic<float>* target;
-	std::atomic<float>* output;
-	const PIDController* pid;
-	float max_speed;
-	float min_speed;
-	int32_t life;
-	std::function<float(float, float)> normalize_err;
+    std::atomic<float>& value;
+    std::atomic<float>& target;
+    std::atomic<float>& output;
+    const PIDController& pid;
+    float max_speed;
+    float min_speed;
+    uint32_t life;
+    std::function<float(float, float)> normalize_err;
 
-	float prev_output = 0;
-	float prev_error = 0;
-	float error = 0;
-	float integral = 0;
-	float derivative = 0;
+    float prev_output = 0;
+    float prev_error = 0;
+    float error = 0;
+    float integral = 0;
+    float derivative = 0;
 
-	PIDProcess(const std::function<float(float, float)> normalize_err = nullptr)
-			: value(value), target(target), output(output), pid(pid), min_speed(min_speed), max_speed(max_speed), life(life), normalize_err(normalize_err) {};
+    PIDProcess(std::atomic<float>& value, std::atomic<float>& target, std::atomic<float>& output,
+               const PIDController& pid, float max_speed, float min_speed, uint32_t life,
+               std::function<float(float, float)> normalize_err = [](float err, float maxErr) { return err / maxErr; })
+        : value(value), target(target), output(output), pid(pid), max_speed(max_speed),
+          min_speed(min_speed), life(life), normalize_err(normalize_err) {}
 
-	auto operator()() {
+    auto operator()() {
         return std::tie(value, target, output, pid, min_speed, max_speed, life, normalize_err,
-				prev_output, prev_error, error, integral, derivative);
+                        prev_output, prev_error, error, integral, derivative);
     }
 };
 
+
 void pid_handle_process(PIDProcess& process) {
-	auto [value, target, output, pid, min_speed, max_speed, life, normalize_err,
-			prev_output, prev_error, error, integral, derivative] = process();
+    auto [value, target, output, pid, min_speed, max_speed, life, normalize_err,
+          prev_output, prev_error, error, integral, derivative] = process();
 
-	if (life <= 0) return;
-	life -= 1;
+    if (life <= 0) return;
+    life -= 1;
 
-	prev_output = output->load();
-	prev_error = error;
+    prev_output = output.load();
+    prev_error = error;
 
-	// error update
-	error = target->load() - value->load();
-	// normalize error if applicable
-	if (normalize_err) error = normalize_err(target->load(), value->load());
+    // error update
+    error = target.load() - value.load();
+    // normalize error if applicable
+    if (normalize_err) error = normalize_err(target.load(), value.load());
 
-	// reset integral if we crossed target
-	if (sgn(prev_error) != sgn(error)) integral = 0;
+    // reset integral if we crossed target
+    if (sgn(prev_error) != sgn(error)) integral = 0;
 
-	// update integral if error in windup range
-	if (std::abs(error) <= pid->wind) integral += error;
-	// else decay integral
-	else integral *= pid->decay;
+    // update integral if error in windup range
+    if (std::abs(error) <= pid.wind) integral += error;
+    // else decay integral
+    else integral *= pid.decay;
 
-	// clamp integral
-	integral = std::min(pid->clamp, std::max(-pid->clamp, integral));
-	
-	// derivative update
-	derivative = error - prev_error;
+    // clamp integral
+    integral = std::min(pid.clamp, std::max(-pid.clamp, integral));
+    
+    // derivative update
+    derivative = error - prev_error;
 
-	float real_error = error;
-	float real_integral = integral;
-	float real_derivative = derivative;
+    float real_error = error;
+    float real_integral = integral;
+    float real_derivative = derivative;
 
-	// scale integral on small error
-	real_integral *= (1 - std::min(1.0f, std::abs(error) / pid->small_error));
-	// scale derivative on large error
-	real_derivative *= (1 - std::min(1.0f, std::abs(error) / pid->large_error));
+    // scale integral on small error
+    real_integral *= (1 - std::min(1.0f, std::abs(error) / pid.small_error));
+    // scale derivative on large error
+    real_derivative *= (1 - std::min(1.0f, std::abs(error) / pid.large_error));
 
-	// calulate power
-	float calc_power = real_error * pid->kp + integral * pid->ki + derivative * pid->kd;
-	// constrain power to slew
-	calc_power = std::min(prev_output + pid->slew, std::max(prev_output - pid->slew, calc_power));
-	// contrain power to min max speed
-	calc_power = std::min(max_speed, std::max(min_speed, calc_power));
+    // calculate power
+    float calc_power = real_error * pid.kp + real_integral * pid.ki + real_derivative * pid.kd;
+    // constrain power to slew
+    calc_power = std::min(prev_output + pid.slew, std::max(prev_output - pid.slew, calc_power));
+    // constrain power to min/max speed
+    calc_power = std::min(max_speed, std::max(min_speed, calc_power));
 
-	// set output power
-	output->store(calc_power);
+    // set output power
+    output.store(calc_power);
 }
 
 
@@ -393,7 +397,8 @@ void solve_imu_bias(int32_t life) {
 Pose robot_pose (0, 0, 0);
 std::atomic<float> dist (0);
 std::atomic<float> prev_dist(0);
-float heading_adjust = 0;
+
+std::atomic<float> arm_pos(0);
 
 int left_motors_prev_pos = 0;
 int right_motors_prev_pos = 0;
@@ -403,31 +408,16 @@ void get_robot_position() {
 
 	prev_dist.store(dist.load());
 
-	dist.fetch_add(((dt_left_motors.get_position() - left_motors_prev_pos) + (dt_right_motors.get_position() - right_motors_prev_pos)) / 2.0f);
+	dist.fetch_add(((dt_left_motors.get_position() - left_motors_prev_pos) + (dt_right_motors.get_position() - right_motors_prev_pos)) / 2.0f / DIST_MULTI);
 	left_motors_prev_pos = dt_left_motors.get_position();
 	right_motors_prev_pos = dt_right_motors.get_position();
 
 	x_pos.fetch_add(std::cos(heading * M_PI / 180) * (dist.load() - prev_dist.load()));
 	y_pos.fetch_add(std::sin(heading * M_PI / 180) * (dist.load() - prev_dist.load()));
 
-	heading_adjust += imu_bias_h;
 	heading.store(imu.get_heading());
-}
 
-
-
-/*****************************************************************************/
-/*                                  GLOBAL                                   */
-/*****************************************************************************/
-
-std::vector<std::function> tasks;
-
-void run_tasks() {
-	while (true) {
-		for (std::function task : tasks) {
-			task();
-		}
-	}
+	arm_pos.store(arm.get_position());
 }
 
 
@@ -487,5 +477,58 @@ void autonomous() {
 	dt_left_motors.tare_position_all();
 	dt_right_motors.tare_position_all();
 
-	
+	auto [x_pos, y_pos, heading] = robot_pose();
+
+	std::atomic<float> target_heading (0);
+	std::atomic<float> angular_output;
+	PIDProcess angular_pid_process (
+			heading,
+			target_heading,
+			angular_output,
+			angular_pid,
+			0, // min speed
+			127, // max speed
+			120000, // life
+			deg_dif
+	);
+
+	std::atomic<float> target_dist (0);
+	std::atomic<float> lateral_output;
+	PIDProcess lateral_pid_process (
+			dist,
+			target_dist,
+			lateral_output,
+			lateral_pid,
+			0, // min speed
+			127, // max speed
+			120000 // life
+	);
+
+	std::atomic<float> target_arm_pos (0);
+	std::atomic<float> arm_pos_output;
+	PIDProcess arm_pid_process (
+			arm_pos,
+			target_arm_pos,
+			arm_pos_output,
+			arm_pid,
+			0, // min speed
+			127, // max speed
+			120000 // life
+	);
+
+	pros::Task auton_task{[&] {
+		while (true) {
+			pid_handle_process(angular_pid_process);
+			pid_handle_process(lateral_pid_process);
+
+			dt_left_motors.move(angular_output.load() + lateral_output.load());
+			dt_right_motors.move(lateral_output.load() - angular_output.load());
+
+			pid_handle_process(arm_pid_process);
+
+			arm.move(arm_pos_output.load());
+
+			wait(PROCESS_DELAY);
+		}
+	}};
 }
