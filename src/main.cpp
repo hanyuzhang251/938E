@@ -188,8 +188,6 @@ PIDController arm_pid (
 
 constexpr bool FORCE_AUTON = false; // if auton was not run, try again at start of op control
 
-constexpr float NO_HEAD = 3704885;
-
 constexpr float DIST_MULTI = 35.5;
 
 // DRIVE
@@ -417,7 +415,7 @@ void get_robot_position() {
 	x_pos.fetch_add(std::cos(heading * M_PI / 180) * (dist.load() - prev_dist.load()));
 	y_pos.fetch_add(std::sin(heading * M_PI / 180) * (dist.load() - prev_dist.load()));
 
-	heading.store(imu.get_heading());
+	heading.store(noramlize_deg(imu.get_heading()));
 
 	arm_pos.store(arm.get_position());
 }
@@ -471,7 +469,7 @@ void competition_initialize() {
 
 bool auton_ran = false;
 
-Pose target_pos (0, 0, NO_HEAD);
+Pose target_pos (0, 0, 0);
 
 void autonomous() {
 	if (auton_ran) return;
@@ -522,6 +520,10 @@ void autonomous() {
 
 	pros::Task auton_task{[&] {
 		while (true) {
+			
+
+			// pid
+
 			pid_handle_process(angular_pid_process);
 			pid_handle_process(lateral_pid_process);
 
