@@ -149,12 +149,12 @@ constexpr pros::digi_button ARM_LOAD_POS_BUTTON = pros::CTRL_DIGI_UP;
 // PID
 
 PIDController lateral_pid (
-		4, // kp
-		0, // ki
-		0, // kd
-		0, // wind
+		5, // kp
+		0.1, // ki
+		5, // kd
+		6, // wind
 		999, // clamp
-		0.9, // decay
+		0, // decay
 		999, // slew
 		0, // small error
 		0 // large error
@@ -162,9 +162,9 @@ PIDController lateral_pid (
 
 PIDController angular_pid (
 		2, // kp
-		1, // ki
-		0, // kd
-		0, // wind
+		0.01, // ki
+		10, // kd
+		30, // wind
 		999, // clamp
 		0, // decay
 		999, // slew
@@ -593,7 +593,7 @@ void autonomous() {
 		}
 	}};
 	printf("e");
-	target_heading.store(90);
+	target_dist.store(24);
 
 	wait(10000);
 
