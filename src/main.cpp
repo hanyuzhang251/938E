@@ -188,6 +188,8 @@ PIDController arm_pid (
 
 constexpr bool FORCE_AUTON = false; // if auton was not run, try again at start of op control
 
+constexpr float NO_HEAD = 3704885;
+
 constexpr float DIST_MULTI = 35.5;
 
 // DRIVE
@@ -468,6 +470,8 @@ void competition_initialize() {
 /*****************************************************************************/
 
 bool auton_ran = false;
+
+Pose target_pos (0, 0, NO_HEAD);
 
 void autonomous() {
 	if (auton_ran) return;
