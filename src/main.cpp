@@ -151,19 +151,19 @@ constexpr pros::digi_button ARM_LOAD_POS_BUTTON = pros::CTRL_DIGI_UP;
 PIDController lateral_pid (
 		5, // kp
 		0.1, // ki
-		5, // kd
-		6, // wind
+		2, // kd
+		5, // wind
 		999, // clamp
 		0, // decay
 		999, // slew
-		0, // small error
-		0 // large error
+		1, // small error
+		4 // large error
 );
 
 PIDController angular_pid (
 		2, // kp
 		0.01, // ki
-		10, // kd
+		12, // kd
 		30, // wind
 		999, // clamp
 		0, // decay
@@ -297,7 +297,7 @@ void pid_handle_process(PIDProcess& process) {
     float real_integral = integral;
     float real_derivative = derivative;
 
-    // // scale integral on small error
+    // scale integral on small error
 	// printf("integral mult %f\n", (1 - std::min(1.0f, std::abs(error) / pid.small_error)));
     // real_integral *= (1 - std::min(1.0f, std::abs(error) / pid.small_error));
     // // scale derivative on large error
@@ -592,9 +592,23 @@ void autonomous() {
 			wait(PROCESS_DELAY);
 		}
 	}};
-	printf("e");
-	target_dist.store(24);
 
+	target_dist.store(16);
+	
+	// intake.move(INTAKE_SPEED);
+	// wait(500);
+	// intake.brake();
+
+	// target_dist.store(16);
+	// wait(900);
+
+	// target_heading.store(-90);
+	// wait(900);
+
+	// mogo.set_value(true);
+	// wait(250);
+
+	// target_dist.fetch_add(-17);
 	wait(10000);
 
 	auton_task.remove();
