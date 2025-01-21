@@ -150,14 +150,14 @@ constexpr pros::digi_button ARM_LOAD_POS_BUTTON = pros::CTRL_DIGI_UP;
 
 PIDController lateral_pid (
 		5, // kp
-		0.1, // ki
-		2, // kd
+		0.7, // ki
+		80, // kd
 		5, // wind
 		999, // clamp
 		0, // decay
 		999, // slew
-		1, // small error
-		4 // large error
+		5, // small error
+		12 // large error
 );
 
 PIDController angular_pid (
@@ -298,11 +298,11 @@ void pid_handle_process(PIDProcess& process) {
     float real_derivative = derivative;
 
     // scale integral on small error
-	// printf("integral mult %f\n", (1 - std::min(1.0f, std::abs(error) / pid.small_error)));
-    // real_integral *= (1 - std::min(1.0f, std::abs(error) / pid.small_error));
-    // // scale derivative on large error
-    // printf("derivitave mult %f\n",  (1 - std::min(1.0f, std::abs(error) / pid.large_error)));
-	// real_derivative *= (1 - std::min(1.0f, std::abs(error) / pid.large_error));
+	printf("integral mult %f\n", (std::min(1.0f, std::abs(error) / pid.small_error)));
+    real_integral *= (std::min(1.0f, std::abs(error) / pid.small_error));
+    // scale derivative on large error
+    printf("derivitave mult %f\n",  (1 - std::min(1.0f, std::abs(error) / pid.large_error)));
+	real_derivative *= (1 - std::min(1.0f, std::abs(error) / pid.large_error));
 
 	printf("err %f, int %f, der %f\n", real_error, real_integral, real_derivative);
 
@@ -579,13 +579,13 @@ void autonomous() {
 
 			// pid
 
-			pid_handle_process(angular_pid_process);
+			// pid_handle_process(angular_pid_process);
 			pid_handle_process(lateral_pid_process);
 
 			dt_left_motors.move(angular_output.load() + lateral_output.load());
 			dt_right_motors.move(lateral_output.load() - angular_output.load());
 
-			pid_handle_process(arm_pid_process);
+			// pid_handle_process(arm_pid_process);
 
 			arm.move(arm_pos_output.load());
 
@@ -593,7 +593,7 @@ void autonomous() {
 		}
 	}};
 
-	target_dist.store(16);
+	target_dist.store(24);
 	
 	// intake.move(INTAKE_SPEED);
 	// wait(500);
