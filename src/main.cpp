@@ -195,6 +195,8 @@ constexpr float DIST_MULTI = 35.5;
 constexpr int DRIVE_RATIO = 1;
 constexpr int TURN_RATIO = 1;
 
+constexpr float DRVE_SLEW = 20;
+
 constexpr bool SPEED_COMP = false;
 
 constexpr int INTAKE_SPEED = 127;
@@ -684,6 +686,8 @@ void autonomous() {
 /*                                  DRIVING                                  */
 /*****************************************************************************/
 
+float prev_drive_power = 0;
+
 void opcontrol() {
 	if (FORCE_AUTON) autonomous();
 
@@ -714,11 +718,15 @@ void opcontrol() {
 
 		float drive_power = drivecurve_calc_power(
 				drive_value, turn_value, drive_lateral, DRIVE_RATIO, TURN_RATIO);
+		drive_power = std::min(prev_drive_power + drive_slew, std::max(prev_drive_power - drive_slew, driver_power));
+
 		float turn_power = drivecurve_calc_power(
 				turn_value, drive_value, drive_angular, TURN_RATIO, DRIVE_RATIO);
 
 		dt_left_motors.move(drive_power + turn_power);
 		dt_right_motors.move(drive_power - turn_power);
+
+		prev_drive_power = drive_power;
 
 		// intake
 		if (master.get_digital(EJECT_RING_BUTTON) && intake_brake_timer <= 0) {
