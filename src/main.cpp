@@ -195,7 +195,7 @@ constexpr float DIST_MULTI = 35.5;
 constexpr int DRIVE_RATIO = 1;
 constexpr int TURN_RATIO = 1;
 
-constexpr float DRVE_SLEW = 20;
+constexpr float DRIVE_SLEW = 20;
 
 constexpr bool SPEED_COMP = false;
 
@@ -617,28 +617,33 @@ void autonomous() {
 	wait(680);
 
 	intake.move(INTAKE_SPEED);
-	lateral_pid_process.max_speed = 90;
-	target_dist.fetch_add(84);
+	target_dist.fetch_add(90);
 	wait(400);
 
 	target_heading.store(45);
-	wait(700);
+	wait(600);
 
 	target_heading.store(5);
-	wait(1100);
 
-	lateral_pid_process.max_speed = 127;
+	for (int i = 0; i < 10; ++i) {
+		lateral_pid_process.max_speed = 120 - i * 10;
+		wait(50);
+	}
+
+	wait(300);
+
 	target_arm_pos.store(ARM_LOAD_POS);
 	wait(600);
 
-	target_dist.fetch_add(-20.6);
+	lateral_pid_process.max_speed = 127;
+	target_dist.fetch_add(-30.5);
 	wait(1300);
 
 	target_heading.store(90);
 	wait(680);
 
 	intake.brake();
-	target_dist.fetch_add(17);
+	target_dist.fetch_add(17.5);
 	wait(300);
 
 	target_arm_pos.store(ARM_TOP_LIMIT);
@@ -655,27 +660,57 @@ void autonomous() {
 	target_heading.store(180);
 	wait(1000);
 
-	lateral_pid_process.max_speed = 90;
-	target_dist.fetch_add(68);
-	wait(2000);
-
 	lateral_pid_process.max_speed = 127;
-	target_heading.store(50);
-	wait(680);
+	target_dist.fetch_add(70);
 
-	target_dist.fetch_add(12);
 	wait(800);
 
-	target_heading.store(-25);
+	for (int i = 0; i < 10; ++i) {
+		lateral_pid_process.max_speed = 120 - i * 10;
+		wait(50);
+	}
+
+	wait(250);
+
+	target_heading.store(90);
+	wait(500);
+
+	lateral_pid_process.max_speed = 127;
+	target_dist.fetch_add(20);
+	wait(750);
+
+	target_heading.store(0);
+	wait(250);
+
+	target_dist.fetch_add(-8);
+	wait(800);
+
+ 	mogo.set_value(false);
+	intake.brake();
+
+	target_dist.fetch_add(130);
+	target_heading.store(-6);
+	wait(1200);
+	
+	intake.move(INTAKE_SPEED);
+	
+	for (int i = 0; i < 10; ++i) {
+		lateral_pid_process.max_speed = 120 - i * 10;
+		wait(50);
+	}
+
+	intake.brake();
+
+	target_heading.store(100);
 	wait(680);
 
-	target_dist.store(-20);
-	wait(300);
-
-	target_dist.store(20);
-
 	mogo.set_value(false);
+
+	target_dist.store(-15);
+	wait(800);
 	
+	mogo.set_value(true);
+	wait(250);
 
 	auton_task.remove();
 }
@@ -718,7 +753,7 @@ void opcontrol() {
 
 		float drive_power = drivecurve_calc_power(
 				drive_value, turn_value, drive_lateral, DRIVE_RATIO, TURN_RATIO);
-		drive_power = std::min(prev_drive_power + drive_slew, std::max(prev_drive_power - drive_slew, driver_power));
+		drive_power = std::min(prev_drive_power + DRIVE_SLEW, std::max(prev_drive_power - DRIVE_SLEW, drive_power));
 
 		float turn_power = drivecurve_calc_power(
 				turn_value, drive_value, drive_angular, TURN_RATIO, DRIVE_RATIO);
