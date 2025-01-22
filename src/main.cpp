@@ -643,15 +643,17 @@ void autonomous() {
 	wait(680);
 
 	intake.brake();
-	target_dist.fetch_add(17.5);
+	target_dist.fetch_add(18);
 	wait(300);
 
-	target_arm_pos.store(ARM_TOP_LIMIT);
 	intake.move(-5);
-	wait(800);
+	wait(100);
+
+	target_arm_pos.store(ARM_TOP_LIMIT);
+	wait(600);
 	
 	intake.move(INTAKE_SPEED);
-	wait(300);
+	wait(400);
 
 	target_dist.fetch_add(-24);
 	target_arm_pos.store(ARM_BOTTOM_LIMIT);
@@ -676,21 +678,22 @@ void autonomous() {
 	wait(500);
 
 	lateral_pid_process.max_speed = 127;
-	target_dist.fetch_add(20);
-	wait(750);
+	target_dist.fetch_add(25);
+	wait(200);
 
 	target_heading.store(0);
-	wait(250);
+	wait(600);
 
-	target_dist.fetch_add(-8);
+	target_heading.store(-10);
+	target_dist.fetch_add(-15);
+	mogo.set_value(false);
 	wait(800);
 
- 	mogo.set_value(false);
 	intake.brake();
 
-	target_dist.fetch_add(130);
-	target_heading.store(-6);
-	wait(1200);
+	target_dist.fetch_add(115);
+	target_heading.store(-7);
+	wait(1250);
 	
 	intake.move(INTAKE_SPEED);
 	
@@ -700,17 +703,42 @@ void autonomous() {
 	}
 
 	intake.brake();
+	wait(250);
 
-	target_heading.store(100);
-	wait(680);
+	target_heading.store(110);
+	wait(800);
 
 	mogo.set_value(false);
-
-	target_dist.store(-15);
+	lateral_pid_process.max_speed = 127;
+	target_dist.fetch_add(-28);
 	wait(800);
-	
+
 	mogo.set_value(true);
 	wait(250);
+
+	target_heading.store(80);
+	wait(680);
+
+	target_dist.fetch_add(36);
+	wait(400);
+	
+	target_heading.store(90);
+
+	wait(1000);
+
+	// target_heading.store(100);
+	
+
+	// target_heading.store(100);
+	// wait(680);
+
+	// mogo.set_value(false);
+
+	// target_dist.store(-15);
+	// wait(800);
+	
+	// mogo.set_value(true);
+	// wait(250);
 
 	auton_task.remove();
 }
