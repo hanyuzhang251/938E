@@ -91,8 +91,9 @@ struct PIDController {
 	float clamp; // clamps the integral
 	float decay; // applied when needed to smoothly increase or decrease a value
     float slew; // maximum acceleration and decelleration
-	float small_error; // range of acceptable error give or take a bit
-	float large_error; // range of error for robot to start settling
+	float small_error; // error range describing almost to target
+	float large_error; // error range to start settling
+	float tolerance; // acceptable error
 };
 
 struct DriveCurve {
@@ -157,7 +158,8 @@ PIDController lateral_pid (
 		0, // decay
 		999, // slew
 		5, // small error
-		12 // large error
+		12, // large error
+		0.3 // tolerance
 );
 
 PIDController angular_pid (
@@ -169,7 +171,8 @@ PIDController angular_pid (
 		0, // decay
 		999, // slew
 		10, // small error
-		30 // large error
+		30, // large error
+		0.5 // tolerance
 );
 
 PIDController arm_pid (
@@ -181,7 +184,8 @@ PIDController arm_pid (
 		0.9, // decay
 		999, // slew
 		0, // small error
-		50 // large error
+		50, // large error
+		3 // tolerance
 );
 
 // AUTON
@@ -233,6 +237,11 @@ struct PIDProcess {
     float error = 0;
     float integral = 0;
     float derivative = 0;
+
+	float get_error() {
+		if (normalize_err) return normalize_err(target.load(), value.load());
+		else return target.load() - value.load();
+	}
 
     PIDProcess(std::atomic<float>& value, std::atomic<float>& target, std::atomic<float>& output,
                const PIDController& pid, float max_speed, float min_speed, uint32_t life,
@@ -505,6 +514,12 @@ Pose target_pose (0, 0, 0);
 float deg_to_point(float x, float z) {
 	float deg = normalize_deg((std::atan2(x, z) * 180 / M_PI));
 	return deg;
+}
+
+void wait_stable(PIDProcess pid_process) {
+	while (std::abs(pid_process.get_error()) > pid_process.pid.tolerance) {
+		wait(PROCESS_DELAY);
+	}
 }
 
 void autonomous() {
