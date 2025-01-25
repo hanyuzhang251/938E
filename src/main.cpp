@@ -622,7 +622,7 @@ void autonomous() {
 	intake.move(INTAKE_SPEED);
 	wait(800);
 
-	target_heaidng.store(-125);
+	target_heading.store(-125);
 	wait(800);
 
 	lateral_pid_process.pid.max_speed = 127;
