@@ -612,167 +612,34 @@ void autonomous() {
 		}
 	}};
 
-	// target_dist.store(24);
-	
-	intake.move(INTAKE_SPEED);
-	wait(500);
-	intake.brake();
-
-	target_dist.fetch_add(14);
-	wait(800);
-
-	target_heading.store(-90);
-	wait(680);
+	lateral_pid_process.pid.max_speed = 80;
+	target_dist.store(-85);
+	wait(1500);
 
 	mogo.set_value(true);
-	wait(250);
-
-	target_dist.fetch_add(-17);
-	wait(800);
-
-	target_heading.store(20);
-	wait(680);
-
-	intake.move(INTAKE_SPEED);
-	target_dist.fetch_add(90);
-	wait(400);
-
-	target_heading.store(45);
-	wait(600);
-
-	target_heading.store(5);
-
-	for (int i = 0; i < 10; ++i) {
-		lateral_pid_process.max_speed = 120 - i * 10;
-		wait(50);
-	}
-
-	wait(200);
-
-	target_arm_pos.store(ARM_LOAD_POS);
-	wait(700);
-
-	lateral_pid_process.max_speed = 127;
-	target_dist.fetch_add(-31.5);
-	wait(1300);
-
-	target_heading.store(90);
-	intake.brake();
-	wait(100);
-
-	intake.move(-5);
-	target_arm_pos.store(3 * ARM_LOAD_POS);
-
 	wait(500);
 
 	intake.move(INTAKE_SPEED);
-	target_dist.fetch_add(18);
-	wait(500);
-
-	target_arm_pos.store(ARM_TOP_LIMIT);
-	wait(700);
-
-	target_dist.fetch_add(-24);
-	target_arm_pos.store(ARM_BOTTOM_LIMIT);
-	wait(300);
-
-	target_heading.store(180);
-	wait(700);
-
-	lateral_pid_process.max_speed = 127;
-	target_dist.fetch_add(71);
-
 	wait(800);
 
-	for (int i = 0; i < 10; ++i) {
-		lateral_pid_process.max_speed = 120 - i * 10;
-		wait(50);
-	}
-
+	target_heaidng.store(-125);
 	wait(800);
 
-	target_heading.store(90);
-	wait(900);
-
-	lateral_pid_process.max_speed = 127;
-	target_dist.fetch_add(36);
-	wait(150);
-
-	target_heading.store(0);
-	wait(900);
-
-	target_dist.fetch_add(-15);
+	lateral_pid_process.pid.max_speed = 127;
+	target_dist.fetch_add(21.13);
 	wait(800);
 
-	intake.brake();
-	mogo.set_value(false);
+	target_heading.store(-105);
+	wait(800);
 
-	// target_heading.store(90);
-	// wait(500);
+	target_dist.fetch_add(24);
+	wait(800);
 
-	// lateral_pid_process.max_speed = 127;
-	// target_dist.fetch_add(25);
-	// wait(200);
+	target_heading.store(15);
+	wait(800);
 
-	// target_heading.store(0);
-	// wait(600);
-
-	// target_heading.store(-10);
-	// target_dist.fetch_add(-15);
-	// mogo.set_value(false);
-	// wait(800);
-
-	// intake.brake();
-
-	// target_dist.fetch_add(115);
-	// target_heading.store(-7);
-	// wait(1250);
-	
-	// intake.move(INTAKE_SPEED);
-	
-	// for (int i = 0; i < 10; ++i) {
-	// 	lateral_pid_process.max_speed = 120 - i * 10;
-	// 	wait(50);
-	// }
-
-	// intake.brake();
-	// wait(250);
-
-	// target_heading.store(110);
-	// wait(800);
-
-	// mogo.set_value(false);
-	// lateral_pid_process.max_speed = 127;
-	// target_dist.fetch_add(-28);
-	// wait(800);
-
-	// mogo.set_value(true);
-	// wait(250);
-
-	// target_heading.store(80);
-	// wait(680);
-
-	// target_dist.fetch_add(36);
-	// wait(400);
-	
-	// target_heading.store(90);
-
-
+	target_dist.fetch_add(21.13);
 	wait(1000);
-
-	// target_heading.store(100);
-	
-
-	// target_heading.store(100);
-	// wait(680);
-
-	// mogo.set_value(false);
-
-	// target_dist.store(-15);
-	// wait(800);
-	
-	// mogo.set_value(true);
-	// wait(250);
 
 	auton_task.remove();
 }
