@@ -622,6 +622,7 @@ void autonomous() {
 	intake.move(INTAKE_SPEED);
 	wait(800);
 
+	// negative
 	target_heading.store(-125);
 	wait(800);
 
