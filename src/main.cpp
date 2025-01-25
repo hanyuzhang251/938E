@@ -629,11 +629,8 @@ void autonomous() {
 	target_dist.fetch_add(26);
 	wait(1500);
 
-	target_heading.store(95);
-	wait(400);
-
 	target_heading.store(90);
-	wait(400);
+	wait(800);
 
 	target_dist.fetch_add(16);
 	wait(1200);
