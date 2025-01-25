@@ -624,11 +624,11 @@ void autonomous() {
 	target_heading.store(-90);
 	wait(680);
 
-	target_dist.fetch_add(-17);
-	wait(800);
-
 	mogo.set_value(true);
 	wait(250);
+
+	target_dist.fetch_add(-17);
+	wait(800);
 
 	target_heading.store(20);
 	wait(680);
@@ -695,16 +695,14 @@ void autonomous() {
 	wait(900);
 
 	lateral_pid_process.max_speed = 127;
-	target_dist.fetch_add(48);
+	target_dist.fetch_add(36);
 	wait(150);
 
 	target_heading.store(0);
 	wait(900);
 
-	target_dist.fetch_add(-23);
+	target_dist.fetch_add(-15);
 	wait(800);
-
-	wait(5000);
 
 	intake.brake();
 	mogo.set_value(false);
