@@ -1,7 +1,7 @@
 {
   "py/object": "pros.conductor.project.Project",
   "py/state": {
-    "project_name": "main",
+    "project_name": "red-aut",
     "target": "v5",
     "templates": {
       "LemLib": {
