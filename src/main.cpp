@@ -613,7 +613,7 @@ void autonomous() {
 	}};
 
 	lateral_pid_process.max_speed = 80;
-	target_dist.store(-32);
+	target_dist.store(-35);
 	wait(1500);
 
 	mogo.set_value(true);
@@ -626,20 +626,23 @@ void autonomous() {
 	wait(800);
 
 	lateral_pid_process.max_speed = 127;
-	target_dist.fetch_add(21.13);
+	target_dist.fetch_add(26);
+	wait(1500);
+
+	target_heading.store(95);
+	wait(400);
+
+	target_heading.store(90);
+	wait(400);
+
+	target_dist.fetch_add(16);
+	wait(1200);
+
+	target_heading.store(-28);
 	wait(800);
 
-	target_heading.store(105);
-	wait(800);
-
-	target_dist.fetch_add(10);
-	wait(800);
-
-	target_heading.store(-15);
-	wait(800);
-
-	target_dist.fetch_add(21.13);
-	wait(1000);
+	target_dist.fetch_add(39);
+	wait(3000);
 
 	auton_task.remove();
 }
