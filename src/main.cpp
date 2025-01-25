@@ -613,7 +613,7 @@ void autonomous() {
 	}};
 
 	lateral_pid_process.max_speed = 80;
-	target_dist.store(-29);
+	target_dist.store(-32);
 	wait(1500);
 
 	mogo.set_value(true);
