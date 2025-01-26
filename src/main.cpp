@@ -195,7 +195,7 @@ PIDController arm_pid (
 
 constexpr bool FORCE_AUTON = false; // if auton was not run, try again at start of op control
 
-constexpr float DIST_MULTI = 35.5;
+constexpr float DIST_MULTI = 29;
 
 // DRIVE
 
@@ -511,6 +511,8 @@ bool auton_ran = false;
 
 int auton_cycle_count = 0;
 
+bool lateral_movement = true;
+
 Pose target_pose (0, 0, 0);
 
 float deg_to_point(float x, float z) {
@@ -599,22 +601,29 @@ void autonomous() {
 			// pid
 
 			pid_handle_process(angular_pid_process);
-			pid_handle_process(lateral_pid_process);
+			if (lateral_movement) pid_handle_process(lateral_pid_process);
 
-			dt_left_motors.move(angular_output.load() + lateral_output.load());
-			dt_right_motors.move(lateral_output.load() - angular_output.load());
+			if (lateral_movement) dt_left_motors.move(angular_output.load() + lateral_output.load());
+			if (lateral_movement) dt_right_motors.move(lateral_output.load() - angular_output.load());
 
 			pid_handle_process(arm_pid_process);
 
 			arm.move(arm_pos_output.load());
+
+			printf("target_dist %f\n", target_dist.load());\
+			printf("dist %f\n", dist.load());
 
 			wait(PROCESS_DELAY);
 		}
 	}};
 
 	lateral_pid_process.max_speed = 80;
-	target_dist.store(-35);
-	wait(1500);
+	target_dist.store(-30);
+	wait(2000);
+
+	lateral_movement = false;
+	dt_left_motors.brake();
+	dt_right_motors.brake();
 
 	mogo.set_value(true);
 	wait(500);
@@ -622,23 +631,25 @@ void autonomous() {
 	intake.move(INTAKE_SPEED);
 	wait(800);
 
-	target_heading.store(125);
+	lateral_movement = true;
+
+	target_heading.store(130);
 	wait(800);
 
 	lateral_pid_process.max_speed = 127;
-	target_dist.fetch_add(26);
+	target_dist.fetch_add(35);
 	wait(1500);
 
 	target_heading.store(90);
 	wait(800);
 
-	target_dist.fetch_add(16);
+	target_dist.fetch_add(15);
 	wait(1200);
 
-	target_heading.store(-28);
+	target_heading.store(-27.5);
 	wait(800);
 
-	target_dist.fetch_add(39);
+	target_dist.fetch_add(27);
 	wait(3000);
 
 	auton_task.remove();
