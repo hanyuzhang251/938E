@@ -705,10 +705,10 @@ void autonomous() {
 	target_dist.fetch_add(36);
 	wait(150);
 
-	target_heading.store(-15);
+	target_heading.store(0);
 	wait(900);
 
-	target_dist.fetch_add(-16);
+	target_dist.fetch_add(-15);
 	wait(800);
 
 	intake.brake();
