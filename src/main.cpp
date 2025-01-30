@@ -654,7 +654,14 @@ void autonomous() {
 
 	lateral_pid_process.max_speed = 127;
 	target_dist.fetch_add(-31.5);
-	wait(1300);
+	wait(700);
+
+	for (int i = 0; i < 2; ++i) {
+		intake.brake();
+		wait(150);
+		intake.move(INTAKE_SPEED);
+		wait(150);
+	}
 
 	target_heading.store(90);
 	intake.brake();
