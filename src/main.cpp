@@ -689,19 +689,19 @@ void autonomous() {
 	lateral_pid_process.max_speed = 127;
 	target_dist.fetch_add(71);
 
-	wait(800);
+	wait(850);
 
 	for (int i = 0; i < 10; ++i) {
 		lateral_pid_process.max_speed = 120 - i * 10;
 		wait(50);
 	}
 
-	wait(800);
+	wait(900);
 
 	target_heading.store(90);
 	wait(900);
 
-	lateral_pid_process.max_speed = 127;
+	lateral_pid_process.max_speed = 100;
 	target_dist.fetch_add(36);
 	wait(150);
 
