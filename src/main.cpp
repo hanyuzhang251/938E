@@ -654,13 +654,13 @@ void autonomous() {
 
 	lateral_pid_process.max_speed = 127;
 	target_dist.fetch_add(-31.5);
-	wait(700);
+	wait(800);
 
 	for (int i = 0; i < 2; ++i) {
 		intake.brake();
-		wait(150);
+		wait(125);
 		intake.move(INTAKE_SPEED);
-		wait(150);
+		wait(125);
 	}
 
 	target_heading.store(90);
@@ -668,6 +668,7 @@ void autonomous() {
 	wait(100);
 
 	intake.move(-5);
+	arm_pid_process.max_speed = 80;
 	target_arm_pos.store(3 * ARM_LOAD_POS);
 
 	wait(500);
@@ -676,6 +677,7 @@ void autonomous() {
 	target_dist.fetch_add(18);
 	wait(500);
 
+	arm_pid_process.max_speed = 127;
 	target_arm_pos.store(ARM_TOP_LIMIT);
 	wait(700);
 
