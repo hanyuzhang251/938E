@@ -195,7 +195,7 @@ PIDController arm_pid (
 
 constexpr bool FORCE_AUTON = false; // if auton was not run, try again at start of op control
 
-constexpr float DIST_MULTI = 29;
+constexpr float DIST_MULTI = 35;
 
 // DRIVE
 
@@ -618,7 +618,7 @@ void autonomous() {
 	}};
 
 	lateral_pid_process.max_speed = 80;
-	target_dist.store(-30);
+	target_dist.store(-32);
 	wait(2000);
 
 	lateral_movement = false;
@@ -633,20 +633,20 @@ void autonomous() {
 
 	lateral_movement = true;
 
-	target_heading.store(140);
+	target_heading.store(-140);
 	wait(800);
 
 	lateral_pid_process.max_speed = 127;
 	target_dist.fetch_add(30.5);
 	wait(1500);
 
-	target_heading.store(90);
+	target_heading.store(-90);
 	wait(800);
 
 	target_dist.fetch_add(15);
 	wait(1200);
 
-	target_heading.store(-15);
+	target_heading.store(15);
 	wait(800);
 
 	target_dist.fetch_add(28);
