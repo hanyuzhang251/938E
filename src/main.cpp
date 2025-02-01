@@ -211,9 +211,9 @@ constexpr int EJECT_BRAKE_CYCLES = 16;
 
 constexpr float ARM_SPEED = 50;
 constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
-constexpr float ARM_LOAD_POS = 250;
+constexpr float ARM_LOAD_POS = 200;
 
-constexpr float ARM_BOTTOM_LIMIT = 20;
+constexpr float ARM_BOTTOM_LIMIT = 0;
 constexpr float ARM_TOP_LIMIT = 2000;
 
 constexpr DriveCurve drive_lateral (3, 10, 3);
@@ -707,10 +707,10 @@ void autonomous() {
 	target_dist.fetch_add(36);
 	wait(150);
 
-	target_heading.store(0);
+	target_heading.store(-8);
 	wait(900);
 
-	target_dist.fetch_add(-15);
+	target_dist.fetch_add(-18.5);
 	wait(800);
 
 	intake.brake();
