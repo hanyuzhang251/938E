@@ -622,7 +622,11 @@ void autonomous() {
 	wait(800);
 
 	target_heading.store(-90);
+<<<<<<< Updated upstream
 	wait(680);
+=======
+	wait(900);
+>>>>>>> Stashed changes
 
 	target_dist.fetch_add(-17);
 	wait(800);
