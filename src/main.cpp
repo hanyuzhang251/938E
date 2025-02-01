@@ -211,10 +211,10 @@ constexpr int EJECT_BRAKE_CYCLES = 16;
 
 constexpr float ARM_SPEED = 50;
 constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
-constexpr float ARM_LOAD_POS = 250;
+constexpr float ARM_LOAD_POS = 270;
 
 constexpr float ARM_BOTTOM_LIMIT = 20;
-constexpr float ARM_TOP_LIMIT = 2000;
+constexpr float ARM_TOP_LIMIT = 1950;
 
 constexpr DriveCurve drive_lateral (3, 10, 3);
 constexpr DriveCurve drive_angular (3, 10, 1);
@@ -633,11 +633,11 @@ void autonomous() {
 
 	lateral_movement = true;
 
-	target_heading.store(130);
+	target_heading.store(140);
 	wait(800);
 
 	lateral_pid_process.max_speed = 127;
-	target_dist.fetch_add(35);
+	target_dist.fetch_add(30.5);
 	wait(1500);
 
 	target_heading.store(90);
@@ -646,10 +646,10 @@ void autonomous() {
 	target_dist.fetch_add(15);
 	wait(1200);
 
-	target_heading.store(-27.5);
+	target_heading.store(-15);
 	wait(800);
 
-	target_dist.fetch_add(27);
+	target_dist.fetch_add(28);
 	wait(3000);
 
 	auton_task.remove();
