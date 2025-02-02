@@ -201,10 +201,10 @@ constexpr float DIST_MULTI = 35.5;
 
 bool intake_override = false;
 
-bool racism = true; // true = red bad
+bool racism = false; // true = red bad
 
 bool color_sort = true;
-constexpr int OUTTAKE_TICKS = 500;
+constexpr int OUTTAKE_TICKS = 800;
 
 constexpr float RED_HUE = 0;
 constexpr float BLUE_HUE = 210;
