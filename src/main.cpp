@@ -202,7 +202,7 @@ constexpr float DIST_MULTI = 35.5;
 constexpr int DRIVE_RATIO = 1;
 constexpr int TURN_RATIO = 1;
 
-constexpr float DRIVE_SLEW = 12;
+constexpr float DRIVE_SLEW = 127;
 
 constexpr bool SPEED_COMP = false;
 
@@ -435,6 +435,7 @@ void solve_imu_bias(int32_t life) {
 
 // robot position
 Pose robot_pose (0, 0, 0);
+Pose robot_ipose (0, 0, 0);
 std::atomic<float> dist (0);
 std::atomic<float> prev_dist(0);
 
@@ -455,7 +456,13 @@ void get_robot_position() {
 	x_pos.fetch_add(std::cos(heading * M_PI / 180) * (dist.load() - prev_dist.load()));
 	y_pos.fetch_add(std::sin(heading * M_PI / 180) * (dist.load() - prev_dist.load()));
 
+	auto [x_ipos, y_ipos, iheading] = robot_ipose();
+
+	x_ipos.fetch_add(imu.get_accel().x + imu_bias_x);
+	y_ipos.fetch_add(imu.get_accel().y + imu_bias_y);
+
 	heading.store(normalize_deg(imu.get_heading()));
+	iheading.store(normalize_deg(imu.get_heading()));
 
 	arm_pos.store(arm.get_position());
 }
@@ -478,13 +485,16 @@ void init() {
 
     pros::Task pos_tracking_task([&]() {
 		auto [x_pos, y_pos, heading] = robot_pose();
+		auto [x_ipos, y_ipos, iheading] = robot_ipose();
 
         while (true) {
 			get_robot_position();
 			
-            pros::lcd::print(0, "x_pos: %f", x_pos.load());
-            pros::lcd::print(1, "y_pos: %f", y_pos.load());
-            pros::lcd::print(3, "head: %f", heading.load());
+            pros::lcd::print(0, "x_dpos: %f", x_pos.load());
+			pros::lcd::print(1, "x_ipos: %f", x_ipos.load());
+            pros::lcd::print(2, "y_dpos: %f", y_pos.load());
+            pros::lcd::print(3, "y_ipos: %f", y_ipos.load());
+            pros::lcd::print(5, "head: %f", heading.load());
 
             pros::delay(PROCESS_DELAY);
         }
