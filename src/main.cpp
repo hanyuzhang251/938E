@@ -131,6 +131,8 @@ constexpr int ARM_PORT = 5;
 
 constexpr int IMU_PORT = 8;
 
+constexpr int OPTICAL_PORT = 6;
+
 // CONTROLS
 
 constexpr pros::anlg_button DRIVE_JOYSTICK = pros::CTRL_ANLG_LY;
@@ -196,6 +198,18 @@ PIDController arm_pid (
 constexpr bool FORCE_AUTON = false; // if auton was not run, try again at start of op control
 
 constexpr float DIST_MULTI = 35.5;
+
+bool intake_override = false;
+
+bool racism = true; // true = red bad
+
+bool color_sort = true;
+constexpr int OUTTAKE_TICKS = 500;
+
+constexpr float RED_HUE = 0;
+constexpr float BLUE_HUE = 210;
+
+constexpr float HUE_TOLERANCE = 15;
 
 // DRIVE
 
@@ -389,6 +403,8 @@ pros::Motor arm (ARM_PORT);
 
 pros::IMU imu (IMU_PORT);
 
+pros::Optical optical (OPTICAL_PORT);
+
 
 
 /*****************************************************************************/
@@ -491,14 +507,55 @@ void init() {
 			get_robot_position();
 			
             pros::lcd::print(0, "x_dpos: %f", x_pos.load());
-			pros::lcd::print(1, "x_ipos: %f", x_ipos.load());
-            pros::lcd::print(2, "y_dpos: %f", y_pos.load());
-            pros::lcd::print(3, "y_ipos: %f", y_ipos.load());
-            pros::lcd::print(5, "head: %f", heading.load());
+            pros::lcd::print(1, "y_dpos: %f", y_pos.load());
+            pros::lcd::print(2, "head: %f", heading.load());
+			pros::lcd::print(4, "hue: %f", optical.get_hue());
 
             pros::delay(PROCESS_DELAY);
         }
     });
+
+	pros::Task color_sort_task([&]() {
+		int outtake_ticks = 0;
+
+		while (true) {
+			pros::delay(PROCESS_DELAY);
+
+			if (!color_sort) continue;
+
+			float hue_target = racism ? RED_HUE : BLUE_HUE;
+			float hue_min = std::fmod(hue_target - HUE_TOLERANCE + 360, 360.0f);
+			float hue_max = std::fmod(hue_target + HUE_TOLERANCE, 360.0f);
+
+			bool outtake = false;
+
+			pros::lcd::print(5, "hue_min: %f,  hue_max: %f", hue_min, hue_max);
+
+			if (hue_min <= hue_max) {
+				// if it's normal, just check the ranges
+				outtake = hue_min <= optical.get_hue() && optical.get_hue() <= hue_max;
+				pros::lcd::print(6, "outtaking, normal range", hue_min, hue_max);
+			} else if (hue_min >= hue_max) {
+				// if the range goes around 0, say hue min is 330 while hue_max is 30,
+				// 0 and 360 are used as bounds.
+				outtake = optical.get_hue() <= hue_max || optical.get_hue() >= hue_min;
+				pros::lcd::print(6, "outtaking, scuffed range", hue_min, hue_max);
+			} else {
+				pros::lcd::print(6, "not outtaking", hue_min, hue_max);
+			}
+
+			if (outtake) outtake_ticks = OUTTAKE_TICKS / PROCESS_DELAY;
+
+			// expected that intake_override is followed appropriately
+			if (outtake_ticks > 0) {
+				intake_override = true;
+				intake.move(-INTAKE_SPEED);
+				--outtake_ticks;
+			} else {
+				intake_override = false;
+			}
+		}
+	});
 
 	init_done = true;
 }
@@ -845,18 +902,14 @@ void opcontrol() {
 		prev_drive_power = drive_power;
 
 		// intake
-		if (master.get_digital(EJECT_RING_BUTTON) && intake_brake_timer <= 0) {
-			intake_brake_timer = EJECT_BRAKE_CYCLES;
-		}
-		if (intake_brake_timer > 0) {
-			intake.brake();
-			--intake_brake_timer;
-		} else {
+		if (!intake_override) {
 			if (master.get_digital(INTAKE_FWD_BUTTON))
 				intake.move(INTAKE_SPEED);
 			else if (master.get_digital(INTAKE_REV_BUTTON))
 				intake.move(-INTAKE_SPEED);
 			else intake.brake();
+		} else {
+			// do nothing buh
 		}
 		
 		// mogo
