@@ -131,6 +131,8 @@ constexpr int ARM_PORT = 5;
 
 constexpr int IMU_PORT = 8;
 
+constexpr int OPTICAL_PORT = 6;
+
 // CONTROLS
 
 constexpr pros::anlg_button DRIVE_JOYSTICK = pros::CTRL_ANLG_LY;
@@ -195,14 +197,26 @@ PIDController arm_pid (
 
 constexpr bool FORCE_AUTON = false; // if auton was not run, try again at start of op control
 
-constexpr float DIST_MULTI = 35;
+constexpr float DIST_MULTI = 35.5;
+
+bool intake_override = false;
+
+bool racism = false; // true = red bad
+
+bool color_sort = true;
+constexpr int OUTTAKE_TICKS = 800;
+
+constexpr float RED_HUE = 0;
+constexpr float BLUE_HUE = 210;
+
+constexpr float HUE_TOLERANCE = 15;
 
 // DRIVE
 
 constexpr int DRIVE_RATIO = 1;
 constexpr int TURN_RATIO = 1;
 
-constexpr float DRIVE_SLEW = 12;
+constexpr float DRIVE_SLEW = 127;
 
 constexpr bool SPEED_COMP = false;
 
@@ -211,10 +225,10 @@ constexpr int EJECT_BRAKE_CYCLES = 16;
 
 constexpr float ARM_SPEED = 50;
 constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
-constexpr float ARM_LOAD_POS = 270;
+constexpr float ARM_LOAD_POS = 200;
 
-constexpr float ARM_BOTTOM_LIMIT = 20;
-constexpr float ARM_TOP_LIMIT = 1950;
+constexpr float ARM_BOTTOM_LIMIT = 0;
+constexpr float ARM_TOP_LIMIT = 2000;
 
 constexpr DriveCurve drive_lateral (3, 10, 3);
 constexpr DriveCurve drive_angular (3, 10, 1);
@@ -389,6 +403,8 @@ pros::Motor arm (ARM_PORT);
 
 pros::IMU imu (IMU_PORT);
 
+pros::Optical optical (OPTICAL_PORT);
+
 
 
 /*****************************************************************************/
@@ -434,7 +450,9 @@ void solve_imu_bias(int32_t life) {
 }
 
 // robot position
+Pose robot_pose_mod(0, 0, 0);
 Pose robot_pose (0, 0, 0);
+Pose robot_ipose (0, 0, 0);
 std::atomic<float> dist (0);
 std::atomic<float> prev_dist(0);
 
@@ -444,7 +462,7 @@ int left_motors_prev_pos = 0;
 int right_motors_prev_pos = 0;
 
 void get_robot_position() {
-	auto [x_pos, y_pos, heading] = robot_pose();
+	auto [x_ipos, y_ipos, iheading] = robot_ipose();
 
 	prev_dist.store(dist.load());
 
@@ -452,10 +470,17 @@ void get_robot_position() {
 	left_motors_prev_pos = dt_left_motors.get_position();
 	right_motors_prev_pos = dt_right_motors.get_position();
 
-	x_pos.fetch_add(std::cos(heading * M_PI / 180) * (dist.load() - prev_dist.load()));
-	y_pos.fetch_add(std::sin(heading * M_PI / 180) * (dist.load() - prev_dist.load()));
+	x_ipos.fetch_add(std::cos(iheading * M_PI / 180) * (dist.load() - prev_dist.load()));
+	y_ipos.fetch_add(std::sin(iheading * M_PI / 180) * (dist.load() - prev_dist.load()));
 
-	heading.store(normalize_deg(imu.get_heading()));
+	iheading.store(normalize_deg(imu.get_heading()));
+
+	auto [x_pos, y_pos, heading] = robot_pose();
+	auto [x_mpos, y_mpos, mheading] = robot_pose_mod();
+
+	x_pos.store(x_ipos + x_mpos);
+	y_pos.store(y_ipos + y_mpos);
+	heading.store(iheading + mheading);
 
 	arm_pos.store(arm.get_position());
 }
@@ -478,17 +503,61 @@ void init() {
 
     pros::Task pos_tracking_task([&]() {
 		auto [x_pos, y_pos, heading] = robot_pose();
+		auto [x_ipos, y_ipos, iheading] = robot_ipose();
 
         while (true) {
 			get_robot_position();
 			
             pros::lcd::print(0, "x_pos: %f", x_pos.load());
             pros::lcd::print(1, "y_pos: %f", y_pos.load());
-            pros::lcd::print(3, "head: %f", heading.load());
+            pros::lcd::print(2, "head: %f", heading.load());
+			pros::lcd::print(4, "hue: %f", optical.get_hue());
 
             pros::delay(PROCESS_DELAY);
         }
     });
+
+	pros::Task color_sort_task([&]() {
+		int outtake_ticks = 0;
+
+		while (true) {
+			pros::delay(PROCESS_DELAY);
+
+			if (!color_sort) continue;
+
+			float hue_target = racism ? RED_HUE : BLUE_HUE;
+			float hue_min = std::fmod(hue_target - HUE_TOLERANCE + 360, 360.0f);
+			float hue_max = std::fmod(hue_target + HUE_TOLERANCE, 360.0f);
+
+			bool outtake = false;
+
+			pros::lcd::print(5, "hue_min: %f,  hue_max: %f", hue_min, hue_max);
+
+			if (hue_min <= hue_max) {
+				// if it's normal, just check the ranges
+				outtake = hue_min <= optical.get_hue() && optical.get_hue() <= hue_max;
+				pros::lcd::print(6, "outtaking, normal range", hue_min, hue_max);
+			} else if (hue_min >= hue_max) {
+				// if the range goes around 0, say hue min is 330 while hue_max is 30,
+				// 0 and 360 are used as bounds.
+				outtake = optical.get_hue() <= hue_max || optical.get_hue() >= hue_min;
+				pros::lcd::print(6, "outtaking, scuffed range", hue_min, hue_max);
+			} else {
+				pros::lcd::print(6, "not outtaking", hue_min, hue_max);
+			}
+
+			if (outtake) outtake_ticks = OUTTAKE_TICKS / PROCESS_DELAY;
+
+			// expected that intake_override is followed appropriately
+			if (outtake_ticks > 0) {
+				intake_override = true;
+				intake.move(-INTAKE_SPEED);
+				--outtake_ticks;
+			} else {
+				intake_override = false;
+			}
+		}
+	});
 
 	init_done = true;
 }
@@ -509,15 +578,22 @@ void competition_initialize() {
 
 bool auton_ran = false;
 
-int auton_cycle_count = 0;
+bool mtp = false;
 
-bool lateral_movement = true;
+int auton_cycle_count = 0;
 
 Pose target_pose (0, 0, 0);
 
-float deg_to_point(float x, float z) {
-	float deg = normalize_deg((std::atan2(x, z) * 180 / M_PI));
+float deg_to_point(float x, float y) {
+	float deg = normalize_deg(normalize_deg((std::atan2(x, y) * 180 / M_PI)) - 90);
 	return deg;
+}
+
+void move_to_point(float x, float y, bool fwd_) {
+	auto [tx_pos, ty_pos, fwd] = target_pose();
+	tx_pos.store(x);
+	ty_pos.store(y);
+	fwd.store(fwd_);
 }
 
 void wait_stable(PIDProcess pid_process) {
@@ -531,6 +607,7 @@ void autonomous() {
 
 	auton_ran = true;
 
+	arm.tare_position();
 	dt_left_motors.tare_position_all();
 	dt_right_motors.tare_position_all();
 
@@ -579,77 +656,235 @@ void autonomous() {
 	);
 
 	pros::Task auton_task{[&] {
+		float mtp_locked_heading = 0;
+		bool mtp_heading_is_locked = false;
+
 		while (true) {
 			int start = pros::millis();
-			// ++auton_cycle_count;
 
-			// float x_dif = target_pose.x - robot_pose.x;
-			// float y_dif = target_pose.y - robot_pose.y;
+			if (mtp) {
+				float x_dif = target_pose.x - robot_pose.x;
+				float y_dif = target_pose.y - robot_pose.y;
 
-			// float dist_to_target = std::sqrt(x_dif * x_dif + y_dif * y_dif);
-			// float deg_to_target = normalize_deg(deg_to_point(x_dif, y_dif));
+				float dist_to_target = std::sqrt(x_dif * x_dif + y_dif * y_dif);
+				float deg_to_target = normalize_deg(deg_to_point(x_dif, y_dif));
+				if (target_pose.h.load() == false) deg_to_target *= -1;
 
-			// float deg_err = deg_dif(deg_to_target, robot_pose.h);
-			// bool fwd = (std::abs(deg_err) <= 90);
+				float deg_err = deg_dif(deg_to_target, robot_pose.h);
+				bool fwd = (std::abs(deg_err) <= 90);
 
-			// dist_to_target *= (1 - ((int) (deg_err) % 90) / 90);
-			// if (!fwd) dist_to_target *= -1;
+				dist_to_target *= (1 - ((int) (deg_err) % 90) / 90);
+				if (!fwd) dist_to_target *= -1;
 
-			// target_heading.store(deg_to_target);
-			// target_dist.store(dist.load() + dist_to_target);
+				// if we're at the target, stop the robot
+				if (std::abs(dist_to_target) <= lateral_pid.tolerance) {
+					target_heading.store(heading);
+					target_dist.store(dist.load());
+				} else {
+					target_heading.store(deg_to_target);
+					target_dist.store(dist.load() + dist_to_target);
+				}
+			}
 
 			// pid
 
 			pid_handle_process(angular_pid_process);
-			if (lateral_movement) pid_handle_process(lateral_pid_process);
+			pid_handle_process(lateral_pid_process);
 
-			if (lateral_movement) dt_left_motors.move(angular_output.load() + lateral_output.load());
-			if (lateral_movement) dt_right_motors.move(lateral_output.load() - angular_output.load());
+			dt_left_motors.move(angular_output.load() + lateral_output.load());
+			dt_right_motors.move(lateral_output.load() - angular_output.load());
 
 			pid_handle_process(arm_pid_process);
 
 			arm.move(arm_pos_output.load());
 
-			printf("target_dist %f\n", target_dist.load());\
-			printf("dist %f\n", dist.load());
-
 			wait(PROCESS_DELAY);
 		}
 	}};
 
-	lateral_pid_process.max_speed = 80;
-	target_dist.store(-32);
-	wait(2000);
+	// target_dist.store(24);
 
-	lateral_movement = false;
-	dt_left_motors.brake();
-	dt_right_motors.brake();
+	auto [x_mpos, y_mpos, mheading] = robot_pose_mod();
+	x_mpos = -59;
+	y_mpos = 0;
+	
+	intake.move(INTAKE_SPEED);
+	wait(500);
+	intake.brake();
+
+	target_dist.fetch_add(14);
+	wait(800);
+
+	target_heading.store(-90);
+	wait(680);
+
+	target_dist.fetch_add(-17);
+	wait(800);
 
 	mogo.set_value(true);
+	wait(250);
+
+	target_heading.store(20);
+	wait(680);
+
+	intake.move(INTAKE_SPEED);
+	target_dist.fetch_add(90);
+	wait(400);
+
+	target_heading.store(45);
+	wait(600);
+
+	target_heading.store(5);
+
+	for (int i = 0; i < 10; ++i) {
+		lateral_pid_process.max_speed = 120 - i * 10;
+		wait(50);
+	}
+
+	wait(200);
+
+	target_arm_pos.store(ARM_LOAD_POS);
+	wait(700);
+
+	lateral_pid_process.max_speed = 127;
+	target_dist.fetch_add(-31.5);
+	wait(800);
+
+	for (int i = 0; i < 2; ++i) {
+		intake.brake();
+		wait(125);
+		intake.move(INTAKE_SPEED);
+		wait(125);
+	}
+
+	target_heading.store(90);
+	intake.brake();
+	wait(100);
+
+	intake.move(-5);
+	arm_pid_process.max_speed = 80;
+	target_arm_pos.store(3 * ARM_LOAD_POS);
+
+	wait(500);
+
+	intake.move(INTAKE_SPEED);
+	target_dist.fetch_add(18);
+	wait(500);
+
+	arm_pid_process.max_speed = 127;
+	target_arm_pos.store(ARM_TOP_LIMIT);
+	wait(700);
+
+	target_dist.fetch_add(-24);
+	target_arm_pos.store(ARM_BOTTOM_LIMIT);
+	wait(300);
+
+	target_heading.store(180);
+	wait(700);
+
+	lateral_pid_process.max_speed = 127;
+	target_dist.fetch_add(71);
+
+	wait(850);
+
+	for (int i = 0; i < 10; ++i) {
+		lateral_pid_process.max_speed = 120 - i * 10;
+		wait(50);
+	}
+
+	wait(900);
+
+	target_heading.store(90);
+	wait(900);
+
+	lateral_pid_process.max_speed = 100;
+	target_dist.fetch_add(36);
+	wait(150);
+
+	target_heading.store(-8);
+	wait(900);
+
+	target_dist.fetch_add(-18.5);
+	wait(800);
+
+	intake.brake();
+	mogo.set_value(false);
+
+	wait(1000);
+	lateral_pid_process.max_speed = 127;
+
+	auto [tx_pos, ty_pos, fwd] = target_pose();
+
+	move_to_point(-47, 12, false);
+	mtp = true;
+	wait(3000);
+
+	mogo.set_value(true);
+	wait(250);
+
+	intake.move(INTAKE_SPEED);
+	move_to_point(23.5, 47, true);
+	wait(1000);
+
+	target_arm_pos.store(ARM_LOAD_POS);
+	wait(1000);
+
+	move_to_point(0, 47, false);
+	wait(1000);
+
+	mtp = false;
+
+	target_heading.store(-90);
+	wait(700);
+
+	intake.move(-5);
+	wait(100);
+
+	target_arm_pos.store(ARM_TOP_LIMIT);
+	target_dist.fetch_add(17);
 	wait(500);
 
 	intake.move(INTAKE_SPEED);
 	wait(800);
 
-	lateral_movement = true;
-
-	target_heading.store(-140);
-	wait(800);
+	target_dist.fetch_add(-24);
+	target_arm_pos.store(ARM_BOTTOM_LIMIT);
+	wait(250);
+	
+	target_heading.store(-180);
+	wait(900);
 
 	lateral_pid_process.max_speed = 127;
-	target_dist.fetch_add(30.5);
-	wait(1500);
+	target_dist.fetch_add(71);
+
+	wait(850);
+
+	for (int i = 0; i < 10; ++i) {
+		lateral_pid_process.max_speed = 120 - i * 10;
+		wait(50);
+	}
+
+	wait(900);
 
 	target_heading.store(-90);
+	wait(900);
+
+	lateral_pid_process.max_speed = 100;
+	target_dist.fetch_add(36);
+	wait(150);
+
+	target_heading.store(8);
+	wait(900);
+
+	target_dist.fetch_add(-18.5);
 	wait(800);
 
-	target_dist.fetch_add(15);
-	wait(1200);
+	intake.brake();
+	mogo.set_value(false);
 
-	target_heading.store(15);
-	wait(800);
+	wait(1000);
 
-	target_dist.fetch_add(28);
+
 	wait(3000);
 
 	auton_task.remove();
@@ -704,18 +939,14 @@ void opcontrol() {
 		prev_drive_power = drive_power;
 
 		// intake
-		if (master.get_digital(EJECT_RING_BUTTON) && intake_brake_timer <= 0) {
-			intake_brake_timer = EJECT_BRAKE_CYCLES;
-		}
-		if (intake_brake_timer > 0) {
-			intake.brake();
-			--intake_brake_timer;
-		} else {
+		if (!intake_override) {
 			if (master.get_digital(INTAKE_FWD_BUTTON))
 				intake.move(INTAKE_SPEED);
 			else if (master.get_digital(INTAKE_REV_BUTTON))
 				intake.move(-INTAKE_SPEED);
 			else intake.brake();
+		} else {
+			// do nothing buh
 		}
 		
 		// mogo
