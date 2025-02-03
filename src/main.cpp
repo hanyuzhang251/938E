@@ -203,7 +203,7 @@ bool intake_override = false;
 
 bool racism = false; // true = red bad
 
-bool color_sort = true;
+bool color_sort = false;
 constexpr int OUTTAKE_TICKS = 800;
 
 constexpr float RED_HUE = 0;
@@ -225,7 +225,7 @@ constexpr int EJECT_BRAKE_CYCLES = 16;
 
 constexpr float ARM_SPEED = 50;
 constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
-constexpr float ARM_LOAD_POS = 200;
+constexpr float ARM_LOAD_POS = 280;
 
 constexpr float ARM_BOTTOM_LIMIT = 0;
 constexpr float ARM_TOP_LIMIT = 2000;
@@ -801,10 +801,10 @@ void autonomous() {
 	target_dist.fetch_add(36);
 	wait(150);
 
-	target_heading.store(-8);
+	target_heading.store(0);
 	wait(900);
 
-	target_dist.fetch_add(-18.5);
+	target_dist.fetch_add(-20);
 	wait(800);
 
 	intake.brake();
