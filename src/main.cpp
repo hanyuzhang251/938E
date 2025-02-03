@@ -450,6 +450,7 @@ void solve_imu_bias(int32_t life) {
 }
 
 // robot position
+Pose robot_pose_mod(0, 0, 0);
 Pose robot_pose (0, 0, 0);
 Pose robot_ipose (0, 0, 0);
 std::atomic<float> dist (0);
@@ -461,7 +462,7 @@ int left_motors_prev_pos = 0;
 int right_motors_prev_pos = 0;
 
 void get_robot_position() {
-	auto [x_pos, y_pos, heading] = robot_pose();
+	auto [x_ipos, y_ipos, iheading] = robot_ipose();
 
 	prev_dist.store(dist.load());
 
@@ -469,16 +470,17 @@ void get_robot_position() {
 	left_motors_prev_pos = dt_left_motors.get_position();
 	right_motors_prev_pos = dt_right_motors.get_position();
 
-	x_pos.fetch_add(std::cos(heading * M_PI / 180) * (dist.load() - prev_dist.load()));
-	y_pos.fetch_add(std::sin(heading * M_PI / 180) * (dist.load() - prev_dist.load()));
+	x_ipos.fetch_add(std::cos(iheading * M_PI / 180) * (dist.load() - prev_dist.load()));
+	y_ipos.fetch_add(std::sin(iheading * M_PI / 180) * (dist.load() - prev_dist.load()));
 
-	auto [x_ipos, y_ipos, iheading] = robot_ipose();
-
-	x_ipos.fetch_add(imu.get_accel().x + imu_bias_x);
-	y_ipos.fetch_add(imu.get_accel().y + imu_bias_y);
-
-	heading.store(normalize_deg(imu.get_heading()));
 	iheading.store(normalize_deg(imu.get_heading()));
+
+	auto [x_pos, y_pos, heading] = robot_pose();
+	auto [x_mpos, y_mpos, mheading] = robot_pose_mod();
+
+	x_pos.store(x_ipos + x_mpos);
+	y_pos.store(y_ipos + y_mpos);
+	heading.store(iheading + mheading);
 
 	arm_pos.store(arm.get_position());
 }
@@ -506,8 +508,8 @@ void init() {
         while (true) {
 			get_robot_position();
 			
-            pros::lcd::print(0, "x_dpos: %f", x_pos.load());
-            pros::lcd::print(1, "y_dpos: %f", y_pos.load());
+            pros::lcd::print(0, "x_pos: %f", x_pos.load());
+            pros::lcd::print(1, "y_pos: %f", y_pos.load());
             pros::lcd::print(2, "head: %f", heading.load());
 			pros::lcd::print(4, "hue: %f", optical.get_hue());
 
@@ -576,12 +578,14 @@ void competition_initialize() {
 
 bool auton_ran = false;
 
+bool mtp = false;
+
 int auton_cycle_count = 0;
 
 Pose target_pose (0, 0, 0);
 
-float deg_to_point(float x, float z) {
-	float deg = normalize_deg((std::atan2(x, z) * 180 / M_PI));
+float deg_to_point(float x, float y) {
+	float deg = normalize_deg((std::atan2(y, x) * 180 / M_PI));
 	return deg;
 }
 
@@ -646,22 +650,23 @@ void autonomous() {
 	pros::Task auton_task{[&] {
 		while (true) {
 			int start = pros::millis();
-			// ++auton_cycle_count;
 
-			// float x_dif = target_pose.x - robot_pose.x;
-			// float y_dif = target_pose.y - robot_pose.y;
+			if (mtp) {
+				float x_dif = target_pose.x - robot_pose.x;
+				float y_dif = target_pose.y - robot_pose.y;
 
-			// float dist_to_target = std::sqrt(x_dif * x_dif + y_dif * y_dif);
-			// float deg_to_target = normalize_deg(deg_to_point(x_dif, y_dif));
+				float dist_to_target = std::sqrt(x_dif * x_dif + y_dif * y_dif);
+				float deg_to_target = normalize_deg(deg_to_point(x_dif, y_dif));
 
-			// float deg_err = deg_dif(deg_to_target, robot_pose.h);
-			// bool fwd = (std::abs(deg_err) <= 90);
+				float deg_err = deg_dif(deg_to_target, robot_pose.h);
+				bool fwd = (std::abs(deg_err) <= 90);
 
-			// dist_to_target *= (1 - ((int) (deg_err) % 90) / 90);
-			// if (!fwd) dist_to_target *= -1;
+				dist_to_target *= (1 - ((int) (deg_err) % 90) / 90);
+				if (!fwd) dist_to_target *= -1;
 
-			// target_heading.store(deg_to_target);
-			// target_dist.store(dist.load() + dist_to_target);
+				target_heading.store(deg_to_target);
+				target_dist.store(dist.load() + dist_to_target);
+			}
 
 			// pid
 
