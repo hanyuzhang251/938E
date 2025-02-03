@@ -585,8 +585,15 @@ int auton_cycle_count = 0;
 Pose target_pose (0, 0, 0);
 
 float deg_to_point(float x, float y) {
-	float deg = normalize_deg((std::atan2(y, x) * 180 / M_PI));
+	float deg = normalize_deg(normalize_deg((std::atan2(x, y) * 180 / M_PI)) - 90);
 	return deg;
+}
+
+void move_to_point(float x, float y, bool fwd_) {
+	auto [tx_pos, ty_pos, fwd] = target_pose();
+	tx_pos.store(x);
+	ty_pos.store(y);
+	fwd.store(fwd_);
 }
 
 void wait_stable(PIDProcess pid_process) {
@@ -600,6 +607,7 @@ void autonomous() {
 
 	auton_ran = true;
 
+	arm.tare_position();
 	dt_left_motors.tare_position_all();
 	dt_right_motors.tare_position_all();
 
@@ -648,6 +656,9 @@ void autonomous() {
 	);
 
 	pros::Task auton_task{[&] {
+		float mtp_locked_heading = 0;
+		bool mtp_heading_is_locked = false;
+
 		while (true) {
 			int start = pros::millis();
 
@@ -657,6 +668,7 @@ void autonomous() {
 
 				float dist_to_target = std::sqrt(x_dif * x_dif + y_dif * y_dif);
 				float deg_to_target = normalize_deg(deg_to_point(x_dif, y_dif));
+				if (target_pose.h.load() == false) deg_to_target *= -1;
 
 				float deg_err = deg_dif(deg_to_target, robot_pose.h);
 				bool fwd = (std::abs(deg_err) <= 90);
@@ -664,8 +676,14 @@ void autonomous() {
 				dist_to_target *= (1 - ((int) (deg_err) % 90) / 90);
 				if (!fwd) dist_to_target *= -1;
 
-				target_heading.store(deg_to_target);
-				target_dist.store(dist.load() + dist_to_target);
+				// if we're at the target, stop the robot
+				if (std::abs(dist_to_target) <= lateral_pid.tolerance) {
+					target_heading.store(heading);
+					target_dist.store(dist.load());
+				} else {
+					target_heading.store(deg_to_target);
+					target_dist.store(dist.load() + dist_to_target);
+				}
 			}
 
 			// pid
@@ -685,6 +703,10 @@ void autonomous() {
 	}};
 
 	// target_dist.store(24);
+
+	auto [x_mpos, y_mpos, mheading] = robot_pose_mod();
+	x_mpos = -59;
+	y_mpos = 0;
 	
 	intake.move(INTAKE_SPEED);
 	wait(500);
@@ -788,72 +810,82 @@ void autonomous() {
 	intake.brake();
 	mogo.set_value(false);
 
-	// target_heading.store(90);
-	// wait(500);
+	wait(1000);
+	lateral_pid_process.max_speed = 127;
 
-	// lateral_pid_process.max_speed = 127;
-	// target_dist.fetch_add(25);
-	// wait(200);
+	auto [tx_pos, ty_pos, fwd] = target_pose();
 
-	// target_heading.store(0);
-	// wait(600);
+	move_to_point(-47, 12, false);
+	mtp = true;
+	wait(3000);
 
-	// target_heading.store(-10);
-	// target_dist.fetch_add(-15);
-	// mogo.set_value(false);
-	// wait(800);
+	mogo.set_value(true);
+	wait(250);
 
-	// intake.brake();
+	intake.move(INTAKE_SPEED);
+	move_to_point(23.5, 47, true);
+	wait(1000);
 
-	// target_dist.fetch_add(115);
-	// target_heading.store(-7);
-	// wait(1250);
+	target_arm_pos.store(ARM_LOAD_POS);
+	wait(1000);
+
+	move_to_point(0, 47, false);
+	wait(1000);
+
+	mtp = false;
+
+	target_heading.store(-90);
+	wait(700);
+
+	intake.move(-5);
+	wait(100);
+
+	target_arm_pos.store(ARM_TOP_LIMIT);
+	target_dist.fetch_add(17);
+	wait(500);
+
+	intake.move(INTAKE_SPEED);
+	wait(800);
+
+	target_dist.fetch_add(-24);
+	target_arm_pos.store(ARM_BOTTOM_LIMIT);
+	wait(250);
 	
-	// intake.move(INTAKE_SPEED);
-	
-	// for (int i = 0; i < 10; ++i) {
-	// 	lateral_pid_process.max_speed = 120 - i * 10;
-	// 	wait(50);
-	// }
+	target_heading.store(-180);
+	wait(900);
 
-	// intake.brake();
-	// wait(250);
+	lateral_pid_process.max_speed = 127;
+	target_dist.fetch_add(71);
 
-	// target_heading.store(110);
-	// wait(800);
+	wait(850);
 
-	// mogo.set_value(false);
-	// lateral_pid_process.max_speed = 127;
-	// target_dist.fetch_add(-28);
-	// wait(800);
+	for (int i = 0; i < 10; ++i) {
+		lateral_pid_process.max_speed = 120 - i * 10;
+		wait(50);
+	}
 
-	// mogo.set_value(true);
-	// wait(250);
+	wait(900);
 
-	// target_heading.store(80);
-	// wait(680);
+	target_heading.store(-90);
+	wait(900);
 
-	// target_dist.fetch_add(36);
-	// wait(400);
-	
-	// target_heading.store(90);
+	lateral_pid_process.max_speed = 100;
+	target_dist.fetch_add(36);
+	wait(150);
 
+	target_heading.store(8);
+	wait(900);
+
+	target_dist.fetch_add(-18.5);
+	wait(800);
+
+	intake.brake();
+	mogo.set_value(false);
 
 	wait(1000);
 
-	// target_heading.store(100);
-	
 
-	// target_heading.store(100);
-	// wait(680);
-
-	// mogo.set_value(false);
-
-	// target_dist.store(-15);
-	// wait(800);
-	
-	// mogo.set_value(true);
-	// wait(250);
+	wait(3000);
 
 	auton_task.remove();
 }
