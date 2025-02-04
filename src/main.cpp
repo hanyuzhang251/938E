@@ -175,7 +175,7 @@ PIDController angular_pid (
 		999, // clamp
 		0, // decay
 		999, // slew
-		2, // small error
+		3, // small error
 		30, // large error
 		1 // tolerance
 );
@@ -611,8 +611,6 @@ void wait_cross(PIDProcess pid_process, float point, bool relative = true, int b
 
 	bool side = pid_process.value.load() >= point;
 	while ((pid_process.value.load() >= point) == side) {
-		pros::lcd::print(5, "value: %f", pid_process.value.load());
-		pros::lcd::print(6, "point: %f", point);
 		wait(PROCESS_DELAY);
 	}
 	for (int i = 0; i < buffer_ticks; ++i) wait(PROCESS_DELAY);
@@ -626,6 +624,21 @@ void wait_stable(PIDProcess pid_process, int buffer_ticks = 3, int min_stable_ti
 		wait(PROCESS_DELAY);
 	}
 	for (int i = 0; i < buffer_ticks; ++i) wait(PROCESS_DELAY);
+}
+
+void tap_ring(int n_times, std::atomic<bool>& crashout, int delay = 150) {
+	pros::Task async_task([&]() {
+		for (int i = 0; i < n_times; ++i) {
+			intake.brake();
+			wait(delay);
+			intake.move(INTAKE_SPEED);
+			wait(delay);
+			if (crashout.load()) break;
+		}
+
+		async_task.remove();
+	});
+	async_task.remove();
 }
 
 float t = 0;
@@ -736,10 +749,8 @@ void autonomous() {
 
 	target_dist.fetch_add(16);
 	wait_stable(lateral_pid_process);
-
 	target_heading.store(-90);
 	wait_stable(angular_pid_process);
-
 	target_dist.fetch_add(-24);
 	wait_stable(lateral_pid_process);
 	mogo.set_value(true);
@@ -757,7 +768,15 @@ void autonomous() {
 	target_heading.store(40);
 	wait_cross(lateral_pid_process, t + 18 + 28);
 	target_heading.store(0);
+	wait_cross(lateral_pid_process, t + 18 + 28 + 12);
 	target_arm_pos.store(ARM_LOAD_POS);
+	wait_stable(lateral_pid_process);
+
+	target_dist.fetch_add(-24);
+	wait_stable(lateral_pid_process);
+	target_heading.store(90);
+	wait_stable(angular_pid_process);
+	
 
 	wait(3000);
 	auton_task.remove();
@@ -828,32 +847,24 @@ void opcontrol() {
 		else if (master.get_digital(MOGO_OFF_BUTTON))
 			mogo.set_value(false);
 
-		printf("CYCLE\n");
 		// arm
 		if (master.get_digital(ARM_UP_BUTTON)) {
-			printf("\tarm up\n");
 			arm_target_pos += ARM_SPEED;
 		}
 		else if (master.get_digital(ARM_DOWN_BUTTON)) {
-			printf("\tarm down\n");
 			arm_target_pos -= ARM_SPEED;
 		}
-		printf("\tarm tp %f\n", arm_target_pos.load());
 		// arm limiters
 		if (arm_target_pos.load() < ARM_BOTTOM_LIMIT) arm_target_pos.store(ARM_BOTTOM_LIMIT);
 		if (arm_target_pos.load() > ARM_TOP_LIMIT) arm_target_pos.store(ARM_TOP_LIMIT);
-		printf("\tarm lim %f\n", arm_target_pos.load());
 		// arm load macro
 		if (master.get_digital(ARM_LOAD_POS_BUTTON)) {
 			arm_target_pos = ARM_LOAD_POS;
-			printf("\tarm macro %f\n", arm_target_pos.load());
 		}
 		// run pid
 		pid_handle_process(arm_pid_process);
 		// move arm to PID arm_pos_output
 		arm.move(arm_pos_output.load());
-		printf("\tarm out %f\n", arm_pos_output.load());
-		printf("\tarm pos %f\n", arm_pos.load());
 
         pros::delay(PROCESS_DELAY);
     }
