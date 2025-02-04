@@ -203,13 +203,16 @@ bool intake_override = false;
 
 bool racism = false; // true = red bad
 
-bool color_sort = false;
-constexpr int OUTTAKE_TICKS = 800;
+bool color_sort = true;
+constexpr int OUTTAKE_DELAY = 100;
+constexpr int OUTTAKE_TICKS = 500;
 
-constexpr float RED_HUE = 0;
+constexpr float RED_HUE = 5;
 constexpr float BLUE_HUE = 210;
 
 constexpr float HUE_TOLERANCE = 15;
+
+constexpr float DIST_TOLERANCE = 200;
 
 // DRIVE
 
@@ -511,14 +514,17 @@ void init() {
             pros::lcd::print(0, "x_pos: %f", x_pos.load());
             pros::lcd::print(1, "y_pos: %f", y_pos.load());
             pros::lcd::print(2, "head: %f", heading.load());
-			pros::lcd::print(4, "hue: %f", optical.get_hue());
 
             pros::delay(PROCESS_DELAY);
         }
     });
 
+	optical.set_led_pwm(100);
+
 	pros::Task color_sort_task([&]() {
+		int outtake_delay = 0;
 		int outtake_ticks = 0;
+		bool prev_verdict = false;
 
 		while (true) {
 			pros::delay(PROCESS_DELAY);
@@ -531,31 +537,38 @@ void init() {
 
 			bool outtake = false;
 
-			pros::lcd::print(5, "hue_min: %f,  hue_max: %f", hue_min, hue_max);
+			pros::lcd::print(5, "hue: %f", optical.get_hue());
+			pros::lcd::print(6, "proximity: %d", optical.get_proximity());
 
 			if (hue_min <= hue_max) {
 				// if it's normal, just check the ranges
 				outtake = hue_min <= optical.get_hue() && optical.get_hue() <= hue_max;
-				pros::lcd::print(6, "outtaking, normal range", hue_min, hue_max);
 			} else if (hue_min >= hue_max) {
 				// if the range goes around 0, say hue min is 330 while hue_max is 30,
 				// 0 and 360 are used as bounds.
 				outtake = optical.get_hue() <= hue_max || optical.get_hue() >= hue_min;
-				pros::lcd::print(6, "outtaking, scuffed range", hue_min, hue_max);
-			} else {
-				pros::lcd::print(6, "not outtaking", hue_min, hue_max);
 			}
 
-			if (outtake) outtake_ticks = OUTTAKE_TICKS / PROCESS_DELAY;
+			bool verdict = outtake && optical.get_proximity() >= DIST_TOLERANCE;
+			if (verdict) {
+				outtake_ticks = OUTTAKE_TICKS / PROCESS_DELAY;
+				if (!prev_verdict) {
+					outtake_delay = OUTTAKE_DELAY / PROCESS_DELAY;
+				}
+			}
 
 			// expected that intake_override is followed appropriately
-			if (outtake_ticks > 0) {
+			if (outtake_delay > 0) {
+				--outtake_delay;
+			} else if (outtake_ticks > 0) {
 				intake_override = true;
 				intake.move(-INTAKE_SPEED);
 				--outtake_ticks;
 			} else {
 				intake_override = false;
 			}
+
+			prev_verdict = verdict;
 		}
 	});
 
@@ -704,10 +717,6 @@ void autonomous() {
 
 	// target_dist.store(24);
 
-	auto [x_mpos, y_mpos, mheading] = robot_pose_mod();
-	x_mpos = -59;
-	y_mpos = 0;
-	
 	intake.move(INTAKE_SPEED);
 	wait(500);
 	intake.brake();
@@ -801,79 +810,7 @@ void autonomous() {
 	target_dist.fetch_add(36);
 	wait(150);
 
-	target_heading.store(0);
-	wait(900);
-
-	target_dist.fetch_add(-20);
-	wait(800);
-
-	intake.brake();
-	mogo.set_value(false);
-
-	wait(1000);
-	lateral_pid_process.max_speed = 127;
-
-	auto [tx_pos, ty_pos, fwd] = target_pose();
-
-	move_to_point(-47, 12, false);
-	mtp = true;
-	wait(3000);
-
-	mogo.set_value(true);
-	wait(250);
-
-	intake.move(INTAKE_SPEED);
-	move_to_point(23.5, 47, true);
-	wait(1000);
-
-	target_arm_pos.store(ARM_LOAD_POS);
-	wait(1000);
-
-	move_to_point(0, 47, false);
-	wait(1000);
-
-	mtp = false;
-
-	target_heading.store(-90);
-	wait(700);
-
-	intake.move(-5);
-	wait(100);
-
-	target_arm_pos.store(ARM_TOP_LIMIT);
-	target_dist.fetch_add(17);
-	wait(500);
-
-	intake.move(INTAKE_SPEED);
-	wait(800);
-
-	target_dist.fetch_add(-24);
-	target_arm_pos.store(ARM_BOTTOM_LIMIT);
-	wait(250);
-	
-	target_heading.store(-180);
-	wait(900);
-
-	lateral_pid_process.max_speed = 127;
-	target_dist.fetch_add(71);
-
-	wait(850);
-
-	for (int i = 0; i < 10; ++i) {
-		lateral_pid_process.max_speed = 120 - i * 10;
-		wait(50);
-	}
-
-	wait(900);
-
-	target_heading.store(-90);
-	wait(900);
-
-	lateral_pid_process.max_speed = 100;
-	target_dist.fetch_add(36);
-	wait(150);
-
-	target_heading.store(8);
+	target_heading.store(-8);
 	wait(900);
 
 	target_dist.fetch_add(-18.5);
@@ -881,8 +818,6 @@ void autonomous() {
 
 	intake.brake();
 	mogo.set_value(false);
-
-	wait(1000);
 
 
 	wait(3000);

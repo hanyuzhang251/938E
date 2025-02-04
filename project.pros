@@ -1,7 +1,7 @@
 {
   "py/object": "pros.conductor.project.Project",
   "py/state": {
-    "project_name": "skills",
+    "project_name": "2/3 grind",
     "target": "v5",
     "templates": {
       "LemLib": {
@@ -299,7 +299,7 @@
     },
     "upload_options": {
       "icon": "pros",
-      "slot": 3,
+      "slot": 1,
       "description": "run this"
     },
     "use_early_access": false
