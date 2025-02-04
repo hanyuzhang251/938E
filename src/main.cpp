@@ -175,9 +175,9 @@ PIDController angular_pid (
 		999, // clamp
 		0, // decay
 		999, // slew
-		10, // small error
+		2, // small error
 		30, // large error
-		0.5 // tolerance
+		1 // tolerance
 );
 
 PIDController arm_pid (
@@ -537,9 +537,6 @@ void init() {
 
 			bool outtake = false;
 
-			pros::lcd::print(5, "hue: %f", optical.get_hue());
-			pros::lcd::print(6, "proximity: %d", optical.get_proximity());
-
 			if (hue_min <= hue_max) {
 				// if it's normal, just check the ranges
 				outtake = hue_min <= optical.get_hue() && optical.get_hue() <= hue_max;
@@ -609,11 +606,29 @@ void move_to_point(float x, float y, bool fwd_) {
 	fwd.store(fwd_);
 }
 
-void wait_stable(PIDProcess pid_process) {
-	while (std::abs(pid_process.get_error()) > pid_process.pid.tolerance) {
+void wait_cross(PIDProcess pid_process, float point, bool relative = true, int buffer_ticks = 0) {
+	if (relative) point += pid_process.value.load();
+
+	bool side = pid_process.value.load() >= point;
+	while ((pid_process.value.load() >= point) == side) {
+		pros::lcd::print(5, "value: %f", pid_process.value.load());
+		pros::lcd::print(6, "point: %f", point);
 		wait(PROCESS_DELAY);
 	}
+	for (int i = 0; i < buffer_ticks; ++i) wait(PROCESS_DELAY);
 }
+
+void wait_stable(PIDProcess pid_process, int buffer_ticks = 3, int min_stable_ticks = 8) {
+	int stable_ticks = 0;
+	while (stable_ticks < min_stable_ticks) {
+		if (std::abs(pid_process.get_error()) <= pid_process.pid.tolerance) ++stable_ticks;
+		else stable_ticks = 0;
+		wait(PROCESS_DELAY);
+	}
+	for (int i = 0; i < buffer_ticks; ++i) wait(PROCESS_DELAY);
+}
+
+float t = 0;
 
 void autonomous() {
 	if (auton_ran) return;
@@ -716,11 +731,33 @@ void autonomous() {
 	}};
 
 	intake.move(INTAKE_SPEED);
-	wait(300);
+	wait(200);
 	intake.brake();
 
-	
+	target_dist.fetch_add(16);
+	wait_stable(lateral_pid_process);
 
+	target_heading.store(-90);
+	wait_stable(angular_pid_process);
+
+	target_dist.fetch_add(-24);
+	wait_stable(lateral_pid_process);
+	mogo.set_value(true);
+	wait(250);
+
+	target_heading.store(0);
+	wait_stable(angular_pid_process);
+
+	intake.move(INTAKE_SPEED);
+
+	t = lateral_pid_process.value.load();
+	lateral_pid_process.max_speed = 90;
+	target_dist.fetch_add(84);
+	wait_cross(lateral_pid_process, t + 18);
+	target_heading.store(40);
+	wait_cross(lateral_pid_process, t + 18 + 28);
+	target_heading.store(0);
+	target_arm_pos.store(ARM_LOAD_POS);
 
 	wait(3000);
 	auton_task.remove();
