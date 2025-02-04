@@ -175,9 +175,9 @@ PIDController angular_pid (
 		999, // clamp
 		0, // decay
 		999, // slew
-		10, // small error
+		3, // small error
 		30, // large error
-		0.5 // tolerance
+		1 // tolerance
 );
 
 PIDController arm_pid (
@@ -204,12 +204,15 @@ bool intake_override = false;
 bool racism = false; // true = red bad
 
 bool color_sort = true;
-constexpr int OUTTAKE_TICKS = 800;
+constexpr int OUTTAKE_DELAY = 100;
+constexpr int OUTTAKE_TICKS = 500;
 
-constexpr float RED_HUE = 0;
+constexpr float RED_HUE = 5;
 constexpr float BLUE_HUE = 210;
 
 constexpr float HUE_TOLERANCE = 15;
+
+constexpr float DIST_TOLERANCE = 200;
 
 // DRIVE
 
@@ -225,7 +228,7 @@ constexpr int EJECT_BRAKE_CYCLES = 16;
 
 constexpr float ARM_SPEED = 50;
 constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
-constexpr float ARM_LOAD_POS = 200;
+constexpr float ARM_LOAD_POS = 280;
 
 constexpr float ARM_BOTTOM_LIMIT = 0;
 constexpr float ARM_TOP_LIMIT = 2000;
@@ -511,14 +514,17 @@ void init() {
             pros::lcd::print(0, "x_pos: %f", x_pos.load());
             pros::lcd::print(1, "y_pos: %f", y_pos.load());
             pros::lcd::print(2, "head: %f", heading.load());
-			pros::lcd::print(4, "hue: %f", optical.get_hue());
 
             pros::delay(PROCESS_DELAY);
         }
     });
 
+	optical.set_led_pwm(100);
+
 	pros::Task color_sort_task([&]() {
+		int outtake_delay = 0;
 		int outtake_ticks = 0;
+		bool prev_verdict = false;
 
 		while (true) {
 			pros::delay(PROCESS_DELAY);
@@ -531,31 +537,35 @@ void init() {
 
 			bool outtake = false;
 
-			pros::lcd::print(5, "hue_min: %f,  hue_max: %f", hue_min, hue_max);
-
 			if (hue_min <= hue_max) {
 				// if it's normal, just check the ranges
 				outtake = hue_min <= optical.get_hue() && optical.get_hue() <= hue_max;
-				pros::lcd::print(6, "outtaking, normal range", hue_min, hue_max);
 			} else if (hue_min >= hue_max) {
 				// if the range goes around 0, say hue min is 330 while hue_max is 30,
 				// 0 and 360 are used as bounds.
 				outtake = optical.get_hue() <= hue_max || optical.get_hue() >= hue_min;
-				pros::lcd::print(6, "outtaking, scuffed range", hue_min, hue_max);
-			} else {
-				pros::lcd::print(6, "not outtaking", hue_min, hue_max);
 			}
 
-			if (outtake) outtake_ticks = OUTTAKE_TICKS / PROCESS_DELAY;
+			bool verdict = outtake && optical.get_proximity() >= DIST_TOLERANCE;
+			if (verdict) {
+				outtake_ticks = OUTTAKE_TICKS / PROCESS_DELAY;
+				if (!prev_verdict) {
+					outtake_delay = OUTTAKE_DELAY / PROCESS_DELAY;
+				}
+			}
 
 			// expected that intake_override is followed appropriately
-			if (outtake_ticks > 0) {
+			if (outtake_delay > 0) {
+				--outtake_delay;
+			} else if (outtake_ticks > 0) {
 				intake_override = true;
 				intake.move(-INTAKE_SPEED);
 				--outtake_ticks;
 			} else {
 				intake_override = false;
 			}
+
+			prev_verdict = verdict;
 		}
 	});
 
@@ -596,11 +606,42 @@ void move_to_point(float x, float y, bool fwd_) {
 	fwd.store(fwd_);
 }
 
-void wait_stable(PIDProcess pid_process) {
-	while (std::abs(pid_process.get_error()) > pid_process.pid.tolerance) {
+void wait_cross(PIDProcess pid_process, float point, bool relative = true, int buffer_ticks = 0) {
+	if (relative) point += pid_process.value.load();
+
+	bool side = pid_process.value.load() >= point;
+	while ((pid_process.value.load() >= point) == side) {
 		wait(PROCESS_DELAY);
 	}
+	for (int i = 0; i < buffer_ticks; ++i) wait(PROCESS_DELAY);
 }
+
+void wait_stable(PIDProcess pid_process, int buffer_ticks = 3, int min_stable_ticks = 8) {
+	int stable_ticks = 0;
+	while (stable_ticks < min_stable_ticks) {
+		if (std::abs(pid_process.get_error()) <= pid_process.pid.tolerance) ++stable_ticks;
+		else stable_ticks = 0;
+		wait(PROCESS_DELAY);
+	}
+	for (int i = 0; i < buffer_ticks; ++i) wait(PROCESS_DELAY);
+}
+
+void tap_ring(int n_times, std::atomic<bool>& crashout, int delay = 150) {
+	pros::Task async_task([&]() {
+		for (int i = 0; i < n_times; ++i) {
+			intake.brake();
+			wait(delay);
+			intake.move(INTAKE_SPEED);
+			wait(delay);
+			if (crashout.load()) break;
+		}
+
+		async_task.remove();
+	});
+	async_task.remove();
+}
+
+float t = 0;
 
 void autonomous() {
 	if (auton_ran) return;
@@ -702,12 +743,42 @@ void autonomous() {
 		}
 	}};
 
-	// target_dist.store(24);
+	intake.move(INTAKE_SPEED);
+	wait(200);
+	intake.brake();
 
-	move_to_point(24, 0, true);
+	target_dist.fetch_add(16);
+	wait_stable(lateral_pid_process);
+	target_heading.store(-90);
+	wait_stable(angular_pid_process);
+	target_dist.fetch_add(-24);
+	wait_stable(lateral_pid_process);
+	mogo.set_value(true);
+	wait(250);
+
+	target_heading.store(0);
+	wait_stable(angular_pid_process);
+
+	intake.move(INTAKE_SPEED);
+
+	t = lateral_pid_process.value.load();
+	lateral_pid_process.max_speed = 90;
+	target_dist.fetch_add(84);
+	wait_cross(lateral_pid_process, t + 18);
+	target_heading.store(40);
+	wait_cross(lateral_pid_process, t + 18 + 28);
+	target_heading.store(0);
+	wait_cross(lateral_pid_process, t + 18 + 28 + 12);
+	target_arm_pos.store(ARM_LOAD_POS);
+	wait_stable(lateral_pid_process);
+
+	target_dist.fetch_add(-24);
+	wait_stable(lateral_pid_process);
+	target_heading.store(90);
+	wait_stable(angular_pid_process);
+	
 
 	wait(3000);
-
 	auton_task.remove();
 }
 
@@ -776,32 +847,24 @@ void opcontrol() {
 		else if (master.get_digital(MOGO_OFF_BUTTON))
 			mogo.set_value(false);
 
-		printf("CYCLE\n");
 		// arm
 		if (master.get_digital(ARM_UP_BUTTON)) {
-			printf("\tarm up\n");
 			arm_target_pos += ARM_SPEED;
 		}
 		else if (master.get_digital(ARM_DOWN_BUTTON)) {
-			printf("\tarm down\n");
 			arm_target_pos -= ARM_SPEED;
 		}
-		printf("\tarm tp %f\n", arm_target_pos.load());
 		// arm limiters
 		if (arm_target_pos.load() < ARM_BOTTOM_LIMIT) arm_target_pos.store(ARM_BOTTOM_LIMIT);
 		if (arm_target_pos.load() > ARM_TOP_LIMIT) arm_target_pos.store(ARM_TOP_LIMIT);
-		printf("\tarm lim %f\n", arm_target_pos.load());
 		// arm load macro
 		if (master.get_digital(ARM_LOAD_POS_BUTTON)) {
 			arm_target_pos = ARM_LOAD_POS;
-			printf("\tarm macro %f\n", arm_target_pos.load());
 		}
 		// run pid
 		pid_handle_process(arm_pid_process);
 		// move arm to PID arm_pos_output
 		arm.move(arm_pos_output.load());
-		printf("\tarm out %f\n", arm_pos_output.load());
-		printf("\tarm pos %f\n", arm_pos.load());
 
         pros::delay(PROCESS_DELAY);
     }
