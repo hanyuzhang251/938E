@@ -6,6 +6,8 @@
 #include <atomic>
 #include <tuple>
 #include <queue>
+#include <cstring>
+#include <cstdio>
 
 #define wait(n) pros::delay(n)
 
@@ -151,7 +153,16 @@ constexpr pros::digi_button MOGO_OFF_BUTTON = pros::CTRL_DIGI_B;
 constexpr pros::digi_button ARM_UP_BUTTON = pros::CTRL_DIGI_R1;
 constexpr pros::digi_button ARM_DOWN_BUTTON = pros::CTRL_DIGI_R2;
 
-constexpr pros::digi_button ARM_LOAD_POS_BUTTON = pros::CTRL_DIGI_UP;
+constexpr pros::digi_button ARM_LOAD_MACRO = pros::CTRL_DIGI_UP;
+bool p_arm_load_macro = false;
+
+bool p_nav_toggle = false;
+constexpr pros::digi_button MENU_TOGGLE = pros::CTRL_DIGI_Y;
+bool p_menu_toggle = false;
+constexpr pros::digi_button SETTING_TOGGLE = pros::CTRL_DIGI_A;
+bool p_setting_toggle = false;
+
+bool override_inputs = false;
 
 // PID
 
@@ -170,13 +181,13 @@ PIDController lateral_pid (
 
 PIDController angular_pid (
 		2, // kp
-		0.2, // ki
-		15, // kd
-		10, // wind
+		0.3, // ki
+		16, // kd
+		5, // wind
 		999, // clamp
 		0, // decay
 		999, // slew
-		3, // small error
+		2, // small error
 		30, // large error
 		1 // tolerance
 );
@@ -184,14 +195,14 @@ PIDController angular_pid (
 PIDController arm_pid (
 		0.3, // kp
 		0.05, // ki
-		0.1, // kd
-		100, // wind
+		0.2, // kd
+		25, // wind
 		999, // clamp
 		0.9, // decay
 		999, // slew
-		0, // small error
+		10, // small error
 		50, // large error
-		3 // tolerance
+		0 // tolerance
 );
 
 // AUTON
@@ -228,6 +239,9 @@ constexpr int INTAKE_SPEED = 127;
 constexpr int EJECT_BRAKE_CYCLES = 16;
 
 constexpr float ARM_SPEED = 50;
+constexpr int ARM_WIND_MIN = 5;
+constexpr int ARM_WIND_TICKS = ARM_WIND_MIN + 8;
+int arm_move_ticks = ARM_WIND_MIN;
 constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
 constexpr float ARM_LOAD_POS = 280;
 
@@ -418,6 +432,10 @@ bool check_tasks() {
 	return task_run;
 }
 
+char ctrl_log[3][15];
+int ctrl_log_ptr = 0;
+uint32_t ctrl_log_update = pros::millis();
+
 
 
 /*****************************************************************************/
@@ -504,12 +522,15 @@ void get_robot_position() {
 /*                                COMPETITION                                */
 /*****************************************************************************/
 
+uint32_t run_start = pros::millis();
+
 bool init_done = false;
 
 void init() {
 	if (init_done) return;
 
 	pros::lcd::initialize();
+	master.clear();
 
 	imu.reset(true);
 	solve_imu_bias(900);
@@ -525,13 +546,56 @@ void init() {
             pros::lcd::print(1, "y_pos: %f", y_pos.load());
             pros::lcd::print(2, "head: %f", heading.load());
 
+			pros::lcd::print(7, "arm-draw: %d", arm.get_current_draw());
+
             pros::delay(PROCESS_DELAY);
         }
     });
 
 	pros::Task async_tasks([&]() {
+		bool ctrl_in_menu = false;
+		int ctrl_menu_ptr = 0;
+
 		while(true) {
 			check_tasks();
+
+			if (master.get_digital(MENU_TOGGLE) && !p_menu_toggle) {
+				ctrl_in_menu = !ctrl_in_menu;
+				override_inputs = ctrl_in_menu;
+			}
+			p_menu_toggle = master.get_digital(MENU_TOGGLE);
+
+			if (ctrl_in_menu) {
+				if (!p_nav_toggle && ctrl_menu_ptr > 0 && master.get_digital(pros::CTRL_DIGI_UP)) --ctrl_menu_ptr;
+				if (!p_nav_toggle && ctrl_menu_ptr < 2 && master.get_digital(pros::CTRL_DIGI_DOWN)) ++ctrl_menu_ptr;
+				p_nav_toggle = master.get_digital(pros::CTRL_DIGI_UP) || master.get_digital(pros::CTRL_DIGI_DOWN);
+				
+				if (master.get_digital(SETTING_TOGGLE) && !p_setting_toggle) {
+					switch(ctrl_menu_ptr) {
+						case 0: {
+							racism = !racism;
+							break;
+						}
+						default: {}
+					}
+				}
+				p_setting_toggle = master.get_digital(SETTING_TOGGLE);
+
+				std::snprintf(ctrl_log[0], 15, "%ccs:%c              ", ctrl_menu_ptr == 0 ? '>' : ' ', racism ? 'R' : 'B');
+			} else {
+				std::snprintf(ctrl_log[0], 15, "%lld", pros::millis() - run_start);
+				std::snprintf(ctrl_log[1], 15, "");
+				std::snprintf(ctrl_log[2], 15, "");
+			}
+
+			if (pros::millis() >= ctrl_log_update) {
+				ctrl_log_update += 51;
+				master.print(ctrl_log_ptr, 0, "%s", ctrl_log[ctrl_log_ptr]);
+				
+				ctrl_log_ptr++;
+				if (ctrl_log_ptr >= 3) ctrl_log_ptr = 0;
+			}
+
 			wait(PROCESS_DELAY);
 		}
 	});
@@ -636,6 +700,7 @@ void wait_cross(PIDProcess pid_process, float point, bool relative = true, int b
 void wait_stable(PIDProcess pid_process, int buffer_ticks = 3, int min_stable_ticks = 8) {
 	int stable_ticks = 0;
 	while (stable_ticks < min_stable_ticks) {
+		pros::lcd::print(4, "error: %f", pid_process.get_error());
 		if (std::abs(pid_process.get_error()) <= pid_process.pid.tolerance) ++stable_ticks;
 		else stable_ticks = 0;
 		wait(PROCESS_DELAY);
@@ -778,14 +843,19 @@ void autonomous() {
 	t = lateral_pid_process.value.load();
 	lateral_pid_process.max_speed = 90;
 	target_dist.fetch_add(84);
-	wait_cross(lateral_pid_process, t + 18);
+	pros::lcd::print(5, "1");
+	wait_cross(lateral_pid_process, t + 12, false);
 	target_heading.store(40);
-	wait_cross(lateral_pid_process, t + 18 + 28);
+	pros::lcd::print(5, "2");
+	wait_cross(lateral_pid_process, t + 24 + 22, false);
 	target_heading.store(0);
-	wait_cross(lateral_pid_process, t + 18 + 28 + 12);
+	pros::lcd::print(5, "3");
+	wait_cross(lateral_pid_process, t + 24 + 34 + 16, false);
 	target_arm_pos.store(ARM_LOAD_POS);
+	pros::lcd::print(5, "4");
 	wait_stable(lateral_pid_process);
 
+	pros::lcd::print(5, "5");
 	tap_ring(4, 100);
 	lateral_pid_process.max_speed = 127;
 	target_dist.fetch_add(-24);
@@ -795,7 +865,7 @@ void autonomous() {
 
 	intake.move(-8);
 	wait(250);
-	inatke.brake();
+	intake.brake();
 	target_arm_pos.store(3 * ARM_LOAD_POS);
 
 	target_dist.fetch_add(18);
@@ -888,9 +958,9 @@ void opcontrol() {
 
 		// intake
 		if (!intake_override) {
-			if (master.get_digital(INTAKE_FWD_BUTTON))
+			if (!override_inputs && master.get_digital(INTAKE_FWD_BUTTON))
 				intake.move(INTAKE_SPEED);
-			else if (master.get_digital(INTAKE_REV_BUTTON))
+			else if (!override_inputs && master.get_digital(INTAKE_REV_BUTTON))
 				intake.move(-INTAKE_SPEED);
 			else intake.brake();
 		} else {
@@ -898,25 +968,30 @@ void opcontrol() {
 		}
 		
 		// mogo
-		if (master.get_digital(MOGO_ON_BUTTON))
+		if (!override_inputs && master.get_digital(MOGO_ON_BUTTON))
 			mogo.set_value(true);
-		else if (master.get_digital(MOGO_OFF_BUTTON))
+		else if (!override_inputs && master.get_digital(MOGO_OFF_BUTTON))
 			mogo.set_value(false);
 
 		// arm
-		if (master.get_digital(ARM_UP_BUTTON)) {
-			arm_target_pos += ARM_SPEED;
+		bool arm_moved = false;
+		float real_arm_speed = ARM_SPEED * std::min(1.0f, (float)(arm_move_ticks) / ARM_WIND_TICKS);
+		if (!override_inputs && master.get_digital(ARM_UP_BUTTON)) {
+			arm_target_pos += real_arm_speed;
+			arm_moved = true;
 		}
-		else if (master.get_digital(ARM_DOWN_BUTTON)) {
-			arm_target_pos -= ARM_SPEED;
+		else if (!override_inputs && master.get_digital(ARM_DOWN_BUTTON)) {
+			arm_target_pos -= real_arm_speed;
+			arm_moved = true;
 		}
-		// arm limiters
-		if (arm_target_pos.load() < ARM_BOTTOM_LIMIT) arm_target_pos.store(ARM_BOTTOM_LIMIT);
-		if (arm_target_pos.load() > ARM_TOP_LIMIT) arm_target_pos.store(ARM_TOP_LIMIT);
+		if (arm_moved) ++arm_move_ticks;
+		else arm_move_ticks = ARM_WIND_MIN;
+
 		// arm load macro
-		if (master.get_digital(ARM_LOAD_POS_BUTTON)) {
-			arm_target_pos = ARM_LOAD_POS;
+		if (!override_inputs && master.get_digital(ARM_LOAD_MACRO)) {
+			if (!p_arm_load_macro) arm_target_pos.store(arm_pos.load() + ARM_LOAD_POS);
 		}
+		p_arm_load_macro = master.get_digital(ARM_LOAD_MACRO);
 		// run pid
 		pid_handle_process(arm_pid_process);
 		// move arm to PID arm_pos_output
