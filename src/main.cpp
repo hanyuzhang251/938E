@@ -5,6 +5,7 @@
 #include <limits>
 #include <atomic>
 #include <tuple>
+#include <queue>
 
 #define wait(n) pros::delay(n)
 
@@ -281,9 +282,6 @@ void pid_handle_process(PIDProcess& process) {
     auto [value, target, output, pid, min_speed, max_speed, life, normalize_err,
           prev_output, prev_error, error, integral, derivative] = process();
 
-	printf("\nHANDLING PID PROCESS\n");
-	printf("> STATE: value: %f, target: %f, output: %f\n", value.load(), target.load(), output.load());
-
     if (life <= 0) return;
     life -= 1;
 
@@ -292,64 +290,49 @@ void pid_handle_process(PIDProcess& process) {
 
     // error update
     error = target.load() - value.load();
-	printf("> ERROR CALC: target(%f) - value(%f) = error(%f)\n", target.load(), value.load(), error);
     // normalize error if applicable
     if (normalize_err) {
 		error = normalize_err(target.load(), value.load());
-		printf("> CUST ERROR CALC: norm_error = error(%f)\n", error);
 	}
 
     // reset integral if we crossed target
     if (sgn(prev_error) != sgn(error)) {
 		integral = 0;
-		printf("> RESET INTEGRAL\n");
 	}
 
     // update integral if error in windup range
     if (std::abs(error) <= pid.wind) {
 		integral += error;
-		printf("> ACCUMULATE INTEGRAL: +%f = %f\n", error, integral);
 	}
     // else decay integral
     else {
 		integral *= pid.decay;
-		printf("> DECAY INTEGRAL: *%f = %f\n", pid.decay, integral);
 	}
 
     // clamp integral
     integral = std::min(pid.clamp, std::max(-pid.clamp, integral));
-	printf("> CLAMP INTEGRAL: range(%f) = %f\n", pid.clamp, integral);
     
     // derivative update
     derivative = error - prev_error;
-	printf("> UPDATE DERIV: error(%f) - prev_error(%f\n", error, prev_error);
 
     float real_error = error;
     float real_integral = integral;
     float real_derivative = derivative;
 
     // scale integral on small error
-	printf("integral mult %f\n", (std::min(1.0f, std::abs(error) / pid.small_error)));
     real_integral *= (std::min(1.0f, std::abs(error) / pid.small_error));
     // scale derivative on large error
-    printf("derivitave mult %f\n",  (1 - std::min(1.0f, std::abs(error) / pid.large_error)));
 	real_derivative *= (1 - std::min(1.0f, std::abs(error) / pid.large_error));
-
-	printf("err %f, int %f, der %f\n", real_error, real_integral, real_derivative);
 
     // calculate power
     float calc_power = real_error * pid.kp + real_integral * pid.ki + real_derivative * pid.kd;
-	printf("> POWER CALC: %f\n", calc_power);
     // constrain power to slew
     calc_power = std::min(prev_output + pid.slew, std::max(prev_output - pid.slew, calc_power));
-    printf("> SLEW CALC: %f\n", calc_power);
 	// constrain power to min/max speed
     calc_power = std::min(max_speed, std::max(-max_speed, calc_power));
-	printf("> MAX SPEED CALC: %f\n", calc_power);
 
     // set output power
     output.store(calc_power);
-	printf("> OUTPUT: %f\n", calc_power);
 }
 
 
@@ -407,6 +390,33 @@ pros::Motor arm (ARM_PORT);
 pros::IMU imu (IMU_PORT);
 
 pros::Optical optical (OPTICAL_PORT);
+
+using Task = std::pair<std::function<void()>, uint32_t>;
+auto task_cmp = [](auto a, auto b) {return a.second > b.second;};
+std::priority_queue<Task, std::vector<Task>, decltype(task_cmp)> tasks;
+
+void schedule_task(std::function<void()> func, uint32_t time, bool relative = true) {
+	if (relative) time += pros::millis();
+
+	tasks.emplace(func, time);
+}
+
+bool check_tasks() {
+	bool task_run = false;
+
+	while (!tasks.empty()) {
+		Task top = tasks.top();
+		if (pros::millis() >= top.second) {
+			tasks.pop();
+			top.first();
+			task_run = true;
+		} else {
+			break;
+		}
+	}
+
+	return task_run;
+}
 
 
 
@@ -519,6 +529,13 @@ void init() {
         }
     });
 
+	pros::Task async_tasks([&]() {
+		while(true) {
+			check_tasks();
+			wait(PROCESS_DELAY);
+		}
+	});
+
 	optical.set_led_pwm(100);
 
 	pros::Task color_sort_task([&]() {
@@ -626,19 +643,16 @@ void wait_stable(PIDProcess pid_process, int buffer_ticks = 3, int min_stable_ti
 	for (int i = 0; i < buffer_ticks; ++i) wait(PROCESS_DELAY);
 }
 
-void tap_ring(int n_times, std::atomic<bool>& crashout, int delay = 150) {
+void tap_ring(int n_times, int delay = 150, std::atomic<bool>* crashout = nullptr) {
 	pros::Task async_task([&]() {
 		for (int i = 0; i < n_times; ++i) {
 			intake.brake();
 			wait(delay);
 			intake.move(INTAKE_SPEED);
 			wait(delay);
-			if (crashout.load()) break;
+			if (crashout && crashout->load()) break;
 		}
-
-		async_task.remove();
 	});
-	async_task.remove();
 }
 
 float t = 0;
@@ -772,11 +786,53 @@ void autonomous() {
 	target_arm_pos.store(ARM_LOAD_POS);
 	wait_stable(lateral_pid_process);
 
+	tap_ring(4, 100);
+	lateral_pid_process.max_speed = 127;
 	target_dist.fetch_add(-24);
 	wait_stable(lateral_pid_process);
 	target_heading.store(90);
 	wait_stable(angular_pid_process);
-	
+
+	intake.move(-8);
+	wait(250);
+	inatke.brake();
+	target_arm_pos.store(3 * ARM_LOAD_POS);
+
+	target_dist.fetch_add(18);
+	wait_cross(lateral_pid_process, 6);
+	intake.move(INTAKE_SPEED);
+
+	target_arm_pos.store(ARM_TOP_LIMIT);
+	wait(500);
+
+	target_dist.fetch_add(-36);
+	wait_cross(lateral_pid_process, -18);
+	target_heading.store(180);
+	wait_stable(lateral_pid_process);
+	wait_stable(angular_pid_process);
+
+	lateral_pid_process.max_speed = 90;
+	target_dist.store(68);
+	wait_stable(lateral_pid_process);
+
+	target_heading.store(45);
+	wait_stable(angular_pid_process);
+
+	lateral_pid_process.max_speed = 127;
+	target_dist.fetch_add(29);
+	wait_cross(lateral_pid_process, 11);
+	target_heading.store(0);
+	wait_stable(lateral_pid_process);
+	wait_stable(angular_pid_process);
+
+	target_dist.fetch_add(-24);
+	wait_cross(lateral_pid_process, -12);
+	target_heading.store(-20);
+	wait_stable(lateral_pid_process);
+	wait_stable(angular_pid_process);
+
+	mogo.set_value(false);
+
 
 	wait(3000);
 	auton_task.remove();
