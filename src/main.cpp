@@ -247,7 +247,7 @@ constexpr int ARM_WIND_MIN = 5;
 constexpr int ARM_WIND_TICKS = ARM_WIND_MIN + 8;
 int arm_move_ticks = ARM_WIND_MIN;
 constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
-constexpr float ARM_LOAD_POS = 280;
+constexpr float ARM_LOAD_POS = 275;
 
 constexpr float ARM_BOTTOM_LIMIT = 0;
 constexpr float ARM_TOP_LIMIT = 2000;
@@ -861,7 +861,7 @@ void autonomous() {
 	target_dist.fetch_add(-27);
 	wait_stable(lateral_pid_process);
 	target_heading.store(90);
-	for (int i = 0; i < 6; ++i) {
+	for (int i = 0; i < 3; ++i) {
 		intake.move(-8);
 		wait(150);
 		intake.move(INTAKE_SPEED);
@@ -889,9 +889,10 @@ void autonomous() {
 	wait_stable(angular_pid_process);
 
 	lateral_pid_process.max_speed = 127;
-	target_dist.fetch_add(77);
-	for (int i = 1; i <= 12; ++i) {
+	target_dist.fetch_add(79);
+	for (int i = 1; i <= 20; ++i) {
 		lateral_pid_process.max_speed = 127 - i * 5;
+		wait(65);
 	}
 	wait_stable(lateral_pid_process);
 
@@ -900,12 +901,12 @@ void autonomous() {
 
 	lateral_pid_process.max_speed = 127;
 	target_dist.fetch_add(29);
-	wait_cross(lateral_pid_process, 3);
+	wait_cross(lateral_pid_process, 3.8);
 	target_heading.store(0);
 	wait_stable(lateral_pid_process);
 	wait_stable(angular_pid_process);
 
-	target_dist.fetch_add(-24);
+	target_dist.fetch_add(-20);
 	wait_cross(lateral_pid_process, -5);
 	target_heading.store(-20);
 	wait_stable(lateral_pid_process);
