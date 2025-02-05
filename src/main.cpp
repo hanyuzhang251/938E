@@ -182,12 +182,12 @@ PIDController lateral_pid (
 PIDController angular_pid (
 		2, // kp
 		0.3, // ki
-		16, // kd
-		5, // wind
+		18, // kd
+		10, // wind
 		999, // clamp
 		0, // decay
 		999, // slew
-		2, // small error
+		4, // small error
 		30, // large error
 		1 // tolerance
 );
@@ -216,7 +216,7 @@ bool intake_override = false;
 bool racism = false; // true = red bad
 
 bool color_sort = true;
-constexpr int OUTTAKE_DELAY = 100;
+constexpr int OUTTAKE_DELAY = 75;
 constexpr int OUTTAKE_TICKS = 500;
 
 constexpr float RED_HUE = 5;
@@ -334,7 +334,7 @@ void pid_handle_process(PIDProcess& process) {
     float real_derivative = derivative;
 
     // scale integral on small error
-    real_integral *= (std::min(1.0f, std::abs(error) / pid.small_error));
+    real_integral *= (std::min(1.0f, std::max(0.3f, std::abs(error) / pid.small_error)));
     // scale derivative on large error
 	real_derivative *= (1 - std::min(1.0f, std::abs(error) / pid.large_error));
 
@@ -581,9 +581,9 @@ void init() {
 				}
 				p_setting_toggle = master.get_digital(SETTING_TOGGLE);
 
-				std::snprintf(ctrl_log[0], 15, "%ccs:%c              ", ctrl_menu_ptr == 0 ? '>' : ' ', racism ? 'R' : 'B');
+				std::snprintf(ctrl_log[0], 15, "%cCOL:%s              ", ctrl_menu_ptr == 0 ? '>' : ' ', racism ? "BLUE" : "RED ");
 			} else {
-				std::snprintf(ctrl_log[0], 15, "%lld", pros::millis() - run_start);
+				std::snprintf(ctrl_log[0], 15, "%ld", pros::millis() - run_start);
 				std::snprintf(ctrl_log[1], 15, "");
 				std::snprintf(ctrl_log[2], 15, "");
 			}
@@ -830,7 +830,7 @@ void autonomous() {
 	wait_stable(lateral_pid_process);
 	target_heading.store(-90);
 	wait_stable(angular_pid_process);
-	target_dist.fetch_add(-24);
+	target_dist.fetch_add(-26);
 	wait_stable(lateral_pid_process);
 	mogo.set_value(true);
 	wait(250);
@@ -843,24 +843,24 @@ void autonomous() {
 	t = lateral_pid_process.value.load();
 	lateral_pid_process.max_speed = 90;
 	target_dist.fetch_add(84);
-	pros::lcd::print(5, "1");
 	wait_cross(lateral_pid_process, t + 12, false);
 	target_heading.store(40);
-	pros::lcd::print(5, "2");
-	wait_cross(lateral_pid_process, t + 24 + 22, false);
+	wait_cross(lateral_pid_process, t + 24 + 25, false);
 	target_heading.store(0);
-	pros::lcd::print(5, "3");
 	wait_cross(lateral_pid_process, t + 24 + 34 + 16, false);
 	target_arm_pos.store(ARM_LOAD_POS);
-	pros::lcd::print(5, "4");
 	wait_stable(lateral_pid_process);
 
-	pros::lcd::print(5, "5");
-	tap_ring(4, 100);
 	lateral_pid_process.max_speed = 127;
-	target_dist.fetch_add(-24);
+	target_dist.fetch_add(-27);
 	wait_stable(lateral_pid_process);
 	target_heading.store(90);
+	for (int i = 0; i < 6; ++i) {
+		intake.move(-8);
+		wait(150);
+		intake.move(INTAKE_SPEED);
+		wait(150);
+	}
 	wait_stable(angular_pid_process);
 
 	intake.move(-8);
@@ -868,21 +868,25 @@ void autonomous() {
 	intake.brake();
 	target_arm_pos.store(3 * ARM_LOAD_POS);
 
-	target_dist.fetch_add(18);
+	target_dist.fetch_add(22);
 	wait_cross(lateral_pid_process, 6);
 	intake.move(INTAKE_SPEED);
 
 	target_arm_pos.store(ARM_TOP_LIMIT);
-	wait(500);
+	wait(800);
 
 	target_dist.fetch_add(-36);
-	wait_cross(lateral_pid_process, -18);
+	wait_cross(lateral_pid_process, -5);
+	target_arm_pos.store(ARM_BOTTOM_LIMIT);
 	target_heading.store(180);
 	wait_stable(lateral_pid_process);
 	wait_stable(angular_pid_process);
 
-	lateral_pid_process.max_speed = 90;
-	target_dist.store(68);
+	lateral_pid_process.max_speed = 127;
+	target_dist.fetch_add(77);
+	for (int i = 1; i <= 12; ++i) {
+		lateral_pid_process.max_speed = 127 - i * 5;
+	}
 	wait_stable(lateral_pid_process);
 
 	target_heading.store(45);
@@ -890,13 +894,13 @@ void autonomous() {
 
 	lateral_pid_process.max_speed = 127;
 	target_dist.fetch_add(29);
-	wait_cross(lateral_pid_process, 11);
+	wait_cross(lateral_pid_process, 3);
 	target_heading.store(0);
 	wait_stable(lateral_pid_process);
 	wait_stable(angular_pid_process);
 
 	target_dist.fetch_add(-24);
-	wait_cross(lateral_pid_process, -12);
+	wait_cross(lateral_pid_process, -5);
 	target_heading.store(-20);
 	wait_stable(lateral_pid_process);
 	wait_stable(angular_pid_process);
