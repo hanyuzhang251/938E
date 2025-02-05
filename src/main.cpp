@@ -127,6 +127,7 @@ constexpr int DT_BR_PORT = 16;
 constexpr int INTAKE_PORT = -2;
 
 constexpr int DIDDY_PORT = 1;
+
 constexpr int MOGO_PORT = 2;
 constexpr int RAISE_INTAKE_PORT = 3;
 
@@ -146,9 +147,12 @@ constexpr pros::digi_button INTAKE_REV_BUTTON = pros::CTRL_DIGI_L2;
 constexpr pros::digi_button EJECT_RING_BUTTON = pros::CTRL_DIGI_X;
 
 constexpr pros::digi_button DIDDY_TOGGLE_BUTTON = pros::CTRL_DIGI_X;
+bool p_diddy = false;
+bool diddy_on = false;
 
-constexpr pros::digi_button MOGO_ON_BUTTON = pros::CTRL_DIGI_A;
-constexpr pros::digi_button MOGO_OFF_BUTTON = pros::CTRL_DIGI_B;
+constexpr pros::digi_button MOGO_TOGGLE_BUTTON = pros::CTRL_DIGI_A;
+bool p_mogo = false;
+bool mogo_on = false;
 
 constexpr pros::digi_button ARM_UP_BUTTON = pros::CTRL_DIGI_R1;
 constexpr pros::digi_button ARM_DOWN_BUTTON = pros::CTRL_DIGI_R2;
@@ -398,6 +402,8 @@ pros::MotorGroup dt_right_motors ({
 pros::Motor intake (INTAKE_PORT);
 
 pros::adi::DigitalOut mogo (MOGO_PORT);
+
+pros::adi::DigitalOut diddy (DIDDY_PORT);
 
 pros::Motor arm (ARM_PORT);
 
@@ -972,10 +978,15 @@ void opcontrol() {
 		}
 		
 		// mogo
-		if (!override_inputs && master.get_digital(MOGO_ON_BUTTON))
-			mogo.set_value(true);
-		else if (!override_inputs && master.get_digital(MOGO_OFF_BUTTON))
-			mogo.set_value(false);
+		if (!override_inputs && master.get_digital(MOGO_TOGGLE_BUTTON) && !p_mogo)
+			mogo_on = !mogo_on;
+		p_mogo = master.get_digital(MOGO_TOGGLE_BUTTON);
+		mogo.set_value(mogo_on);
+
+		if (!override_inputs && master.get_digital(DIDDY_TOGGLE_BUTTON) && !p_diddy)
+			diddy_on = !diddy_on;
+		p_diddy = master.get_digital(DIDDY_TOGGLE_BUTTON);
+		diddy.set_value(diddy_on);
 
 		// arm
 		bool arm_moved = false;
