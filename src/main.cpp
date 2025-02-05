@@ -191,7 +191,7 @@ PIDController angular_pid (
 		999, // clamp
 		0, // decay
 		999, // slew
-		3, // small error
+		5, // small error
 		30, // large error
 		1 // tolerance
 );
