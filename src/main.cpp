@@ -185,13 +185,13 @@ PIDController lateral_pid (
 
 PIDController angular_pid (
 		2, // kp
-		0.3, // ki
-		18, // kd
+		0.2, // ki
+		17, // kd
 		10, // wind
 		999, // clamp
 		0, // decay
 		999, // slew
-		4, // small error
+		3, // small error
 		30, // large error
 		1 // tolerance
 );
@@ -247,7 +247,7 @@ constexpr int ARM_WIND_MIN = 5;
 constexpr int ARM_WIND_TICKS = ARM_WIND_MIN + 8;
 int arm_move_ticks = ARM_WIND_MIN;
 constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
-constexpr float ARM_LOAD_POS = 275;
+constexpr float ARM_LOAD_POS = 258;
 
 constexpr float ARM_BOTTOM_LIMIT = 0;
 constexpr float ARM_TOP_LIMIT = 2000;
@@ -875,7 +875,7 @@ void autonomous() {
 	target_arm_pos.store(3 * ARM_LOAD_POS);
 
 	target_dist.fetch_add(22);
-	wait_cross(lateral_pid_process, 6);
+	wait_cross(lateral_pid_process, 3);
 	intake.move(INTAKE_SPEED);
 
 	target_arm_pos.store(ARM_TOP_LIMIT);
@@ -896,7 +896,7 @@ void autonomous() {
 	}
 	wait_stable(lateral_pid_process);
 
-	target_heading.store(45);
+	target_heading.store(50);
 	wait_stable(angular_pid_process);
 
 	lateral_pid_process.max_speed = 127;
