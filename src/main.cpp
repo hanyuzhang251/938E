@@ -184,15 +184,15 @@ PIDController lateral_pid (
 );
 
 PIDController angular_pid (
-		2, // kp
-		0.2, // ki
-		17, // kd
+		3, // kp
+		0.25, // ki
+		20, // kd
 		10, // wind
 		999, // clamp
 		0, // decay
 		999, // slew
-		5, // small error
-		30, // large error
+		3, // small error
+		999, // large error
 		1 // tolerance
 );
 
@@ -703,12 +703,16 @@ void wait_cross(PIDProcess pid_process, float point, bool relative = true, int b
 	for (int i = 0; i < buffer_ticks; ++i) wait(PROCESS_DELAY);
 }
 
-void wait_stable(PIDProcess pid_process, int buffer_ticks = 3, int min_stable_ticks = 8) {
+void wait_stable(PIDProcess pid_process, uint32_t timeout = 5000, int buffer_ticks = 3, int min_stable_ticks = 8) {
 	int stable_ticks = 0;
+	uint32_t end_time = pros::millis() + timeout;
+
 	while (stable_ticks < min_stable_ticks) {
 		pros::lcd::print(4, "error: %f", pid_process.get_error());
 		if (std::abs(pid_process.get_error()) <= pid_process.pid.tolerance) ++stable_ticks;
 		else stable_ticks = 0;
+
+		if (pros::millis() >= end_time) return;
 		wait(PROCESS_DELAY);
 	}
 	for (int i = 0; i < buffer_ticks; ++i) wait(PROCESS_DELAY);
