@@ -185,13 +185,13 @@ PIDController lateral_pid (
 
 PIDController angular_pid (
 		3, // kp
-		0.25, // ki
+		0.35, // ki
 		20, // kd
 		10, // wind
 		999, // clamp
 		0, // decay
 		999, // slew
-		3, // small error
+		5, // small error
 		999, // large error
 		1 // tolerance
 );
@@ -918,46 +918,17 @@ void autonomous() {
 
 	mogo.set_value(false);
 
+	target_dist.fetch_add(30);
+	target_heading.store(-95);
+	wait_stable(lateral_pid_process);
+
 	target_heading.store(90);
 	wait_stable(angular_pid_process);
-	target_dist.fetch_add(72);
+	target_dist.fetch_add(-60);
 	wait_stable(lateral_pid_process);
-	target_heading.store(100);
-	wait_stable(angular_pid_process);
-	target_dist.fetch_add(10);
-	
 	mogo.set_value(true);
-
-	wait_stable(lateral_pid_process);
-	target_heading.store(90);
-	wait_stable(angular_pid_process);
-	target_dist.fetch_add(36);
-	wait_stable(lateral_pid_process);
-	target_heading.store(190);
-	wait_stable(angular_pid_process);
-	target_dist.fetch_add(27);
-	wait_stable(lateral_pid_process);
-	target_heading.store(170);
-	wait_stable(angular_pid_process);
-	target_arm_pos.store(ARM_LOAD_POS);
-	target_dist.fetch_add(27);
-	wait_stable(lateral_pid_process);
-	wait(150);
-	target_heading.store(90);
-	wait_stable(angular_pid_process);
-	target_dist.fetch_add(12);
-	wait_stable(lateral_pid_process);
-	target_arm_pos.store(3 * ARM_LOAD_POS);
-	target_dist.fetch_add(-12);
-	wait_stable(lateral_pid_process);
-	target_heading.store(-9);
-	wait_stable(angular_pid_process);
-	target_dist.fetch_add(58);
-	target_heading.store(45);
-
-	mogo.set_value(false); 
-
-
+	wait(250);
+	target_heading.store(0);
 
 
 	wait(3000);
