@@ -532,6 +532,9 @@ uint32_t run_start = pros::millis();
 
 bool init_done = false;
 
+std::atomic<bool> red_ring_seen = false;
+std::atomic<bool> blue_ring_seen = false;
+
 void init() {
 	if (init_done) return;
 
@@ -618,20 +621,34 @@ void init() {
 
 			if (!color_sort) continue;
 
-			float hue_target = racism ? RED_HUE : BLUE_HUE;
-			float hue_min = std::fmod(hue_target - HUE_TOLERANCE + 360, 360.0f);
-			float hue_max = std::fmod(hue_target + HUE_TOLERANCE, 360.0f);
+			float r_hue_min = std::fmod(RED_HUE - HUE_TOLERANCE + 360, 360.0f);
+			float r_hue_max = std::fmod(RED_HUE + HUE_TOLERANCE, 360.0f);
+			float b_hue_min = std::fmod(BLUE_HUE - HUE_TOLERANCE + 360, 360.0f);
+			float b_hue_max = std::fmod(BLUE_HUE + HUE_TOLERANCE, 360.0f);
 
-			bool outtake = false;
-
-			if (hue_min <= hue_max) {
+			bool b_ring = false;
+			if (b_hue_min <= b_hue_max) {
 				// if it's normal, just check the ranges
-				outtake = hue_min <= optical.get_hue() && optical.get_hue() <= hue_max;
-			} else if (hue_min >= hue_max) {
+				b_ring = b_hue_min <= optical.get_hue() && optical.get_hue() <= b_hue_max;
+			} else if (b_hue_min >= b_hue_max) {
 				// if the range goes around 0, say hue min is 330 while hue_max is 30,
 				// 0 and 360 are used as bounds.
-				outtake = optical.get_hue() <= hue_max || optical.get_hue() >= hue_min;
+				b_ring = optical.get_hue() <= b_hue_max || optical.get_hue() >= b_hue_min;
 			}
+			if (b_ring) blue_ring_seen.store(true);
+
+			bool r_ring = false;
+			if (r_hue_min <= r_hue_max) {
+				// if it's normal, just check the ranges
+				r_ring = r_hue_min <= optical.get_hue() && optical.get_hue() <= r_hue_max;
+			} else if (r_hue_min >= r_hue_max) {
+				// if the range goes around 0, say hue min is 330 while hue_max is 30,
+				// 0 and 360 are used as bounds.
+				r_ring = optical.get_hue() <= r_hue_max || optical.get_hue() >= r_hue_min;
+			}
+			if (r_ring) red_ring_seen.store(true);
+
+			bool outtake = racism && r_ring || !racism && b_ring;
 
 			bool verdict = outtake && optical.get_proximity() >= DIST_TOLERANCE;
 			if (verdict) {
@@ -716,6 +733,20 @@ void wait_stable(PIDProcess pid_process, uint32_t timeout = 5000, int buffer_tic
 		wait(PROCESS_DELAY);
 	}
 	for (int i = 0; i < buffer_ticks; ++i) wait(PROCESS_DELAY);
+}
+
+// flag bits 
+void wait_for_ring(bool red = true, bool blue = false, uint32_t timeout = 3000) {
+	if (red) red_ring_seen.store(false);
+	if (blue) blue_ring_seen.store(false);
+
+	uint32_t end_time = pros::millis() + timeout;
+
+	while (!(red && red_ring_seen || blue && blue_ring_seen)) {
+		if (pros:millis() >= end_time) return;
+
+		wait(PROCESS_DELAY);
+	}
 }
 
 void tap_ring(int n_times, int delay = 150, std::atomic<bool>* crashout = nullptr) {
@@ -952,6 +983,7 @@ void autonomous() {
 	mogo.set_value(false);
 	wait(250);
 	target_dist.fetch_add(24);
+	wait_for_ring(true, false, 1500);
 
 	wait(3000);
 	auton_task.remove();
