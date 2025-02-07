@@ -918,6 +918,7 @@ void autonomous() {
 
 	mogo.set_value(false);
 	wait(250);
+	intake.brake();
 
 	lateral_pid_process.max_speed = 100;
 	target_dist.fetch_add(96);
@@ -933,7 +934,24 @@ void autonomous() {
 	mogo.set_value(true);
 	wait(250);
 
+	intake.move(INTAKE_SPEED);
+	target_dist.fetch_add(30);
+	wait_stable(lateral_pid_process);
 
+	target_heading.store(80);
+	wait(250);
+	diddy.set_value(true);
+	wait(250);
+	target_heading.store(135);
+	wait(500);
+	target_heading.store(180 + 45);
+	wait_stable(angular_pid_process);
+	
+	target_dist.fetch_add(-4);
+	wait(500);
+	mogo.set_value(false);
+	wait(250);
+	target_dist.fetch_add(24);
 
 	wait(3000);
 	auton_task.remove();
