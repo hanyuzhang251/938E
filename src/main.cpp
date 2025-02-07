@@ -851,7 +851,7 @@ void autonomous() {
 	intake.move(INTAKE_SPEED);
 
 	t = lateral_pid_process.value.load();
-	lateral_pid_process.max_speed = 90;
+	lateral_pid_process.max_speed = 100;
 	target_dist.fetch_add(84);
 	wait_cross(lateral_pid_process, t + 12, false);
 	target_heading.store(40);
@@ -896,7 +896,7 @@ void autonomous() {
 	target_dist.fetch_add(79);
 	for (int i = 1; i <= 20; ++i) {
 		lateral_pid_process.max_speed = 127 - i * 5;
-		wait(65);
+		wait(100);
 	}
 	wait_stable(lateral_pid_process);
 
@@ -917,18 +917,22 @@ void autonomous() {
 	wait_stable(angular_pid_process);
 
 	mogo.set_value(false);
+	wait(250);
 
-	target_dist.fetch_add(30);
-	target_heading.store(-95);
+	lateral_pid_process.max_speed = 100;
+	target_dist.fetch_add(96);
 	wait_stable(lateral_pid_process);
 
-	target_heading.store(90);
+	target_heading.store(160);
 	wait_stable(angular_pid_process);
-	target_dist.fetch_add(-60);
+
+	target_dist.fetch_add(-12);
+	target_heading.store(90);
 	wait_stable(lateral_pid_process);
+	wait_stable(angular_pid_process);
 	mogo.set_value(true);
 	wait(250);
-	target_heading.store(0);
+
 
 
 	wait(3000);
@@ -940,7 +944,6 @@ void autonomous() {
 /*****************************************************************************/
 /*                                  DRIVING                                  */
 /*****************************************************************************/
-
 float prev_drive_power = 0;
 
 void opcontrol() {
@@ -965,6 +968,7 @@ void opcontrol() {
 	);
 
 	int intake_brake_timer = 0;
+	int32_t max_arm_current_draw = 0;
 
     while (true) {
 		// driving
@@ -1028,6 +1032,9 @@ void opcontrol() {
 		pid_handle_process(arm_pid_process);
 		// move arm to PID arm_pos_output
 		arm.move(arm_pos_output.load());
+
+		if (arm.get_current_draw() > max_arm_current_draw)
+		max_arm_current_draw = arm.get_current_draw();
 
         pros::delay(PROCESS_DELAY);
     }
