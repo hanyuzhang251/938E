@@ -541,6 +541,8 @@ void init() {
 	pros::lcd::initialize();
 	master.clear();
 
+	intake.set_current_limit(2700);
+
 	imu.reset(true);
 	solve_imu_bias(900);
 
@@ -743,7 +745,7 @@ void wait_for_ring(bool red = true, bool blue = false, uint32_t timeout = 3000) 
 	uint32_t end_time = pros::millis() + timeout;
 
 	while (!(red && red_ring_seen || blue && blue_ring_seen)) {
-		if (pros:millis() >= end_time) return;
+		if (pros::millis() >= end_time) return;
 
 		wait(PROCESS_DELAY);
 	}
@@ -952,10 +954,11 @@ void autonomous() {
 	intake.brake();
 
 	lateral_pid_process.max_speed = 100;
-	target_dist.fetch_add(96);
+	target_dist.fetch_add(90);
+	target_heading.store(-15);
 	wait_stable(lateral_pid_process);
 
-	target_heading.store(160);
+	target_heading.store(165);
 	wait_stable(angular_pid_process);
 
 	target_dist.fetch_add(-12);
@@ -964,26 +967,6 @@ void autonomous() {
 	wait_stable(angular_pid_process);
 	mogo.set_value(true);
 	wait(250);
-
-	intake.move(INTAKE_SPEED);
-	target_dist.fetch_add(30);
-	wait_stable(lateral_pid_process);
-
-	target_heading.store(80);
-	wait(250);
-	diddy.set_value(true);
-	wait(250);
-	target_heading.store(135);
-	wait(500);
-	target_heading.store(180 + 45);
-	wait_stable(angular_pid_process);
-	
-	target_dist.fetch_add(-4);
-	wait(500);
-	mogo.set_value(false);
-	wait(250);
-	target_dist.fetch_add(24);
-	wait_for_ring(true, false, 1500);
 
 	wait(3000);
 	auton_task.remove();
