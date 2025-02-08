@@ -198,15 +198,15 @@ PIDController angular_pid (
 );
 
 PIDController arm_pid (
-		0.3, // kp
+		0.8, // kp
 		0.05, // ki
-		0.2, // kd
+		0, // kd
 		25, // wind
 		999, // clamp
-		0.9, // decay
+		0, // decay
 		999, // slew
-		10, // small error
-		50, // large error
+		0, // small error
+		999, // large error
 		0 // tolerance
 );
 
@@ -243,12 +243,12 @@ constexpr bool SPEED_COMP = false;
 constexpr int INTAKE_SPEED = 127;
 constexpr int EJECT_BRAKE_CYCLES = 16;
 
-constexpr float ARM_SPEED = 50;
+constexpr float ARM_SPEED = 70;
 constexpr int ARM_WIND_MIN = 5;
-constexpr int ARM_WIND_TICKS = ARM_WIND_MIN + 8;
+constexpr int ARM_WIND_TICKS = ARM_WIND_MIN + 10;
 int arm_move_ticks = ARM_WIND_MIN;
 constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
-constexpr float ARM_LOAD_POS = 258;
+constexpr float ARM_LOAD_POS = 230;
 
 constexpr float ARM_BOTTOM_LIMIT = 0;
 constexpr float ARM_TOP_LIMIT = 2000;
@@ -1062,6 +1062,11 @@ void opcontrol() {
 			if (!p_arm_load_macro) arm_target_pos.store(arm_pos.load() + ARM_LOAD_POS);
 		}
 		p_arm_load_macro = master.get_digital(ARM_LOAD_MACRO);
+
+		if (std::abs(arm_pid_process.error) > ARM_SPEED) {
+			arm_pid_process.error = sgn(arm_pid_process.error) * ARM_SPEED;
+		}
+
 		// run pid
 		pid_handle_process(arm_pid_process);
 		// move arm to PID arm_pos_output
