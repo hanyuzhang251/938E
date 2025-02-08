@@ -869,7 +869,7 @@ void autonomous() {
 	target_dist.fetch_add(48);
 	wait_stable(lateral_pid_process);
 	intake.move(INTAKE_SPEED);
-	target_heading.store(-90);
+	target_heading.store(90);
 	wait_stable(angular_pid_process);
 	target_dist.fetch_add(-24);
 	wait_stable(lateral_pid_process);
