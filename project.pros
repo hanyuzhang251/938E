@@ -1,7 +1,7 @@
 {
   "py/object": "pros.conductor.project.Project",
   "py/state": {
-    "project_name": "skills_autk",
+    "project_name": "red_2_ring",
     "target": "v5",
     "templates": {
       "LemLib": {
@@ -299,7 +299,7 @@
     },
     "upload_options": {
       "icon": "pros",
-      "slot": 7,
+      "slot": 5,
       "description": "run this"
     },
     "use_early_access": false
