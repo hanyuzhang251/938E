@@ -1,3 +1,5 @@
+
+
 #include "main.h"
 #include "pros/misc.h"
 
@@ -9,7 +11,9 @@
 #include <cstring>
 #include <cstdio>
 
-#define wait(n) pros::delay(n)
+inline void wait(uint32_t n) {
+	pros::delay(n);
+}
 
 #define digi_button controller_digital_e_t
 #define anlg_button controller_analog_e_t
