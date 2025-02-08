@@ -203,7 +203,7 @@ PIDController angular_pid (
 
 PIDController arm_pid (
 		0.8, // kp
-		0.05, // ki
+		0.15, // ki
 		0, // kd
 		25, // wind
 		999, // clamp
@@ -252,7 +252,7 @@ constexpr int ARM_WIND_MIN = 5;
 constexpr int ARM_WIND_TICKS = ARM_WIND_MIN + 10;
 int arm_move_ticks = ARM_WIND_MIN;
 constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
-constexpr float ARM_LOAD_POS = 230;
+constexpr float ARM_LOAD_POS = 170;
 
 constexpr float ARM_BOTTOM_LIMIT = 0;
 constexpr float ARM_TOP_LIMIT = 2000;
@@ -876,9 +876,99 @@ void autonomous() {
 
 	target_dist.fetch_add(16);
 	wait_stable(lateral_pid_process);
-	target_heading.store(-90);
+	target_heading.store(90);
 	wait_stable(angular_pid_process);
 	target_dist.fetch_add(-26);
+	wait_stable(lateral_pid_process);
+	mogo.set_value(true);
+	wait(250);
+
+	target_heading.store(0);
+	wait_stable(angular_pid_process);
+
+	intake.move(INTAKE_SPEED);
+
+	t = lateral_pid_process.value.load();
+	lateral_pid_process.max_speed = 100;
+	target_dist.fetch_add(84);
+	wait_cross(lateral_pid_process, t + 12, false);
+	target_heading.store(-40);
+	wait_cross(lateral_pid_process, t + 24 + 25, false);
+	target_heading.store(0);
+	wait_cross(lateral_pid_process, t + 24 + 34 + 16, false);
+	target_arm_pos.store(ARM_LOAD_POS);
+	wait_stable(lateral_pid_process);
+
+	lateral_pid_process.max_speed = 127;
+	target_dist.fetch_add(-28.5);
+	wait_stable(lateral_pid_process);
+	target_heading.store(-90);
+	for (int i = 0; i < 3; ++i) {
+		intake.move(-8);
+		wait(150);
+		intake.move(INTAKE_SPEED);
+		wait(150);
+	}
+	wait_stable(angular_pid_process);
+
+	intake.move(-8);
+	wait(250);
+	intake.brake();
+	target_arm_pos.store(3 * ARM_LOAD_POS);
+
+	target_dist.fetch_add(22);
+	wait_cross(lateral_pid_process, 3);
+	intake.move(INTAKE_SPEED);
+
+	target_arm_pos.store(ARM_TOP_LIMIT);
+	wait(800);
+
+	target_dist.fetch_add(-36);
+	target_arm_pos.store(ARM_BOTTOM_LIMIT);
+	wait_cross(lateral_pid_process, -5);
+	target_heading.store(-180);
+	wait_stable(lateral_pid_process);
+	wait_stable(angular_pid_process);
+
+	lateral_pid_process.max_speed = 127;
+	target_dist.fetch_add(76);
+	wait_cross(lateral_pid_process, 24);
+	for (int i = 0; i < 10; ++i) {
+		lateral_pid_process.max_speed = 127 - i * 5;
+		wait(30);
+	}
+
+	wait_stable(lateral_pid_process);
+
+	target_heading.store(-50);
+	wait_stable(angular_pid_process);
+
+	lateral_pid_process.max_speed = 127;
+	target_dist.fetch_add(29);
+	wait_cross(lateral_pid_process, 3.8);
+	target_heading.store(0);
+	wait_stable(lateral_pid_process);
+	wait_stable(angular_pid_process);
+
+	target_dist.fetch_add(-24);
+	wait_cross(lateral_pid_process, -5);
+	target_heading.store(20);
+	wait_stable(lateral_pid_process);
+	wait_stable(angular_pid_process);
+
+	mogo.set_value(false);
+	wait(250);
+	intake.brake();
+
+	lateral_pid_process.max_speed = 127;
+	target_dist.fetch_add(90);
+	wait_cross(lateral_pid_process, 3);
+	target_heading.store(90);
+	wait_stable(lateral_pid_process);
+
+	target_heading.store(-90);
+	wait_stable(angular_pid_process);
+	target_dist.fetch_add(-24);
 	wait_stable(lateral_pid_process);
 	mogo.set_value(true);
 	wait(250);
@@ -931,11 +1021,13 @@ void autonomous() {
 	wait_stable(angular_pid_process);
 
 	lateral_pid_process.max_speed = 127;
-	target_dist.fetch_add(79);
-	for (int i = 1; i <= 20; ++i) {
+	target_dist.fetch_add(76);
+	wait_cross(lateral_pid_process, 24);
+	for (int i = 0; i < 10; ++i) {
 		lateral_pid_process.max_speed = 127 - i * 5;
-		wait(100);
+		wait(30);
 	}
+
 	wait_stable(lateral_pid_process);
 
 	target_heading.store(50);
@@ -948,7 +1040,7 @@ void autonomous() {
 	wait_stable(lateral_pid_process);
 	wait_stable(angular_pid_process);
 
-	target_dist.fetch_add(-20);
+	target_dist.fetch_add(-24);
 	wait_cross(lateral_pid_process, -5);
 	target_heading.store(-20);
 	wait_stable(lateral_pid_process);
@@ -958,20 +1050,84 @@ void autonomous() {
 	wait(250);
 	intake.brake();
 
-	lateral_pid_process.max_speed = 100;
 	target_dist.fetch_add(90);
+	wait_cross(lateral_pid_process, 48);
 	target_heading.store(-15);
 	wait_stable(lateral_pid_process);
-
 	target_heading.store(165);
 	wait_stable(angular_pid_process);
+	target_dist.fetch_add(-24);
+	wait_cross(lateral_pid_process, -3);
+	target_heading.store(85);
+	mogo.set_value(true);
 
-	target_dist.fetch_add(-12);
-	target_heading.store(90);
+	target_dist.fetch_add(48);
+	diddy.set_value(true);
+	intake.move(true);
+	wait_for_ring(true, false, 2000);
+	intake.brake();
+	wait_stable(lateral_pid_process);
+
+	target_heading.store(-15);
+	target_dist.fetch_add(24);
 	wait_stable(lateral_pid_process);
 	wait_stable(angular_pid_process);
+
+	target_dist.fetch_add(-20);
+	wait_stable(lateral_pid_process);
+	mogo.set_value(false);
+	intake.brake();
+	wait(250);
+
+	target_dist.fetch_add(76);
+	wait_cross(lateral_pid_process, 2);
+	target_heading.store(-90);
+	wait_stable(lateral_pid_process);
+	target_dist.fetch_add(-6);
+	wait_stable(lateral_pid_process);
+
+	target_heading.store(-180);
+	wait_stable(angular_pid_process);
+	target_dist.fetch_add(-24);
+	wait_stable(lateral_pid_process);
+	intake.move(INTAKE_SPEED);
+	wait(500);
+	intake.brake();
+
+	target_dist.fetch_add(24);
+	wait_stable(lateral_pid_process);
+	target_heading.store(90);
+	wait_stable(angular_pid_process);
+	target_dist.fetch_add(-12);
+	wait_stable(lateral_pid_process);//diddy
 	mogo.set_value(true);
 	wait(250);
+
+	intake.move(INTAKE_SPEED);
+	target_heading.store(90);
+	wait_stable(angular_pid_process);
+	target_dist.fetch_add(48);
+	wait_cross(lateral_pid_process, 18);
+	target_heading.store(135);
+	wait_stable(angular_pid_process);
+	wait_stable(lateral_pid_process);
+
+	target_heading.store(-135);
+	wait_stable(angular_pid_process);
+	target_dist.fetch_add(34);
+	wait_stable(lateral_pid_process);
+	target_heading.store(-45);
+	wait_stable(angular_pid_process);
+	target_dist.fetch_add(65);
+	wait_stable(lateral_pid_process);
+
+	target_arm_pos.store(10 * ARM_LOAD_POS);
+	lateral_pid_process.max_speed = 70;
+	target_dist.fetch_add(-60);
+	wait_stable(lateral_pid_process);
+
+	target_arm_pos.store(0);
+
 
 	wait(3000);
 	auton_task.remove();

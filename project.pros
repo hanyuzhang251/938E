@@ -1,7 +1,7 @@
 {
   "py/object": "pros.conductor.project.Project",
   "py/state": {
-    "project_name": "skills_autk",
+    "project_name": "skillaut-143",
     "target": "v5",
     "templates": {
       "LemLib": {
@@ -298,9 +298,9 @@
       }
     },
     "upload_options": {
-      "icon": "pros",
+      "icon": "X",
       "slot": 7,
-      "description": "run this"
+      "description": "mecha"
     },
     "use_early_access": false
   }
