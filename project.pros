@@ -1,7 +1,7 @@
 {
   "py/object": "pros.conductor.project.Project",
   "py/state": {
-    "project_name": "bkue",
+    "project_name": "skills_autk",
     "target": "v5",
     "templates": {
       "LemLib": {
@@ -299,7 +299,7 @@
     },
     "upload_options": {
       "icon": "pros",
-      "slot": 1,
+      "slot": 7,
       "description": "run this"
     },
     "use_early_access": false
