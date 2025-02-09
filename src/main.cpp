@@ -203,8 +203,8 @@ PIDController angular_pid (
 
 PIDController arm_pid (
 		0.8, // kp
-		0.15, // ki
-		0, // kd
+		0, // ki
+		0.08, // kd
 		25, // wind
 		999, // clamp
 		0, // decay
@@ -879,7 +879,7 @@ void autonomous() {
 	target_heading.store(90);
 	wait_stable(angular_pid_process);
 	target_dist.fetch_add(-26);
-	wait_stable(lateral_pid_process);
+	wait_cross(lateral_pid_process, -24);
 	mogo.set_value(true);
 	wait(250);
 
@@ -896,12 +896,13 @@ void autonomous() {
 	wait_cross(lateral_pid_process, t + 24 + 25, false);
 	target_heading.store(0);
 	wait_cross(lateral_pid_process, t + 24 + 34 + 16, false);
+	wait(300);
 	target_arm_pos.store(ARM_LOAD_POS);
 	wait_stable(lateral_pid_process);
 
 	lateral_pid_process.max_speed = 127;
-	target_dist.fetch_add(-28.5);
-	wait_stable(lateral_pid_process);
+	target_dist.fetch_add(-25.5);
+	wait_stable(lateral_pid_process);//f
 	target_heading.store(-90);
 	for (int i = 0; i < 3; ++i) {
 		intake.move(-8);
@@ -916,11 +917,11 @@ void autonomous() {
 	intake.brake();
 	target_arm_pos.store(3 * ARM_LOAD_POS);
 
-	target_dist.fetch_add(22);
-	wait_cross(lateral_pid_process, 3);
+	target_dist.fetch_add(24);
+	wait_cross(lateral_pid_process, 5);
 	intake.move(INTAKE_SPEED);
 
-	target_arm_pos.store(ARM_TOP_LIMIT);
+	target_arm_pos.store(11 * ARM_LOAD_POS);
 	wait(800);
 
 	target_dist.fetch_add(-36);
@@ -931,21 +932,21 @@ void autonomous() {
 	wait_stable(angular_pid_process);
 
 	lateral_pid_process.max_speed = 127;
-	target_dist.fetch_add(76);
-	wait_cross(lateral_pid_process, 24);
-	for (int i = 0; i < 10; ++i) {
-		lateral_pid_process.max_speed = 127 - i * 5;
+	target_dist.fetch_add(76);//f
+	wait_cross(lateral_pid_process, 5);
+	for (int i = 0; i < 13; ++i) {
+		lateral_pid_process.max_speed = 127 - i * 7;
 		wait(30);
 	}
 
 	wait_stable(lateral_pid_process);
-
+//f
 	target_heading.store(-50);
 	wait_stable(angular_pid_process);
 
 	lateral_pid_process.max_speed = 127;
 	target_dist.fetch_add(29);
-	wait_cross(lateral_pid_process, 3.8);
+	wait_cross(lateral_pid_process, 4.2);
 	target_heading.store(0);
 	wait_stable(lateral_pid_process);
 	wait_stable(angular_pid_process);
@@ -961,9 +962,11 @@ void autonomous() {
 	intake.brake();
 
 	lateral_pid_process.max_speed = 127;
-	target_dist.fetch_add(90);
-	wait_cross(lateral_pid_process, 3);
 	target_heading.store(90);
+	wait(80);
+	target_dist.fetch_add(66);
+	
+	
 	wait_stable(lateral_pid_process);
 
 	target_heading.store(-90);
@@ -986,11 +989,12 @@ void autonomous() {
 	wait_cross(lateral_pid_process, t + 24 + 25, false);
 	target_heading.store(0);
 	wait_cross(lateral_pid_process, t + 24 + 34 + 16, false);
+	wait(300);
 	target_arm_pos.store(ARM_LOAD_POS);
 	wait_stable(lateral_pid_process);
 
 	lateral_pid_process.max_speed = 127;
-	target_dist.fetch_add(-28);
+	target_dist.fetch_add(-24.75);//f
 	wait_stable(lateral_pid_process);
 	target_heading.store(90);
 	for (int i = 0; i < 3; ++i) {
@@ -1006,11 +1010,11 @@ void autonomous() {
 	intake.brake();
 	target_arm_pos.store(3 * ARM_LOAD_POS);
 
-	target_dist.fetch_add(22);
+	target_dist.fetch_add(24);
 	wait_cross(lateral_pid_process, 3);
 	intake.move(INTAKE_SPEED);
 
-	target_arm_pos.store(ARM_TOP_LIMIT);
+	target_arm_pos.store(11 * ARM_LOAD_POS);
 	wait(800);
 
 	target_dist.fetch_add(-36);
@@ -1021,21 +1025,21 @@ void autonomous() {
 	wait_stable(angular_pid_process);
 
 	lateral_pid_process.max_speed = 127;
-	target_dist.fetch_add(76);
-	wait_cross(lateral_pid_process, 24);
-	for (int i = 0; i < 10; ++i) {
-		lateral_pid_process.max_speed = 127 - i * 5;
+	target_dist.fetch_add(76);//f
+	wait_cross(lateral_pid_process, 5);
+	for (int i = 0; i < 13; ++i) {
+		lateral_pid_process.max_speed = 127 - i * 7;
 		wait(30);
 	}
 
 	wait_stable(lateral_pid_process);
-
+//f
 	target_heading.store(50);
 	wait_stable(angular_pid_process);
 
 	lateral_pid_process.max_speed = 127;
 	target_dist.fetch_add(29);
-	wait_cross(lateral_pid_process, 3.8);
+	wait_cross(lateral_pid_process, 4.2);
 	target_heading.store(0);
 	wait_stable(lateral_pid_process);
 	wait_stable(angular_pid_process);
@@ -1120,7 +1124,7 @@ void autonomous() {
 	wait_stable(angular_pid_process);
 	target_dist.fetch_add(65);
 	wait_stable(lateral_pid_process);
-
+//l
 	target_arm_pos.store(10 * ARM_LOAD_POS);
 	lateral_pid_process.max_speed = 70;
 	target_dist.fetch_add(-60);
@@ -1128,8 +1132,6 @@ void autonomous() {
 
 	target_arm_pos.store(0);
 
-
-	wait(3000);
 	auton_task.remove();
 }
 
@@ -1165,6 +1167,10 @@ void opcontrol() {
 	int32_t max_arm_current_draw = 0;
 
     while (true) {
+		if (master.get_digital(pros::CTRL_DIGI_DOWN)) {
+			tap_ring(5);
+		}
+
 		// driving
         int drive_value = master.get_analog(DRIVE_JOYSTICK);
         int turn_value = master.get_analog(TURN_JOYSTICK);
