@@ -905,7 +905,7 @@ void autonomous() {
 	wait_stable(lateral_pid_process);
 
 	lateral_pid_process.max_speed = 127;
-	target_dist.fetch_add(76);//f
+	target_dist.fetch_add(72);//f
 	wait_cross(lateral_pid_process, 5);
 	for (int i = 0; i < 13; ++i) {
 		lateral_pid_process.max_speed = 127 - i * 7;
@@ -924,8 +924,8 @@ void autonomous() {
 	wait_stable(lateral_pid_process, 2000);
 	wait_stable(angular_pid_process, 1000);
 
-	target_dist.fetch_add(-30);
-	wait_cross(lateral_pid_process, -5);
+	target_dist.fetch_add(-34);
+	wait_cross(lateral_pid_process, -9);
 	target_heading.store(20);
 	wait_stable(lateral_pid_process);
 	wait_stable(angular_pid_process);
@@ -936,8 +936,8 @@ void autonomous() {
 
 	lateral_pid_process.max_speed = 127;
 	target_heading.store(90);
-	wait(100);
-	target_dist.fetch_add(66);
+	wait(150);
+	target_dist.fetch_add(68);
 	
 	
 	wait_stable(lateral_pid_process);
