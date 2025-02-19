@@ -659,7 +659,7 @@ void init() {
 
 			bool verdict = outtake && optical.get_proximity() >= DIST_TOLERANCE;
 			if (verdict) {
-				outtake_ticks = OUTTAKE_TICKS / PROCESS_DELAY;
+				outtake_ticks = OUTTAKE_TICKS / PROCESS_DELAY;//
 				if (!prev_verdict) {
 					outtake_delay = OUTTAKE_DELAY / PROCESS_DELAY;
 				}
@@ -901,9 +901,12 @@ void autonomous() {
 	wait_stable(lateral_pid_process);
 
 	lateral_pid_process.max_speed = 127;
-	wait(500);
+	wait(600);
 	target_heading.store(182);
 	wait_stable(angular_pid_process);
+	intake.move(-INTAKE_SPEED);
+	wait(500);
+	intake.move(INTAKE_SPEED);
 	target_dist.fetch_add(94);////
 	wait_cross(lateral_pid_process, 5);
 	for (int i = 0; i < 16; ++i) {
@@ -967,13 +970,16 @@ void autonomous() {
 	target_heading.store(40);
 	wait_cross(lateral_pid_process, t + 24 + 25, false);
 	target_heading.store(0);
-	wait_cross(lateral_pid_process, t + 24 + 34 + 16, false);
+	wait_cross(lateral_pid_process, t + 24 + 34 + 16, false);//
 	wait_stable(lateral_pid_process);
 
 	lateral_pid_process.max_speed = 127;
-	wait(500);
+	wait(600);
 	target_heading.store(183);
 	wait_stable(angular_pid_process);
+	intake.move(-INTAKE_SPEED);
+	wait(500);
+	intake.move(INTAKE_SPEED);
 	target_dist.fetch_add(94);////
 	wait_cross(lateral_pid_process, 8);
 	for (int i = 0; i < 16; ++i) {
