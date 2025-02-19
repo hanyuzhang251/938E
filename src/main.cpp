@@ -74,6 +74,18 @@ float deg_dif(float current, float target) {
 /*                                   DATA                                    */
 /*****************************************************************************/
 
+struct Toggle {
+	bool value;
+	bool ptrigger = false;
+
+	Toggle(bool value_ = false) : value(value_), ptrigger(false) {}
+
+	void tick(bool trigger) {
+		if (trigger && !ptrigger) value = !value;
+		ptrigger = trigger;
+	}
+};
+
 struct Pose {
     std::atomic<float> x;
     std::atomic<float> y;
@@ -152,12 +164,10 @@ constexpr pros::digi_button INTAKE_REV_BUTTON = pros::CTRL_DIGI_L2;
 constexpr pros::digi_button EJECT_RING_BUTTON = pros::CTRL_DIGI_X;
 
 constexpr pros::digi_button DIDDY_TOGGLE_BUTTON = pros::CTRL_DIGI_X;
-bool p_diddy = false;
-bool diddy_on = false;
+Toggle diddy_toggle (false);
 
 constexpr pros::digi_button MOGO_TOGGLE_BUTTON = pros::CTRL_DIGI_A;
-bool p_mogo = false;
-bool mogo_on = false;
+Toggle mogo_toggle (false);
 
 constexpr pros::digi_button ARM_UP_BUTTON = pros::CTRL_DIGI_R1;
 constexpr pros::digi_button ARM_DOWN_BUTTON = pros::CTRL_DIGI_R2;
@@ -1091,15 +1101,12 @@ void opcontrol() {
 		}
 		
 		// mogo
-		if (!override_inputs && master.get_digital(MOGO_TOGGLE_BUTTON) && !p_mogo)
-			mogo_on = !mogo_on;
-		p_mogo = master.get_digital(MOGO_TOGGLE_BUTTON);
-		mogo.set_value(mogo_on);
+		if (!override_inputs) mogo_toggle.tick(master.get_digital(MOGO_TOGGLE_BUTTON));
+		mogo.set_value(mogo_toggle.value);
 
-		if (!override_inputs && master.get_digital(DIDDY_TOGGLE_BUTTON) && !p_diddy)
-			diddy_on = !diddy_on;
-		p_diddy = master.get_digital(DIDDY_TOGGLE_BUTTON);
-		diddy.set_value(diddy_on);
+		// diddy
+		if (!override_inputs) diddy_toggle.tick(master.get_digital(DIDDY_TOGGLE_BUTTON));
+		diddy.set_value(diddy_toggle.value);
 
 		// arm
 		bool arm_moved = false;
