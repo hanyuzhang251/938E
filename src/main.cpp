@@ -140,6 +140,8 @@ constexpr int DT_FR_PORT = 14;
 constexpr int DT_MR_PORT = -18;
 constexpr int DT_BR_PORT = 16;
 
+constexpr int V_TRACKING_WHEEL_PORT = 7;
+
 constexpr int INTAKE_PORT = -2;
 
 constexpr int DIDDY_PORT = 1;
@@ -212,9 +214,9 @@ PIDController angular_pid (
 );
 
 PIDController arm_pid (
-		0.8, // kp
-		0, // ki
-		0.08, // kd
+		0.5, // kp
+		0.03, // ki
+		0.05, // kd
 		25, // wind
 		999, // clamp
 		0, // decay
@@ -262,7 +264,7 @@ constexpr int ARM_WIND_MIN = 5;
 constexpr int ARM_WIND_TICKS = ARM_WIND_MIN + 10;
 int arm_move_ticks = ARM_WIND_MIN;
 constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
-constexpr float ARM_LOAD_POS = 170;
+constexpr float ARM_LOAD_POS = 360;
 
 constexpr float ARM_BOTTOM_LIMIT = 0;
 constexpr float ARM_TOP_LIMIT = 2000;
@@ -413,6 +415,8 @@ pros::MotorGroup dt_right_motors ({
 	DT_MR_PORT,
 	DT_BR_PORT
 });
+
+pros::Rotation v_tracking_wheel (V_TRACKING_WHEEL_PORT);
 
 pros::Motor intake (INTAKE_PORT);
 
@@ -565,12 +569,15 @@ void init() {
 		auto [x_pos, y_pos, heading] = robot_pose();
 		auto [x_ipos, y_ipos, iheading] = robot_ipose();
 
+		v_tracking_wheel.reset();
+
         while (true) {
 			get_robot_position();
 			
             pros::lcd::print(0, "x_pos: %f", x_pos.load());
             pros::lcd::print(1, "y_pos: %f", y_pos.load());
             pros::lcd::print(2, "head:  %f", heading.load());
+			pros::lcd::print(3, "vt_wheel:  %f", v_tracking_wheel.get_angle());
 
             pros::delay(PROCESS_DELAY);
         }
@@ -710,6 +717,12 @@ bool auton_ran = false;
 bool mtp = false;
 
 int auton_cycle_count = 0;
+
+struct Path {
+	// std::pair<float, float>
+};
+
+// std::queue<
 
 Pose target_pose (0, 0, 0);
 
