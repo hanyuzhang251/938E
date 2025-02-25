@@ -144,7 +144,7 @@ constexpr int V_TRACKING_WHEEL_PORT = 7;
 
 constexpr int INTAKE_PORT = -2;
 
-constexpr int DIDDY_PORT = 1;
+constexpr int DIDDY_PORT = -1;
 
 constexpr int MOGO_PORT = 2;
 constexpr int RAISE_INTAKE_PORT = 3;
@@ -166,7 +166,7 @@ constexpr pros::digi_button INTAKE_REV_BUTTON = pros::CTRL_DIGI_L2;
 constexpr pros::digi_button EJECT_RING_BUTTON = pros::CTRL_DIGI_X;
 
 constexpr pros::digi_button DIDDY_TOGGLE_BUTTON = pros::CTRL_DIGI_X;
-Toggle diddy_toggle (false);
+Toggle diddy_toggle (true);
 
 constexpr pros::digi_button MOGO_TOGGLE_BUTTON = pros::CTRL_DIGI_A;
 Toggle mogo_toggle (false);
@@ -174,8 +174,9 @@ Toggle mogo_toggle (false);
 constexpr pros::digi_button ARM_UP_BUTTON = pros::CTRL_DIGI_R1;
 constexpr pros::digi_button ARM_DOWN_BUTTON = pros::CTRL_DIGI_R2;
 
-constexpr pros::digi_button ARM_LOAD_MACRO = pros::CTRL_DIGI_UP;
-bool p_arm_load_macro = false;
+constexpr pros::digi_button ARM_INCREMENT_UP = pros::CTRL_DIGI_UP;
+constexpr pros::digi_button ARM_INCREMENT_DOWN = pros::CTRL_DIGI_DOWN;
+bool arm_up_p = false, arm_down_p = false;
 
 bool p_nav_toggle = false;
 constexpr pros::digi_button MENU_TOGGLE = pros::CTRL_DIGI_Y;
@@ -201,23 +202,23 @@ PIDController lateral_pid (
 );
 
 PIDController angular_pid (
-		3, // kp
-		0.35, // ki
-		20, // kd
-		10, // wind
+		2.5, // kp
+		0.1, // ki
+		24, // kd
+		30, // wind
 		999, // clamp
 		0, // decay
 		999, // slew
-		5, // small error
+		0, // small error
 		999, // large error
-		1 // tolerance
+		1.5 // tolerance
 );
 
 PIDController arm_pid (
-		0.5, // kp
-		0.03, // ki
-		0.05, // kd
-		25, // wind
+		0.3, // kp
+		0.02, // ki
+		0.5, // kd
+		30, // wind
 		999, // clamp
 		0, // decay
 		999, // slew
@@ -237,7 +238,7 @@ bool intake_override = false;
 bool racism = false; // true = red bad
 
 bool color_sort = true;
-constexpr int OUTTAKE_DELAY = 75;
+constexpr int CS_OUTTAKE_DELAY = 75;
 constexpr int OUTTAKE_TICKS = 500;
 
 constexpr float RED_HUE = 5;
@@ -260,11 +261,9 @@ constexpr int INTAKE_SPEED = 127;
 constexpr int EJECT_BRAKE_CYCLES = 16;
 
 constexpr float ARM_SPEED = 70;
-constexpr int ARM_WIND_MIN = 5;
-constexpr int ARM_WIND_TICKS = ARM_WIND_MIN + 10;
-int arm_move_ticks = ARM_WIND_MIN;
-constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
-constexpr float ARM_LOAD_POS = 360;
+constexpr float ARM_MAX_SPEED = 300;
+
+constexpr float ARM_INCREMENT = 80;
 
 constexpr float ARM_BOTTOM_LIMIT = 0;
 constexpr float ARM_TOP_LIMIT = 2000;
@@ -515,12 +514,16 @@ std::atomic<float> prev_dist(0);
 std::atomic<float> arm_pos(0);
 
 int left_motors_prev_pos = 0;
-int right_motors_prev_pos = 0;
+int right_motors_prev_pos = 0;//
+
+uint32_t prev_v_tracking_wheel_pos = 0;
 
 void get_robot_position() {
 	auto [x_ipos, y_ipos, iheading] = robot_ipose();
 
 	prev_dist.store(dist.load());
+
+	// dist.fetch_add(v_tracking_wheel.get_angle() - prev_v_tracking_wheel_pos);
 
 	dist.fetch_add(((dt_left_motors.get_position() - left_motors_prev_pos) + (dt_right_motors.get_position() - right_motors_prev_pos)) / 2.0f / DIST_MULTI);
 	left_motors_prev_pos = dt_left_motors.get_position();
@@ -570,6 +573,8 @@ void init() {
 		auto [x_ipos, y_ipos, iheading] = robot_ipose();
 
 		v_tracking_wheel.reset();//
+		v_tracking_wheel.reset_position();//
+		v_tracking_wheel.set_position(0);
 
         while (true) {
 			get_robot_position();
@@ -577,8 +582,6 @@ void init() {
             pros::lcd::print(0, "x_pos: %f", x_pos.load());
             pros::lcd::print(1, "y_pos: %f", y_pos.load());
             pros::lcd::print(2, "head:  %f", heading.load());
-			pros::lcd::print(3, "vt_wheel:  %f", v_tracking_wheel.get_angle());
-			pros::lcd::print(4, "intake :  %f", intake.get_efficiency());
 
             pros::delay(PROCESS_DELAY);
         }
@@ -608,14 +611,20 @@ void init() {
 							racism = !racism;
 							break;
 						}
+						case 1: {
+							color_sort = !color_sort;
+							break;
+						}
 						default: {}
 					}
 				}
 				p_setting_toggle = master.get_digital(SETTING_TOGGLE);
 
-				std::snprintf(ctrl_log[0], 15, "%cCOL:%s              ", ctrl_menu_ptr == 0 ? '>' : ' ', racism ? "BLUE" : "RED ");
+				std::snprintf(ctrl_log[0], 15, "%ccolor: %s              ", ctrl_menu_ptr == 0 ? '>' : ' ', racism ? "BLUE" : "RED ");
+				std::snprintf(ctrl_log[1], 15, "%ccolorsort: %s              ", ctrl_menu_ptr == 0 ? '>' : ' ', color_sort ? "ON " : "OFF");
+				std::snprintf(ctrl_log[2], 15, "%couttake: %s              ", ctrl_menu_ptr == 0 ? '>' : ' ', color_sort ? "ON " : "OFF");
 			} else {
-				std::snprintf(ctrl_log[0], 15, "%ld", pros::millis() - run_start);
+				std::snprintf(ctrl_log[0], 15, "time: %ld               ", pros::millis() - run_start);
 				std::snprintf(ctrl_log[1], 15, "");
 				std::snprintf(ctrl_log[2], 15, "");
 			}
@@ -634,9 +643,9 @@ void init() {
 
 	optical.set_led_pwm(100);
 
-	pros::Task color_sort_task([&]() {
-		int outtake_delay = 0;
-		int outtake_ticks = 0;
+	pros::Task intake_helper_task([&]() {
+		int cs_outtake_delay = 0;
+		int cs_outtake_ticks = 0;
 		bool prev_verdict = false;
 
 		while (true) {
@@ -675,19 +684,19 @@ void init() {
 
 			bool verdict = outtake && optical.get_proximity() >= DIST_TOLERANCE;
 			if (verdict) {
-				outtake_ticks = OUTTAKE_TICKS / PROCESS_DELAY;
+				cs_outtake_ticks = OUTTAKE_TICKS / PROCESS_DELAY;
 				if (!prev_verdict) {
-					outtake_delay = OUTTAKE_DELAY / PROCESS_DELAY;
+					cs_outtake_delay = CS_OUTTAKE_DELAY / PROCESS_DELAY;
 				}
 			}
 
 			// expected that intake_override is followed appropriately
-			if (outtake_delay > 0) {
-				--outtake_delay;
-			} else if (outtake_ticks > 0) {
+			if (cs_outtake_delay > 0) {
+				--cs_outtake_delay;
+			} else if (cs_outtake_ticks > 0) {
 				intake_override = true;
 				intake.move(-INTAKE_SPEED);
-				--outtake_ticks;
+				--cs_outtake_ticks;
 			} else {
 				intake_override = false;
 			}
@@ -714,10 +723,6 @@ void competition_initialize() {
 /*****************************************************************************/
 
 bool auton_ran = false;
-
-bool mtp = false;
-
-int auton_cycle_count = 0;
 
 struct Path {
 	// std::pair<float, float>
@@ -811,7 +816,7 @@ void autonomous() {
 			angular_output,
 			angular_pid,
 			127, // max speed
-			0, // min speed
+			0, // min speed//
 			120000, // life
 			deg_dif
 	);
@@ -875,29 +880,29 @@ void autonomous() {
 
 			int start = pros::millis();
 
-			if (mtp) {
-				float x_dif = target_pose.x - robot_pose.x;
-				float y_dif = target_pose.y - robot_pose.y;
+			// if (mtp) {
+			// 	float x_dif = target_pose.x - robot_pose.x;
+			// 	float y_dif = target_pose.y - robot_pose.y;
 
-				float dist_to_target = std::sqrt(x_dif * x_dif + y_dif * y_dif);
-				float deg_to_target = normalize_deg(deg_to_point(x_dif, y_dif));
-				if (target_pose.h.load() == false) deg_to_target *= -1;
+			// 	float dist_to_target = std::sqrt(x_dif * x_dif + y_dif * y_dif);
+			// 	float deg_to_target = normalize_deg(deg_to_point(x_dif, y_dif));
+			// 	if (target_pose.h.load() == false) deg_to_target *= -1;
 
-				float deg_err = deg_dif(deg_to_target, robot_pose.h);
-				bool fwd = (std::abs(deg_err) <= 90);
+			// 	float deg_err = deg_dif(deg_to_target, robot_pose.h);
+			// 	bool fwd = (std::abs(deg_err) <= 90);
 
-				dist_to_target *= (1 - ((int) (deg_err) % 90) / 90);
-				if (!fwd) dist_to_target *= -1;
+			// 	dist_to_target *= (1 - ((int) (deg_err) % 90) / 90);
+			// 	if (!fwd) dist_to_target *= -1;
 
-				// if we're at the target, stop the robot
-				if (std::abs(dist_to_target) <= lateral_pid.tolerance) {
-					target_heading.store(heading);
-					target_dist.store(dist.load());
-				} else {
-					target_heading.store(deg_to_target);
-					target_dist.store(dist.load() + dist_to_target);
-				}
-			}
+			// 	// if we're at the target, stop the robot
+			// 	if (std::abs(dist_to_target) <= lateral_pid.tolerance) {
+			// 		target_heading.store(heading);
+			// 		target_dist.store(dist.load());
+			// 	} else {
+			// 		target_heading.store(deg_to_target);
+			// 		target_dist.store(dist.load() + dist_to_target);
+			// 	}
+			// }
 
 			// pid
 
@@ -949,9 +954,6 @@ void autonomous() {
 	wait(600);
 	target_heading.store(182);
 	wait_stable(angular_pid_process);
-	run_intake = false;
-	wait(500);
-	run_intake = true;
 	target_dist.fetch_add(94);////
 	for (int i = 0; i < 16; ++i) {
 		lateral_pid_process.max_speed = 127 - i * 6;
@@ -959,12 +961,7 @@ void autonomous() {
 	}
 
 	wait_stable(lateral_pid_process, 3000);
-
-	run_intake = false;;
-	wait(200);
-	run_intake = false;
-	wait(800);
-	run_intake = false;;
+	wait(1000);
 //f
 	target_heading.store(-50);
 	wait_stable(angular_pid_process);
@@ -985,12 +982,27 @@ void autonomous() {
 
 	mogo.set_value(false);
 	wait(250);
-	run_intake = false;;//
+	run_intake = false;//
 
 	lateral_pid_process.max_speed = 127;
+
 	target_heading.store(90);
-	wait(50);
-	target_dist.fetch_add(68);
+	target_dist.fetch_add(24);
+	wait_cross(lateral_pid_process, 12);
+	target_heading.store(0);
+	wait_stable(angular_pid_process, 500);
+	target_dist.fetch_add(-24);
+	wait_stable(lateral_pid_process, 1000);
+
+	for (int i = 0; i < 3; ++i) {
+		robot_pose.x.store(0);
+		wait(PROCESS_DELAY);
+	}
+	imu.set_heading(0);
+
+	target_dist.fetch_add(60);
+	wait_cross(lateral_pid_process, 0.5);
+	target_heading.store(90);
 	
 	
 	wait_stable(lateral_pid_process);
@@ -1014,16 +1026,13 @@ void autonomous() {
 	target_heading.store(40);
 	wait_cross(lateral_pid_process, t + 24 + 25, false);
 	target_heading.store(0);
-	wait_cross(lateral_pid_process, t + 24 + 34 + 16, false);//
+	wait_cross(lateral_pid_process, t + 24 + 34 + 16, false);
 	wait_stable(lateral_pid_process);
 
 	lateral_pid_process.max_speed = 127;
 	wait(600);
-	target_heading.store(183);
+	target_heading.store(-182);
 	wait_stable(angular_pid_process);
-	run_intake = false;
-	wait(500);
-	run_intake = true;
 	target_dist.fetch_add(94);////
 	for (int i = 0; i < 16; ++i) {
 		lateral_pid_process.max_speed = 127 - i * 6;
@@ -1031,12 +1040,7 @@ void autonomous() {
 	}
 
 	wait_stable(lateral_pid_process, 3000);
-
-	run_intake = false;;
-	wait(200);
-	run_intake = false;
-	wait(800);
-	run_intake = false;;
+	wait(1000);
 //f
 	target_heading.store(50);
 	wait_stable(angular_pid_process);
@@ -1057,7 +1061,7 @@ void autonomous() {
 
 	mogo.set_value(false);
 	wait(250);
-	run_intake = false;;//
+	run_intake = false;//
 
 	target_heading.store(-9);
 	target_dist.fetch_add(115);
@@ -1092,6 +1096,7 @@ void autonomous() {
 	wait_stable(angular_pid_process);//
 
 	auton_task.remove();
+
 }
 
 
@@ -1167,7 +1172,7 @@ void opcontrol() {
 
 		// arm
 		bool arm_moved = false;
-		float real_arm_speed = ARM_SPEED * std::min(1.0f, (float)(arm_move_ticks) / ARM_WIND_TICKS);
+		float real_arm_speed = ARM_SPEED;
 		if (!override_inputs && master.get_digital(ARM_UP_BUTTON)) {
 			arm_target_pos += real_arm_speed;
 			arm_moved = true;
@@ -1175,18 +1180,22 @@ void opcontrol() {
 		else if (!override_inputs && master.get_digital(ARM_DOWN_BUTTON)) {
 			arm_target_pos -= real_arm_speed;
 			arm_moved = true;
-		}
-		if (arm_moved) ++arm_move_ticks;
-		else arm_move_ticks = ARM_WIND_MIN;
+		}//
 
-		// arm load macro
-		if (!override_inputs && master.get_digital(ARM_LOAD_MACRO)) {
-			if (!p_arm_load_macro) arm_target_pos.store(arm_pos.load() + ARM_LOAD_POS);
-		}
-		p_arm_load_macro = master.get_digital(ARM_LOAD_MACRO);
+		// arm increment
 
-		if (std::abs(arm_pid_process.error) > ARM_SPEED) {
-			arm_pid_process.error = sgn(arm_pid_process.error) * ARM_SPEED;
+		if (!override_inputs && master.get_digital(ARM_INCREMENT_UP) && !arm_up_p) {
+			arm_target_pos.store(arm_pos.load() + ARM_INCREMENT);
+		}
+		arm_up_p = master.get_digital(ARM_INCREMENT_UP);
+
+		if (!override_inputs && master.get_digital(ARM_INCREMENT_DOWN) && !arm_down_p) {
+			arm_target_pos.store(arm_pos.load() - ARM_INCREMENT);
+		}
+		arm_down_p = master.get_digital(ARM_INCREMENT_DOWN);
+
+		if (std::abs(arm_pid_process.error) > ARM_MAX_SPEED) {
+			arm_target_pos = arm_pos.load() + sgn(arm_pid_process.error) * ARM_MAX_SPEED;
 		}
 
 		// run pid
@@ -1197,7 +1206,7 @@ void opcontrol() {
 		if (arm.get_current_draw() > max_arm_current_draw)
 		max_arm_current_draw = arm.get_current_draw();
 
-		pros::lcd::print(5, "armpos %d", arm_pos.load());
+		pros::lcd::print(5, "armpos %f", arm_target_pos.load());
 
         pros::delay(PROCESS_DELAY);
     }

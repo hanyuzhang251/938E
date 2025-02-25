@@ -1,7 +1,7 @@
 {
   "py/object": "pros.conductor.project.Project",
   "py/state": {
-    "project_name": "odom_test-321",
+    "project_name": "skills-1243",
     "target": "v5",
     "templates": {
       "LemLib": {
@@ -299,8 +299,8 @@
     },
     "upload_options": {
       "icon": "X",
-      "slot": 7,
-      "description": "mecha"
+      "slot": 1,
+      "description": "states"
     },
     "use_early_access": false
   }
