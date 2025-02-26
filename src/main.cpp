@@ -852,7 +852,7 @@ void autonomous() {
 
 	bool run_intake = false;
 	int intake_stuck_ticks = 0;
-	const int INTAKE_STUCK_LIMIT = 15;
+	const int INTAKE_STUCK_LIMIT = 8;
 	int intake_outtake_ticks = 0;
 	const int INTAKE_OUTTAKE_DURATION = 15;
 
@@ -1001,7 +1001,7 @@ void autonomous() {
 	imu.set_heading(0);
 
 	target_dist.fetch_add(60);
-	wait_cross(lateral_pid_process, 0.5);
+	wait_cross(lateral_pid_process, 1.15);
 	target_heading.store(90);
 	
 	
@@ -1009,7 +1009,7 @@ void autonomous() {
 
 	target_heading.store(-90);
 	wait_stable(angular_pid_process);
-	target_dist.fetch_add(-29);//
+	target_dist.fetch_add(-28);//
 	wait_stable(lateral_pid_process);
 	mogo.set_value(true);
 	wait(250);
@@ -1130,10 +1130,30 @@ void opcontrol() {
 	int intake_brake_timer = 0;
 	int32_t max_arm_current_draw = 0;
 
+	bool run_intake = false;
+	bool intake_dir = true;
+	int intake_stuck_ticks = 0;
+	const int INTAKE_STUCK_LIMIT = 8;
+	int intake_outtake_ticks = 0;
+	const int INTAKE_OUTTAKE_DURATION = 10;
+
+
     while (true) {
-		if (master.get_digital(pros::CTRL_DIGI_DOWN)) {
-			tap_ring(5);
-		}
+		// if (run_intake && intake.get_efficiency() < 3) {
+		// 	++intake_stuck_ticks;
+		// } else {
+		// 	intake_stuck_ticks = 0;
+		// }
+		// if (intake_stuck_ticks >= INTAKE_STUCK_LIMIT) {
+		// 	intake_outtake_ticks = INTAKE_OUTTAKE_DURATION;
+		// }
+		// if (intake_outtake_ticks > 0) {
+		// 	intake.move(-INTAKE_SPEED);
+		// 	--intake_outtake_ticks;
+		// } else {
+		// 	if (run_intake) intake.move((intake_dir ? 1 : -1) * INTAKE_SPEED);
+		// 	else intake.brake();
+		// }
 
 		// driving
         int drive_value = master.get_analog(DRIVE_JOYSTICK);
@@ -1153,11 +1173,13 @@ void opcontrol() {
 
 		// intake
 		if (!intake_override) {
-			if (!override_inputs && master.get_digital(INTAKE_FWD_BUTTON))
-				intake.move(INTAKE_SPEED);
-			else if (!override_inputs && master.get_digital(INTAKE_REV_BUTTON))
-				intake.move(-INTAKE_SPEED);
-			else intake.brake();
+			if (!override_inputs && master.get_digital(INTAKE_FWD_BUTTON)) {
+				run_intake = true;
+				intake_dir = true;
+			} else if (!override_inputs && master.get_digital(INTAKE_REV_BUTTON)){
+				run_intake = true;
+				intake_dir = false;
+			} else run_intake = false;
 		} else {
 			// do nothing buh
 		}
@@ -1189,10 +1211,10 @@ void opcontrol() {
 		}
 		arm_up_p = master.get_digital(ARM_INCREMENT_UP);
 
-		if (!override_inputs && master.get_digital(ARM_INCREMENT_DOWN) && !arm_down_p) {
-			arm_target_pos.store(arm_pos.load() - ARM_INCREMENT);
-		}
-		arm_down_p = master.get_digital(ARM_INCREMENT_DOWN);
+		// if (!override_inputs && master.get_digital(ARM_INCREMENT_DOWN) && !arm_down_p) {
+		// 	arm_target_pos.store(arm_pos.load() - ARM_INCREMENT);
+		// }
+		// arm_down_p = master.get_digital(ARM_INCREMENT_DOWN);
 
 		if (std::abs(arm_pid_process.error) > ARM_MAX_SPEED) {
 			arm_target_pos = arm_pos.load() + sgn(arm_pid_process.error) * ARM_MAX_SPEED;
