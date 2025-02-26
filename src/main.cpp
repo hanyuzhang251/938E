@@ -852,7 +852,7 @@ void autonomous() {
 
 	bool run_intake = false;
 	int intake_stuck_ticks = 0;
-	const int INTAKE_STUCK_LIMIT = 8;
+	const int INTAKE_STUCK_LIMIT = 6;
 	int intake_outtake_ticks = 0;
 	const int INTAKE_OUTTAKE_DURATION = 15;
 
@@ -955,13 +955,15 @@ void autonomous() {
 	target_heading.store(182);
 	wait_stable(angular_pid_process);
 	target_dist.fetch_add(94);////
+	wait_cross(lateral_pid_process, 4);
 	for (int i = 0; i < 16; ++i) {
 		lateral_pid_process.max_speed = 127 - i * 6;
 		wait(60);
 	}
 
 	wait_stable(lateral_pid_process, 3000);
-	wait(1000);
+	wait(1500);
+	run_intake = false;
 //f
 	target_heading.store(-50);
 	wait_stable(angular_pid_process);
@@ -1000,8 +1002,8 @@ void autonomous() {
 	}
 	imu.set_heading(0);
 
-	target_dist.fetch_add(60);
-	wait_cross(lateral_pid_process, 1.15);
+	target_dist.fetch_add(71);
+	wait_cross(lateral_pid_process, 2.5);
 	target_heading.store(90);
 	
 	
@@ -1009,7 +1011,7 @@ void autonomous() {
 
 	target_heading.store(-90);
 	wait_stable(angular_pid_process);
-	target_dist.fetch_add(-28);//
+	target_dist.fetch_add(-24);//
 	wait_stable(lateral_pid_process);
 	mogo.set_value(true);
 	wait(250);
@@ -1034,13 +1036,15 @@ void autonomous() {
 	target_heading.store(-182);
 	wait_stable(angular_pid_process);
 	target_dist.fetch_add(94);////
-	for (int i = 0; i < 16; ++i) {
+	wait_cross(lateral_pid_process, 4);
+	for (int i = 0; i < 17; ++i) {
 		lateral_pid_process.max_speed = 127 - i * 6;
-		wait(60);
+		wait(50);
 	}
 
 	wait_stable(lateral_pid_process, 3000);
-	wait(1000);
+	wait(1500);
+	run_intake = false;
 //f
 	target_heading.store(50);
 	wait_stable(angular_pid_process);
@@ -1065,7 +1069,7 @@ void autonomous() {
 
 	target_heading.store(-9);
 	target_dist.fetch_add(115);
-	wait_cross(lateral_pid_process, 45);
+	wait_cross(lateral_pid_process, 42 );
 	target_heading.store(-45);
 	wait_stable(lateral_pid_process);
 	target_heading.store(135);
@@ -1151,8 +1155,8 @@ void opcontrol() {
 		// 	intake.move(-INTAKE_SPEED);
 		// 	--intake_outtake_ticks;
 		// } else {
-		// 	if (run_intake) intake.move((intake_dir ? 1 : -1) * INTAKE_SPEED);
-		// 	else intake.brake();
+			if (run_intake) intake.move((intake_dir ? 1 : -1) * INTAKE_SPEED);
+			else intake.brake();
 		// }
 
 		// driving
