@@ -74,7 +74,8 @@ float deg_dif(float current, float target) {
 /*                                   DATA                                    */
 /*****************************************************************************/
 
-struct Toggle {
+//                                                                             
+struct Toggle {                                                                
 	bool value;
 	bool ptrigger = false;
 
@@ -102,13 +103,13 @@ struct Pose {
     }
 };
 
-struct PIDController {
+struct PIDController {                                                         
     float kp;
     float ki;
     float kd;
     float wind; // range of error for integral accumulation
 	float clamp; // clamps the integral
-	float decay; // applied when needed to smoothly increase or decrease a value
+	float decay; // smoothly decreases integral
     float slew; // maximum acceleration and decelleration
 	float small_error; // error range describing almost to target
 	float large_error; // error range to start settling
@@ -211,7 +212,7 @@ PIDController angular_pid (
 		999, // slew
 		0, // small error
 		999, // large error
-		1.5 // tolerance
+		2.5 // tolerance
 );
 
 PIDController arm_pid (
@@ -277,7 +278,7 @@ constexpr DriveCurve drive_angular (3, 10, 1);
 /*                                    PID                                    */
 /*****************************************************************************/
 
-struct PIDProcess {
+struct PIDProcess {                                                            
     std::atomic<float>& value;
     std::atomic<float>& target;
     std::atomic<float>& output;
@@ -293,25 +294,43 @@ struct PIDProcess {
     float integral = 0;
     float derivative = 0;
 
-	float get_error() {
-		if (normalize_err) return normalize_err(target.load(), value.load());
-		else return target.load() - value.load();
-	}
+    float get_error() {
+        if (normalize_err) {
+            return normalize_err(target.load(), value.load());
+        } else {
+            return target.load() - value.load();
+        }
+    }
 
-    PIDProcess(std::atomic<float>& value, std::atomic<float>& target, std::atomic<float>& output,
-               const PIDController& pid, float max_speed, float min_speed, uint32_t life,
-               std::function<float(float, float)> normalize_err = [](float err, float maxErr) { return err / maxErr; })
-        : value(value), target(target), output(output), pid(pid), max_speed(max_speed),
-          min_speed(min_speed), life(life), normalize_err(normalize_err) {}
+    PIDProcess(
+        std::atomic<float>& value,
+        std::atomic<float>& target,
+        std::atomic<float>& output,
+        const PIDController& pid,
+        float max_speed,
+        float min_speed,
+        uint32_t life,
+        std::function<float(float, float)> normalize_err =
+            [](float err, float maxErr) { return err / maxErr; })
+        : value(value),
+          target(target),
+          output(output),
+          pid(pid),
+          max_speed(max_speed),
+          min_speed(min_speed),
+          life(life),
+          normalize_err(normalize_err) {}
 
     auto operator()() {
-        return std::tie(value, target, output, pid, min_speed, max_speed, life, normalize_err,
-                        prev_output, prev_error, error, integral, derivative);
+        return std::tie(
+            value, target, output, pid, min_speed, max_speed, life,
+            normalize_err, prev_output, prev_error, error, integral,
+            derivative);
     }
 };
 
 
-void pid_handle_process(PIDProcess& process) {
+void pid_handle_process(PIDProcess& process) {                                 
 
     auto [value, target, output, pid, min_speed, max_speed, life, normalize_err,
           prev_output, prev_error, error, integral, derivative] = process();
@@ -329,7 +348,7 @@ void pid_handle_process(PIDProcess& process) {
 		error = normalize_err(target.load(), value.load());
 	}
 
-    // reset integral if we crossed target
+    // reset integral if we crossed target                                     
     if (sgn(prev_error) != sgn(error)) {
 		integral = 0;
 	}
@@ -346,7 +365,7 @@ void pid_handle_process(PIDProcess& process) {
     // clamp integral
     integral = std::min(pid.clamp, std::max(-pid.clamp, integral));
     
-    // derivative update
+    // derivative update                                                       
     derivative = error - prev_error;
 
     float real_error = error;
@@ -359,9 +378,15 @@ void pid_handle_process(PIDProcess& process) {
 	real_derivative *= (1 - std::min(1.0f, std::abs(error) / pid.large_error));
 
     // calculate power
-    float calc_power = real_error * pid.kp + real_integral * pid.ki + real_derivative * pid.kd;
+    float calc_power =
+		real_error * pid.kp
+		+ real_integral * pid.ki
+		+ real_derivative * pid.kd;
     // constrain power to slew
-    calc_power = std::min(prev_output + pid.slew, std::max(prev_output - pid.slew, calc_power));
+    calc_power = std::min(
+		prev_output + pid.slew,
+		std::max(prev_output - pid.slew, calc_power)
+	);
 	// constrain power to min/max speed
     calc_power = std::min(max_speed, std::max(-max_speed, calc_power));
 
@@ -854,7 +879,7 @@ void autonomous() {
 	int intake_stuck_ticks = 0;
 	const int INTAKE_STUCK_LIMIT = 6;
 	int intake_outtake_ticks = 0;
-	const int INTAKE_OUTTAKE_DURATION = 15;
+	const int INTAKE_OUTTAKE_DURATION = 12;
 
 
 	pros::Task auton_task{[&] {
@@ -954,14 +979,18 @@ void autonomous() {
 	wait(600);
 	target_heading.store(182);
 	wait_stable(angular_pid_process);
-	target_dist.fetch_add(100);////
+	target_dist.fetch_add(80);////
 	wait_cross(lateral_pid_process, 4);
 	for (int i = 0; i < 16; ++i) {
 		lateral_pid_process.max_speed = 127 - i * 6;
 		wait(60);
 	}
 
-	wait_stable(lateral_pid_process, 3000);
+	wait_stable(lateral_pid_process, 2500);
+	wait(600);
+
+	target_dist.fetch_add(26);
+	wait_stable(lateral_pid_process, 1500);
 //f
 	target_heading.store(-50);
 	wait_stable(angular_pid_process);
@@ -977,8 +1006,7 @@ void autonomous() {
 	target_dist.fetch_add(-34);
 	wait_cross(lateral_pid_process, -10);
 	target_heading.store(20);
-	wait_stable(lateral_pid_process, 2000);
-	wait_stable(angular_pid_process, 500);
+	wait_stable(lateral_pid_process, 1250);
 
 	mogo.set_value(false);
 	wait(250);
@@ -1014,7 +1042,7 @@ void autonomous() {
 	mogo.set_value(true);
 	wait(250);
 
-	target_heading.store(0);
+	target_heading.store(-3);
 	wait_stable(angular_pid_process);
 
 	run_intake = true;
@@ -1025,22 +1053,26 @@ void autonomous() {
 	wait_cross(lateral_pid_process, t + 12, false);
 	target_heading.store(40);
 	wait_cross(lateral_pid_process, t + 24 + 25, false);
-	target_heading.store(0);
+	target_heading.store(-3);
 	wait_cross(lateral_pid_process, t + 24 + 34 + 16, false);
 	wait_stable(lateral_pid_process);
 
 	lateral_pid_process.max_speed = 127;
 	wait(600);
-	target_heading.store(-182);
+	target_heading.store(182);
 	wait_stable(angular_pid_process);
-	target_dist.fetch_add(100);////
+	target_dist.fetch_add(80);////
 	wait_cross(lateral_pid_process, 4);
 	for (int i = 0; i < 17; ++i) {
 		lateral_pid_process.max_speed = 127 - i * 6;
 		wait(50);
 	}
 
-	wait_stable(lateral_pid_process, 3000);
+	wait_stable(lateral_pid_process, 2500);
+	wait(600);
+
+	target_dist.fetch_add(26);
+	wait_stable(lateral_pid_process, 1500);
 //f
 	target_heading.store(50);
 	wait_stable(angular_pid_process);
@@ -1057,8 +1089,7 @@ void autonomous() {
 	target_dist.fetch_add(-34);
 	wait_cross(lateral_pid_process, -10);
 	target_heading.store(-20);
-	wait_stable(lateral_pid_process, 2000);
-	wait_stable(angular_pid_process, 500);
+	wait_stable(lateral_pid_process, 1250);
 
 	mogo.set_value(false);
 	wait(250);
@@ -1069,7 +1100,7 @@ void autonomous() {
 	wait_cross(lateral_pid_process, 12);
 	target_heading.store(0);
 	wait_stable(angular_pid_process, 500);
-	target_dist.fetch_add(-24);
+	target_dist.fetch_add(-30);
 	wait_stable(lateral_pid_process, 1000);
 
 	for (int i = 0; i < 3; ++i) {
@@ -1078,42 +1109,50 @@ void autonomous() {
 	}
 	imu.set_heading(0);
 
-	target_heading.store(-9);
-	target_dist.fetch_add(115);
-	wait_cross(lateral_pid_process, 60);
+	target_dist.fetch_add(127.5);
+	wait_cross(lateral_pid_process, 6);
 	target_heading.store(-45);
-	wait_stable(lateral_pid_process);
-	target_heading.store(135);
-	wait_stable(angular_pid_process);
-	target_dist.fetch_add(-27);
-	wait_cross(lateral_pid_process, -24);
-	mogo.set_value(true);
-	wait(250);
-	target_heading.store(95);
-	wait_stable(angular_pid_process);
-	target_dist.fetch_add(53);
+	wait_cross(lateral_pid_process, 34);
+	for (int i = 0; i < 17; ++i) {
+		lateral_pid_process.max_speed = 127 - i * 6;
+		wait(65);
+	}
 	run_intake = true;
-	wait_stable(lateral_pid_process, 3000);
-	target_heading.store(45);
-	wait_stable(angular_pid_process);
-	lateral_pid_process.max_speed = 60;
-	target_dist.fetch_add(24);
-	wait_stable(lateral_pid_process, 1000);
-	wait(500);
+	wait_stable(lateral_pid_process);
+	run_intake = false;
 	target_heading.store(-135);
 	wait_stable(angular_pid_process);
-	target_dist.fetch_add(-6);
-	wait_stable(lateral_pid_process, 1000);
-	mogo.set_value(false);
-	run_intake = false;
-		intake.move(-20);
+	lateral_pid_process.max_speed = 127;
+	target_dist.fetch_add(-36);
+	wait_cross(lateral_pid_process, -33);
+	mogo.set_value(true);
 	wait(250);
+	run_intake = true;
 
-lateral_pid_process.max_speed = 127;
-	target_dist.fetch_add(200);
-	target_heading.store(-100);
-	wait_cross(lateral_pid_process, 35);
-	target_heading.store(-75);
+	target_heading.store(-85);
+	wait_stable(angular_pid_process);
+	target_dist.fetch_add(48);
+	for (int i = 0; i < 16; ++i) {
+		lateral_pid_process.max_speed = 127 - i * 6;
+		wait(50);
+	}
+	wait_stable(lateral_pid_process);
+
+	target_heading.store(0);
+	wait_stable(angular_pid_process);
+	target_dist.fetch_add(16);
+	wait_stable(lateral_pid_process, 2000);
+
+	target_heading.store(90);
+	wait_stable(angular_pid_process);
+	lateral_pid_process.max_speed = 127;
+	target_dist.fetch_add(-20);
+	wait_stable(lateral_pid_process, 2000);
+
+	target_heading.store(105);
+	target_dist.fetch_add(24 * 6);
+	wait_cross(lateral_pid_process, 72);
+	target_heading.store(80);
 	
 	wait_stable(lateral_pid_process);
 	wait_stable(angular_pid_process);//
