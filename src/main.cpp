@@ -497,7 +497,7 @@ uint32_t ctrl_log_update = pros::millis();
 
 // imu bias
 
-float imu_bias_x = 0;
+float imu_bias_x = 0;                                                          
 float imu_bias_y = 0;
 float imu_bias_z = 0;
 float imu_bias_h = 0;
@@ -534,7 +534,7 @@ void solve_imu_bias(int32_t life) {
 }
 
 // robot position
-Pose robot_pose_mod(0, 0, 0);
+Pose robot_pose_mod(0, 0, 0);                                                  
 Pose robot_pose (0, 0, 0);
 Pose robot_ipose (0, 0, 0);
 std::atomic<float> dist (0);
@@ -548,18 +548,23 @@ int right_motors_prev_pos = 0;//
 uint32_t prev_v_tracking_wheel_pos = 0;
 
 void get_robot_position() {
-	auto [x_ipos, y_ipos, iheading] = robot_ipose();
-
 	prev_dist.store(dist.load());
 
-	// dist.fetch_add(v_tracking_wheel.get_angle() - prev_v_tracking_wheel_pos);
-
-	dist.fetch_add(((dt_left_motors.get_position() - left_motors_prev_pos) + (dt_right_motors.get_position() - right_motors_prev_pos)) / 2.0f / DIST_MULTI);
+	dist.fetch_add(
+		((dt_left_motors.get_position() - left_motors_prev_pos)
+		+ (dt_right_motors.get_position() - right_motors_prev_pos))
+		/ 2.0f / DIST_MULTI);
 	left_motors_prev_pos = dt_left_motors.get_position();
 	right_motors_prev_pos = dt_right_motors.get_position();
 
-	x_ipos.fetch_add(std::cos(iheading * M_PI / 180) * (dist.load() - prev_dist.load()));
-	y_ipos.fetch_add(std::sin(iheading * M_PI / 180) * (dist.load() - prev_dist.load()));
+	auto [x_ipos, y_ipos, iheading] = robot_ipose();
+
+	x_ipos.fetch_add(
+		std::cos(iheading * M_PI / 180)
+		* (dist.load() - prev_dist.load()));
+	y_ipos.fetch_add(
+		std::sin(iheading * M_PI / 180)
+		* (dist.load() - prev_dist.load()));
 
 	iheading.store(normalize_deg(imu.get_heading()));
 
