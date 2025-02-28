@@ -964,302 +964,36 @@ void autonomous() {
 		}
 	}};
 
-<<<<<<< HEAD
-	lateral_pid_process.max_speed = 90;
-	target_dist.store(-40);
-	wait(1500);
+	robot_ipose.h = -122;
 
-	lateral_movement = false;
-	dt_left_motors.brake();
-	dt_right_motors.brake();
-
-	mogo.set_value(true);
-	wait(500);
-
-	intake.move(INTAKE_SPEED);
-	wait(800);
-
-	lateral_movement = true;
-
-	target_heading.store(100);
-	wait(800);
-
-	lateral_pid_process.max_speed = 127;
-	target_dist.fetch_add(30);
-	wait(1500);
-
-	mogo.set_value(false);
-	wait(500);
-
-	target_heading.store(-60);
-	wait(800);
-
-	target_dist.fetch_add(70);
-	wait(1500);
-
-	intake.move(INTAKE_SPEED-INTAKE_SPEED);
-	wait(300);
-
-	target_heading.store(45);
-	wait(800);
-
-	target_dist.fetch_add(-42);
+	target_arm_pos.fetch_add(2000);
 	wait(1000);
 
-	mogo.set_value(true);
-	wait(200);
-
-	intake.move(INTAKE_SPEED);
-	wait(500);
-
-	target_heading.store(90);
-	wait(500);
-
-	target_arm_pos.store(3 * ARM_LOAD_POS);
-	target_dist.fetch_add(8);
-
-	wait(2000);
-=======
-	run_intake = true;
-	wait(200);
-	run_intake = false;;
-
-	target_dist.fetch_add(16);
-	wait_stable(lateral_pid_process);
-	target_heading.store(90);
-	wait_stable(angular_pid_process);
-	lateral_pid_process.max_speed = 90;
-	target_dist.fetch_add(-26);
-	wait_cross(lateral_pid_process, -24);
-	mogo.set_value(true);
-	wait(250);
-	lateral_pid_process.max_speed = 127;
-
-	target_heading.store(0);
-	wait_stable(angular_pid_process);
-
-	run_intake = true;
-
-	t = lateral_pid_process.value.load();
-	lateral_pid_process.max_speed = 100;
-	target_dist.fetch_add(87);
-	wait_cross(lateral_pid_process, t + 12, false);
-	target_heading.store(-40);
-	wait_cross(lateral_pid_process, t + 24 + 25, false);
-	target_heading.store(0);
-	wait_cross(lateral_pid_process, t + 24 + 34 + 16, false);
-	wait_stable(lateral_pid_process);
-
-	lateral_pid_process.max_speed = 127;
-	wait(600);
-	target_heading.store(182);
-	wait_stable(angular_pid_process);
-	target_dist.fetch_add(77);////
-	wait_cross(lateral_pid_process, 4);
-	for (int i = 0; i < 16; ++i) {
-		lateral_pid_process.max_speed = 127 - i * 6;
-		wait(60);
-	}
-
-	wait_stable(lateral_pid_process, 2500);
-	wait(600);
-	
-	target_dist.fetch_add(26);
-	wait_stable(lateral_pid_process, 1000);
-//f
-	target_heading.store(-50);
-	wait_stable(angular_pid_process);
-
-	run_intake = true;
-
-	lateral_pid_process.max_speed = 127;
-	target_dist.fetch_add(29);
-	wait_cross(lateral_pid_process, 4.2);
-	target_heading.store(0);
-	wait_stable(lateral_pid_process, 2000);
-	wait(500);
-	target_dist.fetch_add(-34);
-	wait_cross(lateral_pid_process, -10);
-	target_heading.store(20);
-	wait_stable(lateral_pid_process, 1250);
-
-	mogo.set_value(false);
-	wait(250);
-	run_intake = false;//
-
-	lateral_pid_process.max_speed = 127;
-
-	target_heading.store(90);
-	target_dist.fetch_add(24);
-	wait_cross(lateral_pid_process, 12);
-	target_heading.store(0);
-	wait_stable(angular_pid_process, 500);
-	target_dist.fetch_add(-24);
-	wait_stable(lateral_pid_process, 1000);
-
-	for (int i = 0; i < 3; ++i) {
-		robot_pose.x.store(0);
-		wait(PROCESS_DELAY);
-	}
-	imu.set_heading(0);
-
-	target_dist.fetch_add(70);
-	wait_cross(lateral_pid_process, 2.5);
-	target_heading.store(90);
-	
-	
-	wait_stable(lateral_pid_process);
-
-	target_heading.store(-90);
-	wait_stable(angular_pid_process);
-	target_dist.fetch_add(-24);//
-	wait_stable(lateral_pid_process);
-	mogo.set_value(true);
-	wait(250);
-
-	target_heading.store(-3);
-	wait_stable(angular_pid_process);
-
-	run_intake = true;
-
-	t = lateral_pid_process.value.load();
-	lateral_pid_process.max_speed = 100;
-	target_dist.fetch_add(90);
-	wait_cross(lateral_pid_process, t + 12, false);
-	target_heading.store(40);
-	wait_cross(lateral_pid_process, t + 24 + 25, false);
-	target_heading.store(-5);
-	wait_cross(lateral_pid_process, t + 24 + 34 + 16, false);
-	wait_stable(lateral_pid_process);
-
-	lateral_pid_process.max_speed = 127;
-	wait(600);
-	target_heading.store(182);
-	wait_stable(angular_pid_process);
-	target_dist.fetch_add(80);////
-	wait_cross(lateral_pid_process, 4);
-	for (int i = 0; i < 17; ++i) {
-		lateral_pid_process.max_speed = 127 - i * 6;
-		wait(50);
-	}
-
-	wait_stable(lateral_pid_process, 2500);
-	wait(600);
-
-	target_dist.fetch_add(26);
-	wait_stable(lateral_pid_process, 1000);
-//f
-	target_heading.store(50);
-	wait_stable(angular_pid_process);
-
-	run_intake = true;
-
-lateral_pid_process.max_speed = 127;
-	target_dist.fetch_add(29);
-	wait_cross(lateral_pid_process, 4.2);
-	target_heading.store(0);
-	wait_stable(lateral_pid_process, 2000);
-	wait(500);
-
-	target_dist.fetch_add(-34);
-	wait_cross(lateral_pid_process, -10);
-	target_heading.store(-30);
-	wait_stable(lateral_pid_process, 1250);
-
-	mogo.set_value(false);
-	wait(250);
-	run_intake = false;//
-
-	target_heading.store(-90);
-	target_dist.fetch_add(24);
-	wait_cross(lateral_pid_process, 12);
-	target_heading.store(0);
-	wait_stable(angular_pid_process, 500);
-	target_dist.fetch_add(-24);
-	wait_stable(lateral_pid_process, 1000);
-
-	for (int i = 0; i < 3; ++i) {
-		robot_pose.x.store(0);
-		wait(PROCESS_DELAY);
-	}
-	imu.set_heading(0);
-
-	target_dist.fetch_add(130);
-	wait_cross(lateral_pid_process, 6);
-	target_heading.store(-45);
-	wait_cross(lateral_pid_process, 34);
-	for (int i = 0; i < 17; ++i) {
-		lateral_pid_process.max_speed = 127 - i * 6;
-		wait(65);
-	}
-	run_intake = true;
-	wait_stable(lateral_pid_process);
-	run_intake = false;
-	target_heading.store(-135);
-	wait_stable(angular_pid_process);
-	lateral_pid_process.max_speed = 127;
-	target_dist.fetch_add(-36);
-	for (int i = 0; i < 10; --i) {
-		lateral_pid_process.max_speed = 127 - i * 5;
-		wait(50);
-	}
-	wait_stable(lateral_pid_process);
-	mogo.set_value(true);
-	wait(250);
-	run_intake = true;
-
-lateral_pid_process.max_speed = 127;
-	target_heading.store(-85);
-	wait_stable(angular_pid_process);
-	target_dist.fetch_add(48);
-	for (int i = 0; i < 16; ++i) {
-		lateral_pid_process.max_speed = 127 - i * 6;
-		wait(50);
-	}
-	wait_stable(lateral_pid_process);
-
-	target_heading.store(0);
-	wait_stable(angular_pid_process);
-	target_dist.fetch_add(10);
-	wait_stable(lateral_pid_process, 1000);
-
-	target_heading.store(95);
-	wait_stable(angular_pid_process, 1000);
-	lateral_pid_process.max_speed = 127;
-	target_dist.fetch_add(-20);
-	wait_stable(lateral_pid_process, 2000);
-	mogo.set_value(false);
-	wait(250);
-
-	lateral_pid_process.max_speed = 90;
-	target_heading.store(-100);
-	target_dist.fetch_add(48);
-	run_intake = true;
-	wait(2300);
-	run_intake = false;
-	wait(500);
-
-	target_heading.store(-87);
-	target_dist.fetch_add(-80);
-	wait_stable(lateral_pid_process);
-
+	target_dist.fetch_add(-48);
+	wait_cross(lateral_pid_process, -3);
 	target_heading.store(180);
+	wait_stable(lateral_pid_process);
+	mogo.set_value(true);
+	wait(250)
+
+	target_heading.store(-45);
 	wait_stable(angular_pid_process);
+	lateral_pid_process.max_speed = 50;
 
-	target_dist.fetch_add(-24);
-	wait_stable(lateral_pid_process, 1000);
-	target_dist.fetch_add(1.5);
-	wait(250);
 	run_intake = true;
-	wait(250);
-	run_intake = false;
+	target_dist.fetch_add(34+20);
+	wait_cross(lateral_pid_proces, 28);
+	target_heading.store(-90);
+	wait_stable(lateral_pid_process, 2500);
 
-	target_heading.store(90);
-	target_dist.fetch_add(72);
+	target_heading.store(170);
+	wait_stable(angular_pid_process);
+	target_dist.fetch_add(24);
+	wait_stable(lateral_pid_process);
+
 	
 	wait_stable(lateral_pid_process);
 	wait_stable(angular_pid_process);//
->>>>>>> main
 
 	auton_task.remove();
 
