@@ -1,12 +1,20 @@
+
+
 #include "main.h"
 #include "pros/misc.h"
+#include "pros/optical.hpp"
 
 #include <cmath>
 #include <limits>
 #include <atomic>
 #include <tuple>
+#include <queue>
+#include <cstring>
+#include <cstdio>
 
-#define wait(n) pros::delay(n)
+inline void wait(uint32_t n) {
+	pros::delay(n);
+}
 
 #define digi_button controller_digital_e_t
 #define anlg_button controller_analog_e_t
@@ -67,7 +75,20 @@ float deg_dif(float current, float target) {
 /*                                   DATA                                    */
 /*****************************************************************************/
 
-struct Pose {
+//                                                                             
+struct Toggle {                                                                
+	bool value;
+	bool ptrigger = false;
+
+	Toggle(bool value_ = false) : value(value_), ptrigger(false) {}
+
+	void tick(bool trigger) {
+		if (trigger && !ptrigger) value = !value;
+		ptrigger = trigger;
+	}
+};
+
+struct Pose {                                                                  
     std::atomic<float> x;
     std::atomic<float> y;
     std::atomic<float> h;
@@ -83,13 +104,13 @@ struct Pose {
     }
 };
 
-struct PIDController {
+struct PIDController {                                                         
     float kp;
     float ki;
     float kd;
     float wind; // range of error for integral accumulation
 	float clamp; // clamps the integral
-	float decay; // applied when needed to smoothly increase or decrease a value
+	float decay; // smoothly decreases integral
     float slew; // maximum acceleration and decelleration
 	float small_error; // error range describing almost to target
 	float large_error; // error range to start settling
@@ -121,15 +142,21 @@ constexpr int DT_FR_PORT = 14;
 constexpr int DT_MR_PORT = -18;
 constexpr int DT_BR_PORT = 16;
 
+constexpr int V_TRACKING_WHEEL_PORT = 7;
+
 constexpr int INTAKE_PORT = -2;
 
-constexpr int DIDDY_PORT = 1;
+constexpr int DIDDY_PORT = -1;
+
 constexpr int MOGO_PORT = 2;
 constexpr int RAISE_INTAKE_PORT = 3;
 
-constexpr int ARM_PORT = 5;
+constexpr int ARM_R_PORT = -5;
+constexpr int ARM_L_PORT = 21;
 
 constexpr int IMU_PORT = 8;
+
+constexpr int OPTICAL_PORT = 6;
 
 // CONTROLS
 
@@ -141,18 +168,29 @@ constexpr pros::digi_button INTAKE_REV_BUTTON = pros::CTRL_DIGI_L2;
 constexpr pros::digi_button EJECT_RING_BUTTON = pros::CTRL_DIGI_X;
 
 constexpr pros::digi_button DIDDY_TOGGLE_BUTTON = pros::CTRL_DIGI_X;
+Toggle diddy_toggle (true);
 
-constexpr pros::digi_button MOGO_ON_BUTTON = pros::CTRL_DIGI_A;
-constexpr pros::digi_button MOGO_OFF_BUTTON = pros::CTRL_DIGI_B;
+constexpr pros::digi_button MOGO_TOGGLE_BUTTON = pros::CTRL_DIGI_A;
+Toggle mogo_toggle (false);
 
 constexpr pros::digi_button ARM_UP_BUTTON = pros::CTRL_DIGI_R1;
 constexpr pros::digi_button ARM_DOWN_BUTTON = pros::CTRL_DIGI_R2;
 
-constexpr pros::digi_button ARM_LOAD_POS_BUTTON = pros::CTRL_DIGI_UP;
+constexpr pros::digi_button ARM_INCREMENT_UP = pros::CTRL_DIGI_UP;
+constexpr pros::digi_button ARM_INCREMENT_DOWN = pros::CTRL_DIGI_DOWN;
+bool arm_up_p = false, arm_down_p = false;
+
+bool p_nav_toggle = false;
+constexpr pros::digi_button MENU_TOGGLE = pros::CTRL_DIGI_Y;
+bool p_menu_toggle = false;
+constexpr pros::digi_button SETTING_TOGGLE = pros::CTRL_DIGI_A;
+bool p_setting_toggle = false;
+
+bool override_inputs = false;
 
 // PID
 
-PIDController lateral_pid (
+PIDController lateral_pid (  
 		5, // kp
 		0.7, // ki
 		80, // kd
@@ -165,30 +203,30 @@ PIDController lateral_pid (
 		0.3 // tolerance
 );
 
-PIDController angular_pid (
-		2, // kp
-		0.2, // ki
-		15, // kd
-		10, // wind
+PIDController angular_pid (  
+		2.5, // kp
+		0.1, // ki
+		24, // kd
+		30, // wind
 		999, // clamp
 		0, // decay
 		999, // slew
-		10, // small error
-		30, // large error
-		0.5 // tolerance
+		0, // small error
+		999, // large error
+		2.5 // tolerance
 );
 
-PIDController arm_pid (
+PIDController arm_pid (      
 		0.3, // kp
-		0.05, // ki
-		0.1, // kd
-		100, // wind
+		0.02, // ki
+		0.5, // kd
+		30, // wind
 		999, // clamp
-		0.9, // decay
+		0, // decay
 		999, // slew
 		0, // small error
-		50, // large error
-		3 // tolerance
+		999, // large error
+		0 // tolerance
 );
 
 // AUTON
@@ -197,21 +235,37 @@ constexpr bool FORCE_AUTON = false; // if auton was not run, try again at start 
 
 constexpr float DIST_MULTI = 29;
 
+bool intake_override = false;
+
+bool racism = false; // true = red bad
+
+bool color_sort = true;
+constexpr int CS_OUTTAKE_DELAY = 75;
+constexpr int OUTTAKE_TICKS = 500;
+
+constexpr float RED_HUE = 5;
+constexpr float BLUE_HUE = 210;
+
+constexpr float HUE_TOLERANCE = 15;
+
+constexpr float DIST_TOLERANCE = 125;
+
 // DRIVE
 
 constexpr int DRIVE_RATIO = 1;
 constexpr int TURN_RATIO = 1;
 
-constexpr float DRIVE_SLEW = 12;
+constexpr float DRIVE_SLEW = 127;
 
 constexpr bool SPEED_COMP = false;
 
 constexpr int INTAKE_SPEED = 127;
 constexpr int EJECT_BRAKE_CYCLES = 16;
 
-constexpr float ARM_SPEED = 50;
-constexpr float ARM_DOWN_SPEED_MULTI = 0.5;
-constexpr float ARM_LOAD_POS = 200;
+constexpr float ARM_SPEED = 70;
+constexpr float ARM_MAX_SPEED = 300;
+
+constexpr float ARM_INCREMENT = 80;
 
 constexpr float ARM_BOTTOM_LIMIT = 0;
 constexpr float ARM_TOP_LIMIT = 2000;
@@ -225,7 +279,7 @@ constexpr DriveCurve drive_angular (3, 10, 1);
 /*                                    PID                                    */
 /*****************************************************************************/
 
-struct PIDProcess {
+struct PIDProcess {                                                            
     std::atomic<float>& value;
     std::atomic<float>& target;
     std::atomic<float>& output;
@@ -241,31 +295,46 @@ struct PIDProcess {
     float integral = 0;
     float derivative = 0;
 
-	float get_error() {
-		if (normalize_err) return normalize_err(target.load(), value.load());
-		else return target.load() - value.load();
-	}
+    float get_error() {
+        if (normalize_err) {
+            return normalize_err(target.load(), value.load());
+        } else {
+            return target.load() - value.load();
+        }
+    }
 
-    PIDProcess(std::atomic<float>& value, std::atomic<float>& target, std::atomic<float>& output,
-               const PIDController& pid, float max_speed, float min_speed, uint32_t life,
-               std::function<float(float, float)> normalize_err = [](float err, float maxErr) { return err / maxErr; })
-        : value(value), target(target), output(output), pid(pid), max_speed(max_speed),
-          min_speed(min_speed), life(life), normalize_err(normalize_err) {}
+    PIDProcess(
+        std::atomic<float>& value,
+        std::atomic<float>& target,
+        std::atomic<float>& output,
+        const PIDController& pid,
+        float max_speed,
+        float min_speed,
+        uint32_t life,
+        std::function<float(float, float)> normalize_err =
+            [](float err, float maxErr) { return err / maxErr; })
+        : value(value),
+          target(target),
+          output(output),
+          pid(pid),
+          max_speed(max_speed),
+          min_speed(min_speed),
+          life(life),
+          normalize_err(normalize_err) {}
 
     auto operator()() {
-        return std::tie(value, target, output, pid, min_speed, max_speed, life, normalize_err,
-                        prev_output, prev_error, error, integral, derivative);
+        return std::tie(
+            value, target, output, pid, min_speed, max_speed, life,
+            normalize_err, prev_output, prev_error, error, integral,
+            derivative);
     }
 };
 
 
-void pid_handle_process(PIDProcess& process) {
+void pid_handle_process(PIDProcess& process) {                                 
 
     auto [value, target, output, pid, min_speed, max_speed, life, normalize_err,
           prev_output, prev_error, error, integral, derivative] = process();
-
-	printf("\nHANDLING PID PROCESS\n");
-	printf("> STATE: value: %f, target: %f, output: %f\n", value.load(), target.load(), output.load());
 
     if (life <= 0) return;
     life -= 1;
@@ -275,64 +344,58 @@ void pid_handle_process(PIDProcess& process) {
 
     // error update
     error = target.load() - value.load();
-	printf("> ERROR CALC: target(%f) - value(%f) = error(%f)\n", target.load(), value.load(), error);
     // normalize error if applicable
     if (normalize_err) {
 		error = normalize_err(target.load(), value.load());
-		printf("> CUST ERROR CALC: norm_error = error(%f)\n", error);
 	}
 
-    // reset integral if we crossed target
+    // reset integral if we crossed target                                     
     if (sgn(prev_error) != sgn(error)) {
 		integral = 0;
-		printf("> RESET INTEGRAL\n");
 	}
 
     // update integral if error in windup range
     if (std::abs(error) <= pid.wind) {
 		integral += error;
-		printf("> ACCUMULATE INTEGRAL: +%f = %f\n", error, integral);
 	}
     // else decay integral
     else {
 		integral *= pid.decay;
-		printf("> DECAY INTEGRAL: *%f = %f\n", pid.decay, integral);
 	}
 
     // clamp integral
     integral = std::min(pid.clamp, std::max(-pid.clamp, integral));
-	printf("> CLAMP INTEGRAL: range(%f) = %f\n", pid.clamp, integral);
     
-    // derivative update
+    // derivative update                                                       
     derivative = error - prev_error;
-	printf("> UPDATE DERIV: error(%f) - prev_error(%f\n", error, prev_error);
 
-    float real_error = error;
+    float real_error = error;                                                  
     float real_integral = integral;
     float real_derivative = derivative;
 
     // scale integral on small error
-	printf("integral mult %f\n", (std::min(1.0f, std::abs(error) / pid.small_error)));
-    real_integral *= (std::min(1.0f, std::abs(error) / pid.small_error));
+    real_integral *= (std::min(
+		1.0f,
+		std::max(0.3f, std::abs(error) / pid.small_error))
+	);
     // scale derivative on large error
-    printf("derivitave mult %f\n",  (1 - std::min(1.0f, std::abs(error) / pid.large_error)));
 	real_derivative *= (1 - std::min(1.0f, std::abs(error) / pid.large_error));
 
-	printf("err %f, int %f, der %f\n", real_error, real_integral, real_derivative);
-
     // calculate power
-    float calc_power = real_error * pid.kp + real_integral * pid.ki + real_derivative * pid.kd;
-	printf("> POWER CALC: %f\n", calc_power);
+    float calc_power =
+		real_error * pid.kp
+		+ real_integral * pid.ki
+		+ real_derivative * pid.kd;
     // constrain power to slew
-    calc_power = std::min(prev_output + pid.slew, std::max(prev_output - pid.slew, calc_power));
-    printf("> SLEW CALC: %f\n", calc_power);
+    calc_power = std::min(
+		prev_output + pid.slew,
+		std::max(prev_output - pid.slew, calc_power)
+	);
 	// constrain power to min/max speed
     calc_power = std::min(max_speed, std::max(-max_speed, calc_power));
-	printf("> MAX SPEED CALC: %f\n", calc_power);
 
     // set output power
     output.store(calc_power);
-	printf("> OUTPUT: %f\n", calc_power);
 }
 
 
@@ -381,13 +444,50 @@ pros::MotorGroup dt_right_motors ({
 	DT_BR_PORT
 });
 
+pros::Rotation v_tracking_wheel (V_TRACKING_WHEEL_PORT);
+
 pros::Motor intake (INTAKE_PORT);
 
 pros::adi::DigitalOut mogo (MOGO_PORT);
 
-pros::Motor arm (ARM_PORT);
+pros::adi::DigitalOut diddy (DIDDY_PORT);
+
+pros::MotorGroup arm ({ARM_R_PORT, ARM_L_PORT});
 
 pros::IMU imu (IMU_PORT);
+
+pros::Optical optical (OPTICAL_PORT);
+
+using Task = std::pair<std::function<void()>, uint32_t>;
+auto task_cmp = [](auto a, auto b) {return a.second > b.second;};
+std::priority_queue<Task, std::vector<Task>, decltype(task_cmp)> tasks;
+
+void schedule_task(std::function<void()> func, uint32_t time, bool relative = true) {
+	if (relative) time += pros::millis();
+
+	tasks.emplace(func, time);
+}
+
+bool check_tasks() {
+	bool task_run = false;
+
+	while (!tasks.empty()) {
+		Task top = tasks.top();
+		if (pros::millis() >= top.second) {
+			tasks.pop();
+			top.first();
+			task_run = true;
+		} else {
+			break;
+		}
+	}
+
+	return task_run;
+}
+
+char ctrl_log[3][15];
+int ctrl_log_ptr = 0;
+uint32_t ctrl_log_update = pros::millis();
 
 
 
@@ -397,7 +497,7 @@ pros::IMU imu (IMU_PORT);
 
 // imu bias
 
-float imu_bias_x = 0;
+float imu_bias_x = 0;                                                          
 float imu_bias_y = 0;
 float imu_bias_z = 0;
 float imu_bias_h = 0;
@@ -434,28 +534,46 @@ void solve_imu_bias(int32_t life) {
 }
 
 // robot position
+Pose robot_pose_mod(0, 0, 0);                                                  
 Pose robot_pose (0, 0, 0);
+Pose robot_ipose (0, 0, 0);
 std::atomic<float> dist (0);
 std::atomic<float> prev_dist(0);
 
 std::atomic<float> arm_pos(0);
 
 int left_motors_prev_pos = 0;
-int right_motors_prev_pos = 0;
+int right_motors_prev_pos = 0;//
+
+uint32_t prev_v_tracking_wheel_pos = 0;
 
 void get_robot_position() {
-	auto [x_pos, y_pos, heading] = robot_pose();
-
 	prev_dist.store(dist.load());
 
-	dist.fetch_add(((dt_left_motors.get_position() - left_motors_prev_pos) + (dt_right_motors.get_position() - right_motors_prev_pos)) / 2.0f / DIST_MULTI);
+	dist.fetch_add(
+		((dt_left_motors.get_position() - left_motors_prev_pos)
+		+ (dt_right_motors.get_position() - right_motors_prev_pos))
+		/ 2.0f / DIST_MULTI);
 	left_motors_prev_pos = dt_left_motors.get_position();
 	right_motors_prev_pos = dt_right_motors.get_position();
 
-	x_pos.fetch_add(std::cos(heading * M_PI / 180) * (dist.load() - prev_dist.load()));
-	y_pos.fetch_add(std::sin(heading * M_PI / 180) * (dist.load() - prev_dist.load()));
+	auto [x_ipos, y_ipos, iheading] = robot_ipose();
 
-	heading.store(normalize_deg(imu.get_heading()));
+	x_ipos.fetch_add(
+		std::cos(iheading * M_PI / 180)
+		* (dist.load() - prev_dist.load()));
+	y_ipos.fetch_add(
+		std::sin(iheading * M_PI / 180)
+		* (dist.load() - prev_dist.load()));
+
+	iheading.store(normalize_deg(imu.get_heading()));
+
+	auto [x_pos, y_pos, heading] = robot_pose();
+	auto [x_mpos, y_mpos, mheading] = robot_pose_mod();
+
+	x_pos.store(x_ipos + x_mpos);
+	y_pos.store(y_ipos + y_mpos);
+	heading.store(iheading + mheading);
 
 	arm_pos.store(arm.get_position());
 }
@@ -466,29 +584,163 @@ void get_robot_position() {
 /*                                COMPETITION                                */
 /*****************************************************************************/
 
+uint32_t run_start = pros::millis();
+
 bool init_done = false;
+
+std::atomic<bool> red_ring_seen = false;
+std::atomic<bool> blue_ring_seen = false;
 
 void init() {
 	if (init_done) return;
 
+	optical.set_integration_time(17);
+
 	pros::lcd::initialize();
+	master.clear();
+
+	intake.set_current_limit(2700);
+	
 
 	imu.reset(true);
 	solve_imu_bias(900);
 
     pros::Task pos_tracking_task([&]() {
 		auto [x_pos, y_pos, heading] = robot_pose();
+		auto [x_ipos, y_ipos, iheading] = robot_ipose();
+
+		v_tracking_wheel.reset();//
+		v_tracking_wheel.reset_position();//
+		v_tracking_wheel.set_position(0);
 
         while (true) {
 			get_robot_position();
 			
             pros::lcd::print(0, "x_pos: %f", x_pos.load());
             pros::lcd::print(1, "y_pos: %f", y_pos.load());
-            pros::lcd::print(3, "head: %f", heading.load());
+            pros::lcd::print(2, "head:  %f", heading.load());
 
             pros::delay(PROCESS_DELAY);
         }
     });
+
+	pros::Task async_tasks([&]() {
+		bool ctrl_in_menu = false;
+		int ctrl_menu_ptr = 0;
+
+		while(true) {
+			check_tasks();
+
+			if (master.get_digital(MENU_TOGGLE) && !p_menu_toggle) {
+				ctrl_in_menu = !ctrl_in_menu;
+				override_inputs = ctrl_in_menu;
+			}
+			p_menu_toggle = master.get_digital(MENU_TOGGLE);
+
+			if (ctrl_in_menu) {
+				if (!p_nav_toggle && ctrl_menu_ptr > 0 && master.get_digital(pros::CTRL_DIGI_UP)) --ctrl_menu_ptr;
+				if (!p_nav_toggle && ctrl_menu_ptr < 2 && master.get_digital(pros::CTRL_DIGI_DOWN)) ++ctrl_menu_ptr;
+				p_nav_toggle = master.get_digital(pros::CTRL_DIGI_UP) || master.get_digital(pros::CTRL_DIGI_DOWN);
+				
+				if (master.get_digital(SETTING_TOGGLE) && !p_setting_toggle) {
+					switch(ctrl_menu_ptr) {
+						case 0: {
+							racism = !racism;
+							break;
+						}
+						case 1: {
+							color_sort = !color_sort;
+							break;
+						}
+						default: {}
+					}
+				}
+				p_setting_toggle = master.get_digital(SETTING_TOGGLE);
+
+				std::snprintf(ctrl_log[0], 15, "%ccolor: %s              ", ctrl_menu_ptr == 0 ? '>' : ' ', racism ? "BLUE" : "RED ");
+				std::snprintf(ctrl_log[1], 15, "%ccolorsort: %s              ", ctrl_menu_ptr == 0 ? '>' : ' ', color_sort ? "ON " : "OFF");
+				std::snprintf(ctrl_log[2], 15, "%couttake: %s              ", ctrl_menu_ptr == 0 ? '>' : ' ', color_sort ? "ON " : "OFF");
+			} else {
+				std::snprintf(ctrl_log[0], 15, "time: %ld               ", pros::millis() - run_start);
+				std::snprintf(ctrl_log[1], 15, "");
+				std::snprintf(ctrl_log[2], 15, "");
+			}
+
+			if (pros::millis() >= ctrl_log_update) {
+				ctrl_log_update += 51;
+				master.print(ctrl_log_ptr, 0, "%s", ctrl_log[ctrl_log_ptr]);
+				
+				ctrl_log_ptr++;
+				if (ctrl_log_ptr >= 3) ctrl_log_ptr = 0;
+			}
+
+			wait(PROCESS_DELAY);
+		}
+	});
+
+	optical.set_led_pwm(100);
+
+	pros::Task intake_helper_task([&]() {
+		int cs_outtake_delay = 0;
+		int cs_outtake_ticks = 0;
+		bool prev_verdict = false;
+
+		while (true) {
+			pros::delay(PROCESS_DELAY);
+
+			if (!color_sort) continue;
+
+			float r_hue_min = std::fmod(RED_HUE - HUE_TOLERANCE + 360, 360.0f);
+			float r_hue_max = std::fmod(RED_HUE + HUE_TOLERANCE, 360.0f);
+			float b_hue_min = std::fmod(BLUE_HUE - HUE_TOLERANCE + 360, 360.0f);
+			float b_hue_max = std::fmod(BLUE_HUE + HUE_TOLERANCE, 360.0f);
+
+			bool b_ring = false;
+			if (b_hue_min <= b_hue_max) {
+				// if it's normal, just check the ranges
+				b_ring = b_hue_min <= optical.get_hue() && optical.get_hue() <= b_hue_max;
+			} else if (b_hue_min >= b_hue_max) {
+				// if the range goes around 0, say hue min is 330 while hue_max is 30,
+				// 0 and 360 are used as bounds.
+				b_ring = optical.get_hue() <= b_hue_max || optical.get_hue() >= b_hue_min;
+			}
+			if (b_ring) blue_ring_seen.store(true);
+
+			bool r_ring = false;
+			if (r_hue_min <= r_hue_max) {
+				// if it's normal, just check the ranges
+				r_ring = r_hue_min <= optical.get_hue() && optical.get_hue() <= r_hue_max;
+			} else if (r_hue_min >= r_hue_max) {
+				// if the range goes around 0, say hue min is 330 while hue_max is 30,
+				// 0 and 360 are used as bounds.
+				r_ring = optical.get_hue() <= r_hue_max || optical.get_hue() >= r_hue_min;
+			}
+			if (r_ring) red_ring_seen.store(true);
+
+			bool outtake = racism && r_ring || !racism && b_ring;
+
+			bool verdict = outtake && optical.get_proximity() >= DIST_TOLERANCE;
+			if (verdict) {
+				cs_outtake_ticks = OUTTAKE_TICKS / PROCESS_DELAY;
+				if (!prev_verdict) {
+					cs_outtake_delay = CS_OUTTAKE_DELAY / PROCESS_DELAY;
+				}
+			}
+
+			// expected that intake_override is followed appropriately
+			if (cs_outtake_delay > 0) {
+				--cs_outtake_delay;
+			} else if (cs_outtake_ticks > 0) {
+				intake_override = true;
+				intake.move(-INTAKE_SPEED);
+				--cs_outtake_ticks;
+			} else {
+				intake_override = false;
+			}
+
+			prev_verdict = verdict;
+		}
+	});
 
 	init_done = true;
 }
@@ -509,34 +761,93 @@ void competition_initialize() {
 
 bool auton_ran = false;
 
-int auton_cycle_count = 0;
+struct Path {
+	// std::pair<float, float>
+};
+
+// std::queue<
 
 bool lateral_movement = true;
 
 Pose target_pose (0, 0, 0);
 
-float deg_to_point(float x, float z) {
-	float deg = normalize_deg((std::atan2(x, z) * 180 / M_PI));
+float deg_to_point(float x, float y) {
+	float deg = normalize_deg(normalize_deg((std::atan2(x, y) * 180 / M_PI)) - 90);
 	return deg;
 }
 
-void wait_stable(PIDProcess pid_process) {
-	while (std::abs(pid_process.get_error()) > pid_process.pid.tolerance) {
+void move_to_point(float x, float y, bool fwd_) {
+	auto [tx_pos, ty_pos, fwd] = target_pose();
+	tx_pos.store(x);
+	ty_pos.store(y);
+	fwd.store(fwd_);
+}
+
+void wait_cross(PIDProcess pid_process, float point, bool relative = true, int buffer_ticks = 0) {
+	if (relative) point += pid_process.value.load();
+
+	bool side = pid_process.value.load() >= point;
+	while ((pid_process.value.load() >= point) == side) {
+		wait(PROCESS_DELAY);
+	}
+	for (int i = 0; i < buffer_ticks; ++i) wait(PROCESS_DELAY);
+}
+
+void wait_stable(PIDProcess pid_process, uint32_t timeout = 5000, int buffer_ticks = 3, int min_stable_ticks = 8) {
+	int stable_ticks = 0;
+	uint32_t end_time = pros::millis() + timeout;
+
+	while (stable_ticks < min_stable_ticks) {
+		pros::lcd::print(4, "error: %f", pid_process.get_error());
+		if (std::abs(pid_process.get_error()) <= pid_process.pid.tolerance) ++stable_ticks;
+		else stable_ticks = 0;
+
+		if (pros::millis() >= end_time) return;
+		wait(PROCESS_DELAY);
+	}
+	for (int i = 0; i < buffer_ticks; ++i) wait(PROCESS_DELAY);
+}
+
+// flag bits 
+void wait_for_ring(bool red = true, bool blue = false, uint32_t timeout = 3000) {
+	if (red) red_ring_seen.store(false);
+	if (blue) blue_ring_seen.store(false);
+
+	uint32_t end_time = pros::millis() + timeout;
+
+	while (!(red && red_ring_seen || blue && blue_ring_seen)) {
+		if (pros::millis() >= end_time) return;
+
 		wait(PROCESS_DELAY);
 	}
 }
+
+void tap_ring(int n_times, int delay = 150, std::atomic<bool>* crashout = nullptr) {
+	pros::Task async_task([&]() {
+		for (int i = 0; i < n_times; ++i) {
+			intake.brake();
+			wait(delay);
+			intake.move(INTAKE_SPEED);
+			wait(delay);
+			if (crashout && crashout->load()) break;
+		}
+	});
+}
+
+float t = 0;
 
 void autonomous() {
 	if (auton_ran) return;
 
 	auton_ran = true;
 
+	arm.tare_position();
 	dt_left_motors.tare_position_all();
 	dt_right_motors.tare_position_all();
 
 	auto [x_pos, y_pos, heading] = robot_pose();
 
-	std::atomic<float> target_heading (0);
+	std::atomic<float> target_heading (0);                                     
 	std::atomic<float> angular_output;
 	PIDProcess angular_pid_process (
 			heading,
@@ -578,25 +889,61 @@ void autonomous() {
 			error_mod
 	);
 
+	bool run_intake = false;
+	int intake_stuck_ticks = 0;
+	const int INTAKE_STUCK_LIMIT = 12;
+	int intake_outtake_ticks = 0;
+	const int INTAKE_OUTTAKE_DURATION = 15;
+
+
 	pros::Task auton_task{[&] {
+		float mtp_locked_heading = 0;
+		bool mtp_heading_is_locked = false;
+
 		while (true) {
+			if (run_intake && intake.get_efficiency() < 3) {
+				++intake_stuck_ticks;
+			} else {
+				intake_stuck_ticks = 0;
+			}
+			if (intake_stuck_ticks >= INTAKE_STUCK_LIMIT) {
+				intake_outtake_ticks = INTAKE_OUTTAKE_DURATION;
+			}
+			if (intake_outtake_ticks > 0) {
+				if (!intake_override) intake.move(-INTAKE_SPEED);
+				--intake_outtake_ticks;
+			} else {
+				if (!intake_override) {
+					if (run_intake) intake.move(INTAKE_SPEED);
+					else intake.brake();
+				}
+			}
+
 			int start = pros::millis();
-			// ++auton_cycle_count;
 
-			// float x_dif = target_pose.x - robot_pose.x;
-			// float y_dif = target_pose.y - robot_pose.y;
+			// if (mtp) {
+			// 	float x_dif = target_pose.x - robot_pose.x;
+			// 	float y_dif = target_pose.y - robot_pose.y;
 
-			// float dist_to_target = std::sqrt(x_dif * x_dif + y_dif * y_dif);
-			// float deg_to_target = normalize_deg(deg_to_point(x_dif, y_dif));
+			// 	float dist_to_target = std::sqrt(x_dif * x_dif + y_dif * y_dif);
+			// 	float deg_to_target = normalize_deg(deg_to_point(x_dif, y_dif));
+			// 	if (target_pose.h.load() == false) deg_to_target *= -1;
 
-			// float deg_err = deg_dif(deg_to_target, robot_pose.h);
-			// bool fwd = (std::abs(deg_err) <= 90);
+			// 	float deg_err = deg_dif(deg_to_target, robot_pose.h);
+			// 	bool fwd = (std::abs(deg_err) <= 90);
 
-			// dist_to_target *= (1 - ((int) (deg_err) % 90) / 90);
-			// if (!fwd) dist_to_target *= -1;
+			// 	dist_to_target *= (1 - ((int) (deg_err) % 90) / 90);
+			// 	if (!fwd) dist_to_target *= -1;
 
-			// target_heading.store(deg_to_target);
-			// target_dist.store(dist.load() + dist_to_target);
+			// 	// if we're at the target, stop the robot
+			// 	if (std::abs(dist_to_target) <= lateral_pid.tolerance) {
+			// 		target_heading.store(heading);
+			// 		target_dist.store(dist.load());
+			// 	} else {
+			// 		target_heading.store(deg_to_target);
+			// 		target_dist.store(dist.load() + dist_to_target);
+			// 	}
+			// }
 
 			// pid
 
@@ -617,6 +964,7 @@ void autonomous() {
 		}
 	}};
 
+<<<<<<< HEAD
 	lateral_pid_process.max_speed = 90;
 	target_dist.store(-40);
 	wait(1500);
@@ -671,8 +1019,250 @@ void autonomous() {
 	target_dist.fetch_add(8);
 
 	wait(2000);
+=======
+	run_intake = true;
+	wait(200);
+	run_intake = false;;
+
+	target_dist.fetch_add(16);
+	wait_stable(lateral_pid_process);
+	target_heading.store(90);
+	wait_stable(angular_pid_process);
+	lateral_pid_process.max_speed = 90;
+	target_dist.fetch_add(-26);
+	wait_cross(lateral_pid_process, -24);
+	mogo.set_value(true);
+	wait(250);
+	lateral_pid_process.max_speed = 127;
+
+	target_heading.store(0);
+	wait_stable(angular_pid_process);
+
+	run_intake = true;
+
+	t = lateral_pid_process.value.load();
+	lateral_pid_process.max_speed = 100;
+	target_dist.fetch_add(87);
+	wait_cross(lateral_pid_process, t + 12, false);
+	target_heading.store(-40);
+	wait_cross(lateral_pid_process, t + 24 + 25, false);
+	target_heading.store(0);
+	wait_cross(lateral_pid_process, t + 24 + 34 + 16, false);
+	wait_stable(lateral_pid_process);
+
+	lateral_pid_process.max_speed = 127;
+	wait(600);
+	target_heading.store(182);
+	wait_stable(angular_pid_process);
+	target_dist.fetch_add(77);////
+	wait_cross(lateral_pid_process, 4);
+	for (int i = 0; i < 16; ++i) {
+		lateral_pid_process.max_speed = 127 - i * 6;
+		wait(60);
+	}
+
+	wait_stable(lateral_pid_process, 2500);
+	wait(600);
+	
+	target_dist.fetch_add(26);
+	wait_stable(lateral_pid_process, 1000);
+//f
+	target_heading.store(-50);
+	wait_stable(angular_pid_process);
+
+	run_intake = true;
+
+	lateral_pid_process.max_speed = 127;
+	target_dist.fetch_add(29);
+	wait_cross(lateral_pid_process, 4.2);
+	target_heading.store(0);
+	wait_stable(lateral_pid_process, 2000);
+	wait(500);
+	target_dist.fetch_add(-34);
+	wait_cross(lateral_pid_process, -10);
+	target_heading.store(20);
+	wait_stable(lateral_pid_process, 1250);
+
+	mogo.set_value(false);
+	wait(250);
+	run_intake = false;//
+
+	lateral_pid_process.max_speed = 127;
+
+	target_heading.store(90);
+	target_dist.fetch_add(24);
+	wait_cross(lateral_pid_process, 12);
+	target_heading.store(0);
+	wait_stable(angular_pid_process, 500);
+	target_dist.fetch_add(-24);
+	wait_stable(lateral_pid_process, 1000);
+
+	for (int i = 0; i < 3; ++i) {
+		robot_pose.x.store(0);
+		wait(PROCESS_DELAY);
+	}
+	imu.set_heading(0);
+
+	target_dist.fetch_add(70);
+	wait_cross(lateral_pid_process, 2.5);
+	target_heading.store(90);
+	
+	
+	wait_stable(lateral_pid_process);
+
+	target_heading.store(-90);
+	wait_stable(angular_pid_process);
+	target_dist.fetch_add(-24);//
+	wait_stable(lateral_pid_process);
+	mogo.set_value(true);
+	wait(250);
+
+	target_heading.store(-3);
+	wait_stable(angular_pid_process);
+
+	run_intake = true;
+
+	t = lateral_pid_process.value.load();
+	lateral_pid_process.max_speed = 100;
+	target_dist.fetch_add(90);
+	wait_cross(lateral_pid_process, t + 12, false);
+	target_heading.store(40);
+	wait_cross(lateral_pid_process, t + 24 + 25, false);
+	target_heading.store(-5);
+	wait_cross(lateral_pid_process, t + 24 + 34 + 16, false);
+	wait_stable(lateral_pid_process);
+
+	lateral_pid_process.max_speed = 127;
+	wait(600);
+	target_heading.store(182);
+	wait_stable(angular_pid_process);
+	target_dist.fetch_add(80);////
+	wait_cross(lateral_pid_process, 4);
+	for (int i = 0; i < 17; ++i) {
+		lateral_pid_process.max_speed = 127 - i * 6;
+		wait(50);
+	}
+
+	wait_stable(lateral_pid_process, 2500);
+	wait(600);
+
+	target_dist.fetch_add(26);
+	wait_stable(lateral_pid_process, 1000);
+//f
+	target_heading.store(50);
+	wait_stable(angular_pid_process);
+
+	run_intake = true;
+
+lateral_pid_process.max_speed = 127;
+	target_dist.fetch_add(29);
+	wait_cross(lateral_pid_process, 4.2);
+	target_heading.store(0);
+	wait_stable(lateral_pid_process, 2000);
+	wait(500);
+
+	target_dist.fetch_add(-34);
+	wait_cross(lateral_pid_process, -10);
+	target_heading.store(-30);
+	wait_stable(lateral_pid_process, 1250);
+
+	mogo.set_value(false);
+	wait(250);
+	run_intake = false;//
+
+	target_heading.store(-90);
+	target_dist.fetch_add(24);
+	wait_cross(lateral_pid_process, 12);
+	target_heading.store(0);
+	wait_stable(angular_pid_process, 500);
+	target_dist.fetch_add(-24);
+	wait_stable(lateral_pid_process, 1000);
+
+	for (int i = 0; i < 3; ++i) {
+		robot_pose.x.store(0);
+		wait(PROCESS_DELAY);
+	}
+	imu.set_heading(0);
+
+	target_dist.fetch_add(130);
+	wait_cross(lateral_pid_process, 6);
+	target_heading.store(-45);
+	wait_cross(lateral_pid_process, 34);
+	for (int i = 0; i < 17; ++i) {
+		lateral_pid_process.max_speed = 127 - i * 6;
+		wait(65);
+	}
+	run_intake = true;
+	wait_stable(lateral_pid_process);
+	run_intake = false;
+	target_heading.store(-135);
+	wait_stable(angular_pid_process);
+	lateral_pid_process.max_speed = 127;
+	target_dist.fetch_add(-36);
+	for (int i = 0; i < 10; --i) {
+		lateral_pid_process.max_speed = 127 - i * 5;
+		wait(50);
+	}
+	wait_stable(lateral_pid_process);
+	mogo.set_value(true);
+	wait(250);
+	run_intake = true;
+
+lateral_pid_process.max_speed = 127;
+	target_heading.store(-85);
+	wait_stable(angular_pid_process);
+	target_dist.fetch_add(48);
+	for (int i = 0; i < 16; ++i) {
+		lateral_pid_process.max_speed = 127 - i * 6;
+		wait(50);
+	}
+	wait_stable(lateral_pid_process);
+
+	target_heading.store(0);
+	wait_stable(angular_pid_process);
+	target_dist.fetch_add(10);
+	wait_stable(lateral_pid_process, 1000);
+
+	target_heading.store(95);
+	wait_stable(angular_pid_process, 1000);
+	lateral_pid_process.max_speed = 127;
+	target_dist.fetch_add(-20);
+	wait_stable(lateral_pid_process, 2000);
+	mogo.set_value(false);
+	wait(250);
+
+	lateral_pid_process.max_speed = 90;
+	target_heading.store(-100);
+	target_dist.fetch_add(48);
+	run_intake = true;
+	wait(2300);
+	run_intake = false;
+	wait(500);
+
+	target_heading.store(-87);
+	target_dist.fetch_add(-80);
+	wait_stable(lateral_pid_process);
+
+	target_heading.store(180);
+	wait_stable(angular_pid_process);
+
+	target_dist.fetch_add(-24);
+	wait_stable(lateral_pid_process, 1000);
+	target_dist.fetch_add(1.5);
+	wait(250);
+	run_intake = true;
+	wait(250);
+	run_intake = false;
+
+	target_heading.store(90);
+	target_dist.fetch_add(72);
+	
+	wait_stable(lateral_pid_process);
+	wait_stable(angular_pid_process);//
+>>>>>>> main
 
 	auton_task.remove();
+
 }
 
 
@@ -680,7 +1270,6 @@ void autonomous() {
 /*****************************************************************************/
 /*                                  DRIVING                                  */
 /*****************************************************************************/
-
 float prev_drive_power = 0;
 
 void opcontrol() {
@@ -705,8 +1294,35 @@ void opcontrol() {
 	);
 
 	int intake_brake_timer = 0;
+	int32_t max_arm_current_draw = 0;
+
+	bool run_intake = false;
+	bool intake_dir = true;
+	int intake_stuck_ticks = 0;
+	const int INTAKE_STUCK_LIMIT = 8;
+	int intake_outtake_ticks = 0;
+	const int INTAKE_OUTTAKE_DURATION = 10;
+
 
     while (true) {
+		// if (run_intake && intake.get_efficiency() < 3) {
+		// 	++intake_stuck_ticks;
+		// } else {
+		// 	intake_stuck_ticks = 0;
+		// }
+		// if (intake_stuck_ticks >= INTAKE_STUCK_LIMIT) {
+		// 	intake_outtake_ticks = INTAKE_OUTTAKE_DURATION;
+		// }
+		// if (intake_outtake_ticks > 0) {
+		// 	intake.move(-INTAKE_SPEED);
+		// 	--intake_outtake_ticks;
+		// } else {
+			if (!intake_override) {
+				if (run_intake) intake.move((intake_dir ? 1 : -1) * INTAKE_SPEED);
+				else intake.brake();
+			}
+		// }
+
 		// driving
         int drive_value = master.get_analog(DRIVE_JOYSTICK);
         int turn_value = master.get_analog(TURN_JOYSTICK);
@@ -724,52 +1340,63 @@ void opcontrol() {
 		prev_drive_power = drive_power;
 
 		// intake
-		if (master.get_digital(EJECT_RING_BUTTON) && intake_brake_timer <= 0) {
-			intake_brake_timer = EJECT_BRAKE_CYCLES;
-		}
-		if (intake_brake_timer > 0) {
-			intake.brake();
-			--intake_brake_timer;
+		if (!intake_override) {
+			if (!override_inputs && master.get_digital(INTAKE_FWD_BUTTON)) {
+				run_intake = true;
+				intake_dir = true;
+			} else if (!override_inputs && master.get_digital(INTAKE_REV_BUTTON)){
+				run_intake = true;
+				intake_dir = false;
+			} else run_intake = false;
 		} else {
-			if (master.get_digital(INTAKE_FWD_BUTTON))
-				intake.move(INTAKE_SPEED);
-			else if (master.get_digital(INTAKE_REV_BUTTON))
-				intake.move(-INTAKE_SPEED);
-			else intake.brake();
+			// do nothing buh
 		}
 		
 		// mogo
-		if (master.get_digital(MOGO_ON_BUTTON))
-			mogo.set_value(true);
-		else if (master.get_digital(MOGO_OFF_BUTTON))
-			mogo.set_value(false);
+		if (!override_inputs) mogo_toggle.tick(master.get_digital(MOGO_TOGGLE_BUTTON));
+		mogo.set_value(mogo_toggle.value);
 
-		printf("CYCLE\n");
+		// diddy
+		if (!override_inputs) diddy_toggle.tick(master.get_digital(DIDDY_TOGGLE_BUTTON));
+		diddy.set_value(diddy_toggle.value);
+
 		// arm
-		if (master.get_digital(ARM_UP_BUTTON)) {
-			printf("\tarm up\n");
-			arm_target_pos += ARM_SPEED;
+		bool arm_moved = false;
+		float real_arm_speed = ARM_SPEED;
+		if (!override_inputs && master.get_digital(ARM_UP_BUTTON)) {
+			arm_target_pos += real_arm_speed;
+			arm_moved = true;
 		}
-		else if (master.get_digital(ARM_DOWN_BUTTON)) {
-			printf("\tarm down\n");
-			arm_target_pos -= ARM_SPEED;
+		else if (!override_inputs && master.get_digital(ARM_DOWN_BUTTON)) {
+			arm_target_pos -= real_arm_speed;
+			arm_moved = true;
+		}//
+
+		// arm increment
+
+		if (!override_inputs && master.get_digital(ARM_INCREMENT_UP) && !arm_up_p) {
+			arm_target_pos.store(arm_pos.load() + ARM_INCREMENT);
 		}
-		printf("\tarm tp %f\n", arm_target_pos.load());
-		// arm limiters
-		if (arm_target_pos.load() < ARM_BOTTOM_LIMIT) arm_target_pos.store(ARM_BOTTOM_LIMIT);
-		if (arm_target_pos.load() > ARM_TOP_LIMIT) arm_target_pos.store(ARM_TOP_LIMIT);
-		printf("\tarm lim %f\n", arm_target_pos.load());
-		// arm load macro
-		if (master.get_digital(ARM_LOAD_POS_BUTTON)) {
-			arm_target_pos = ARM_LOAD_POS;
-			printf("\tarm macro %f\n", arm_target_pos.load());
+		arm_up_p = master.get_digital(ARM_INCREMENT_UP);
+
+		// if (!override_inputs && master.get_digital(ARM_INCREMENT_DOWN) && !arm_down_p) {
+		// 	arm_target_pos.store(arm_pos.load() - ARM_INCREMENT);
+		// }
+		// arm_down_p = master.get_digital(ARM_INCREMENT_DOWN);
+
+		if (std::abs(arm_pid_process.error) > ARM_MAX_SPEED) {
+			arm_target_pos = arm_pos.load() + sgn(arm_pid_process.error) * ARM_MAX_SPEED;
 		}
+
 		// run pid
 		pid_handle_process(arm_pid_process);
 		// move arm to PID arm_pos_output
 		arm.move(arm_pos_output.load());
-		printf("\tarm out %f\n", arm_pos_output.load());
-		printf("\tarm pos %f\n", arm_pos.load());
+
+		if (arm.get_current_draw() > max_arm_current_draw)
+		max_arm_current_draw = arm.get_current_draw();
+
+		pros::lcd::print(5, "armpos %f", arm_target_pos.load());
 
         pros::delay(PROCESS_DELAY);
     }
