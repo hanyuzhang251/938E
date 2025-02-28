@@ -559,7 +559,7 @@ void get_robot_position() {
 
 	auto [x_ipos, y_ipos, iheading] = robot_ipose();
 
-	x_ipos.fetch_add(
+	x_ipos.fetch_add(                                                          
 		std::cos(iheading * M_PI / 180)
 		* (dist.load() - prev_dist.load()));
 	y_ipos.fetch_add(
@@ -605,13 +605,9 @@ void init() {
 	imu.reset(true);
 	solve_imu_bias(900);
 
-    pros::Task pos_tracking_task([&]() {
+    pros::Task pos_tracking_task([&]() {                                       
 		auto [x_pos, y_pos, heading] = robot_pose();
 		auto [x_ipos, y_ipos, iheading] = robot_ipose();
-
-		v_tracking_wheel.reset();//
-		v_tracking_wheel.reset_position();//
-		v_tracking_wheel.set_position(0);
 
         while (true) {
 			get_robot_position();
@@ -984,14 +980,14 @@ void autonomous() {
 	target_dist.fetch_add(87);
 	wait_cross(lateral_pid_process, t + 12, false);
 	target_heading.store(-40);
-	wait_cross(lateral_pid_process, t + 24 + 25, false);
+	wait_cross(lateral_pid_process, t + 24 + 23, false);
 	target_heading.store(0);
 	wait_cross(lateral_pid_process, t + 24 + 34 + 16, false);
 	wait_stable(lateral_pid_process);
 
 	lateral_pid_process.max_speed = 127;
 	wait(600);
-	target_heading.store(182);
+	target_heading.store(180);
 	wait_stable(angular_pid_process);
 	target_dist.fetch_add(77);////
 	wait_cross(lateral_pid_process, 4);
@@ -1043,7 +1039,7 @@ void autonomous() {
 	imu.set_heading(0);
 
 	target_dist.fetch_add(70);
-	wait_cross(lateral_pid_process, 2.5);
+	wait_cross(lateral_pid_process, 2.7);
 	target_heading.store(90);
 	
 	
@@ -1066,14 +1062,14 @@ void autonomous() {
 	target_dist.fetch_add(90);
 	wait_cross(lateral_pid_process, t + 12, false);
 	target_heading.store(40);
-	wait_cross(lateral_pid_process, t + 24 + 25, false);
-	target_heading.store(-5);
+	wait_cross(lateral_pid_process, t + 24 + 23, false);
+	target_heading.store(-4);
 	wait_cross(lateral_pid_process, t + 24 + 34 + 16, false);
 	wait_stable(lateral_pid_process);
 
 	lateral_pid_process.max_speed = 127;
 	wait(600);
-	target_heading.store(182);
+	target_heading.store(180);
 	wait_stable(angular_pid_process);
 	target_dist.fetch_add(80);////
 	wait_cross(lateral_pid_process, 4);
@@ -1088,20 +1084,20 @@ void autonomous() {
 	target_dist.fetch_add(26);
 	wait_stable(lateral_pid_process, 1000);
 //f
-	target_heading.store(50);
+	target_heading.store(65);
 	wait_stable(angular_pid_process);
 
 	run_intake = true;
 
 lateral_pid_process.max_speed = 127;
-	target_dist.fetch_add(29);
+	target_dist.fetch_add(24);
 	wait_cross(lateral_pid_process, 4.2);
 	target_heading.store(0);
 	wait_stable(lateral_pid_process, 2000);
 	wait(500);
 
-	target_dist.fetch_add(-34);
-	wait_cross(lateral_pid_process, -10);
+	target_dist.fetch_add(-40);
+	wait_cross(lateral_pid_process, -24);
 	target_heading.store(-30);
 	wait_stable(lateral_pid_process, 1250);
 
@@ -1123,7 +1119,7 @@ lateral_pid_process.max_speed = 127;
 	}
 	imu.set_heading(0);
 
-	target_dist.fetch_add(130);
+	target_dist.fetch_add(128);
 	wait_cross(lateral_pid_process, 6);
 	target_heading.store(-45);
 	wait_cross(lateral_pid_process, 34);
@@ -1210,7 +1206,7 @@ lateral_pid_process.max_speed = 127;
 /*****************************************************************************/
 float prev_drive_power = 0;
 
-void opcontrol() {
+void opcontrol() {                                                              
 	if (FORCE_AUTON) autonomous();
 
 	std::atomic<float> arm_target_pos = 0;
@@ -1218,7 +1214,7 @@ void opcontrol() {
 	// dampens the error when moving downward to prevent dropping the arm
 	auto error_mod = [](float target, float current) {
 		float error = target - current;
-		return error;
+		return error / (error < 0 ? 2 : 1);
 	};
 	PIDProcess arm_pid_process (
 			arm_pos,
@@ -1227,7 +1223,7 @@ void opcontrol() {
 			arm_pid,
 			127,
 			0,
-			1200000, // 20 min time cause max said so
+			1200000,
 			error_mod
 	);
 
@@ -1243,23 +1239,23 @@ void opcontrol() {
 
 
     while (true) {
-		// if (run_intake && intake.get_efficiency() < 3) {
-		// 	++intake_stuck_ticks;
-		// } else {
-		// 	intake_stuck_ticks = 0;
-		// }
-		// if (intake_stuck_ticks >= INTAKE_STUCK_LIMIT) {
-		// 	intake_outtake_ticks = INTAKE_OUTTAKE_DURATION;
-		// }
-		// if (intake_outtake_ticks > 0) {
-		// 	intake.move(-INTAKE_SPEED);
-		// 	--intake_outtake_ticks;
-		// } else {
+		if (run_intake && intake.get_efficiency() < 3) {
+			++intake_stuck_ticks;
+		} else {
+			intake_stuck_ticks = 0;
+		}
+		if (intake_stuck_ticks >= INTAKE_STUCK_LIMIT) {
+			intake_outtake_ticks = INTAKE_OUTTAKE_DURATION;
+		}
+		if (intake_outtake_ticks > 0) {
+			intake.move(-INTAKE_SPEED);
+			--intake_outtake_ticks;
+		} else {
 			if (!intake_override) {
 				if (run_intake) intake.move((intake_dir ? 1 : -1) * INTAKE_SPEED);
 				else intake.brake();
 			}
-		// }
+		}
 
 		// driving
         int drive_value = master.get_analog(DRIVE_JOYSTICK);
