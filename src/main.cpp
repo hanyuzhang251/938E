@@ -2,6 +2,7 @@
 
 #include "main.h"
 #include "pros/misc.h"
+#include "pros/optical.hpp"
 
 #include <cmath>
 #include <limits>
@@ -87,7 +88,7 @@ struct Toggle {
 	}
 };
 
-struct Pose {
+struct Pose {                                                                  
     std::atomic<float> x;
     std::atomic<float> y;
     std::atomic<float> h;
@@ -189,7 +190,7 @@ bool override_inputs = false;
 
 // PID
 
-PIDController lateral_pid (
+PIDController lateral_pid (  
 		5, // kp
 		0.7, // ki
 		80, // kd
@@ -202,7 +203,7 @@ PIDController lateral_pid (
 		0.3 // tolerance
 );
 
-PIDController angular_pid (
+PIDController angular_pid (  
 		2.5, // kp
 		0.1, // ki
 		24, // kd
@@ -215,7 +216,7 @@ PIDController angular_pid (
 		2.5 // tolerance
 );
 
-PIDController arm_pid (
+PIDController arm_pid (      
 		0.3, // kp
 		0.02, // ki
 		0.5, // kd
@@ -247,7 +248,7 @@ constexpr float BLUE_HUE = 210;
 
 constexpr float HUE_TOLERANCE = 15;
 
-constexpr float DIST_TOLERANCE = 200;
+constexpr float DIST_TOLERANCE = 125;
 
 // DRIVE
 
@@ -368,12 +369,15 @@ void pid_handle_process(PIDProcess& process) {
     // derivative update                                                       
     derivative = error - prev_error;
 
-    float real_error = error;
+    float real_error = error;                                                  
     float real_integral = integral;
     float real_derivative = derivative;
 
     // scale integral on small error
-    real_integral *= (std::min(1.0f, std::max(0.3f, std::abs(error) / pid.small_error)));
+    real_integral *= (std::min(
+		1.0f,
+		std::max(0.3f, std::abs(error) / pid.small_error))
+	);
     // scale derivative on large error
 	real_derivative *= (1 - std::min(1.0f, std::abs(error) / pid.large_error));
 
@@ -585,10 +589,13 @@ std::atomic<bool> blue_ring_seen = false;
 void init() {
 	if (init_done) return;
 
+	optical.set_integration_time(17);
+
 	pros::lcd::initialize();
 	master.clear();
 
 	intake.set_current_limit(2700);
+	
 
 	imu.reset(true);
 	solve_imu_bias(900);
@@ -833,7 +840,7 @@ void autonomous() {
 
 	auto [x_pos, y_pos, heading] = robot_pose();
 
-	std::atomic<float> target_heading (0);
+	std::atomic<float> target_heading (0);                                     
 	std::atomic<float> angular_output;
 	PIDProcess angular_pid_process (
 			heading,
@@ -841,7 +848,7 @@ void autonomous() {
 			angular_output,
 			angular_pid,
 			127, // max speed
-			0, // min speed//
+			0, // min speed
 			120000, // life
 			deg_dif
 	);
@@ -877,9 +884,9 @@ void autonomous() {
 
 	bool run_intake = false;
 	int intake_stuck_ticks = 0;
-	const int INTAKE_STUCK_LIMIT = 6;
+	const int INTAKE_STUCK_LIMIT = 12;
 	int intake_outtake_ticks = 0;
-	const int INTAKE_OUTTAKE_DURATION = 12;
+	const int INTAKE_OUTTAKE_DURATION = 15;
 
 
 	pros::Task auton_task{[&] {
@@ -896,11 +903,13 @@ void autonomous() {
 				intake_outtake_ticks = INTAKE_OUTTAKE_DURATION;
 			}
 			if (intake_outtake_ticks > 0) {
-				intake.move(-INTAKE_SPEED);
+				if (!intake_override) intake.move(-INTAKE_SPEED);
 				--intake_outtake_ticks;
 			} else {
-				if (run_intake) intake.move(INTAKE_SPEED);
-				else intake.brake();
+				if (!intake_override) {
+					if (run_intake) intake.move(INTAKE_SPEED);
+					else intake.brake();
+				}
 			}
 
 			int start = pros::millis();
@@ -967,7 +976,7 @@ void autonomous() {
 
 	t = lateral_pid_process.value.load();
 	lateral_pid_process.max_speed = 100;
-	target_dist.fetch_add(90);
+	target_dist.fetch_add(87);
 	wait_cross(lateral_pid_process, t + 12, false);
 	target_heading.store(-40);
 	wait_cross(lateral_pid_process, t + 24 + 25, false);
@@ -979,7 +988,7 @@ void autonomous() {
 	wait(600);
 	target_heading.store(182);
 	wait_stable(angular_pid_process);
-	target_dist.fetch_add(80);////
+	target_dist.fetch_add(77);////
 	wait_cross(lateral_pid_process, 4);
 	for (int i = 0; i < 16; ++i) {
 		lateral_pid_process.max_speed = 127 - i * 6;
@@ -988,9 +997,9 @@ void autonomous() {
 
 	wait_stable(lateral_pid_process, 2500);
 	wait(600);
-
+	
 	target_dist.fetch_add(26);
-	wait_stable(lateral_pid_process, 1500);
+	wait_stable(lateral_pid_process, 1000);
 //f
 	target_heading.store(-50);
 	wait_stable(angular_pid_process);
@@ -1028,7 +1037,7 @@ void autonomous() {
 	}
 	imu.set_heading(0);
 
-	target_dist.fetch_add(71);
+	target_dist.fetch_add(70);
 	wait_cross(lateral_pid_process, 2.5);
 	target_heading.store(90);
 	
@@ -1053,7 +1062,7 @@ void autonomous() {
 	wait_cross(lateral_pid_process, t + 12, false);
 	target_heading.store(40);
 	wait_cross(lateral_pid_process, t + 24 + 25, false);
-	target_heading.store(-3);
+	target_heading.store(-5);
 	wait_cross(lateral_pid_process, t + 24 + 34 + 16, false);
 	wait_stable(lateral_pid_process);
 
@@ -1072,14 +1081,14 @@ void autonomous() {
 	wait(600);
 
 	target_dist.fetch_add(26);
-	wait_stable(lateral_pid_process, 1500);
+	wait_stable(lateral_pid_process, 1000);
 //f
 	target_heading.store(50);
 	wait_stable(angular_pid_process);
 
 	run_intake = true;
 
-	lateral_pid_process.max_speed = 127;
+lateral_pid_process.max_speed = 127;
 	target_dist.fetch_add(29);
 	wait_cross(lateral_pid_process, 4.2);
 	target_heading.store(0);
@@ -1088,7 +1097,7 @@ void autonomous() {
 
 	target_dist.fetch_add(-34);
 	wait_cross(lateral_pid_process, -10);
-	target_heading.store(-20);
+	target_heading.store(-30);
 	wait_stable(lateral_pid_process, 1250);
 
 	mogo.set_value(false);
@@ -1100,7 +1109,7 @@ void autonomous() {
 	wait_cross(lateral_pid_process, 12);
 	target_heading.store(0);
 	wait_stable(angular_pid_process, 500);
-	target_dist.fetch_add(-30);
+	target_dist.fetch_add(-24);
 	wait_stable(lateral_pid_process, 1000);
 
 	for (int i = 0; i < 3; ++i) {
@@ -1109,7 +1118,7 @@ void autonomous() {
 	}
 	imu.set_heading(0);
 
-	target_dist.fetch_add(127.5);
+	target_dist.fetch_add(130);
 	wait_cross(lateral_pid_process, 6);
 	target_heading.store(-45);
 	wait_cross(lateral_pid_process, 34);
@@ -1124,11 +1133,16 @@ void autonomous() {
 	wait_stable(angular_pid_process);
 	lateral_pid_process.max_speed = 127;
 	target_dist.fetch_add(-36);
-	wait_cross(lateral_pid_process, -33);
+	for (int i = 0; i < 10; --i) {
+		lateral_pid_process.max_speed = 127 - i * 5;
+		wait(50);
+	}
+	wait_stable(lateral_pid_process);
 	mogo.set_value(true);
 	wait(250);
 	run_intake = true;
 
+lateral_pid_process.max_speed = 127;
 	target_heading.store(-85);
 	wait_stable(angular_pid_process);
 	target_dist.fetch_add(48);
@@ -1140,19 +1154,42 @@ void autonomous() {
 
 	target_heading.store(0);
 	wait_stable(angular_pid_process);
-	target_dist.fetch_add(16);
-	wait_stable(lateral_pid_process, 2000);
+	target_dist.fetch_add(10);
+	wait_stable(lateral_pid_process, 1000);
 
-	target_heading.store(90);
-	wait_stable(angular_pid_process);
+	target_heading.store(95);
+	wait_stable(angular_pid_process, 1000);
 	lateral_pid_process.max_speed = 127;
 	target_dist.fetch_add(-20);
 	wait_stable(lateral_pid_process, 2000);
+	mogo.set_value(false);
+	wait(250);
 
-	target_heading.store(105);
-	target_dist.fetch_add(24 * 6);
-	wait_cross(lateral_pid_process, 72);
-	target_heading.store(80);
+	lateral_pid_process.max_speed = 90;
+	target_heading.store(-100);
+	target_dist.fetch_add(48);
+	run_intake = true;
+	wait(2300);
+	run_intake = false;
+	wait(500);
+
+	target_heading.store(-87);
+	target_dist.fetch_add(-80);
+	wait_stable(lateral_pid_process);
+
+	target_heading.store(180);
+	wait_stable(angular_pid_process);
+
+	target_dist.fetch_add(-24);
+	wait_stable(lateral_pid_process, 1000);
+	target_dist.fetch_add(1.5);
+	wait(250);
+	run_intake = true;
+	wait(250);
+	run_intake = false;
+
+	target_heading.store(90);
+	target_dist.fetch_add(72);
 	
 	wait_stable(lateral_pid_process);
 	wait_stable(angular_pid_process);//
@@ -1213,8 +1250,10 @@ void opcontrol() {
 		// 	intake.move(-INTAKE_SPEED);
 		// 	--intake_outtake_ticks;
 		// } else {
-			if (run_intake) intake.move((intake_dir ? 1 : -1) * INTAKE_SPEED);
-			else intake.brake();
+			if (!intake_override) {
+				if (run_intake) intake.move((intake_dir ? 1 : -1) * INTAKE_SPEED);
+				else intake.brake();
+			}
 		// }
 
 		// driving
