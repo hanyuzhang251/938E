@@ -266,7 +266,7 @@ constexpr int EJECT_BRAKE_CYCLES = 16;
 constexpr float ARM_SPEED = 70;
 constexpr float ARM_MAX_SPEED = 300;
 
-constexpr float ARM_INCREMENT = 80 * 4.8;
+constexpr float ARM_INCREMENT = 80;
 
 constexpr float ARM_BOTTOM_LIMIT = 0;
 constexpr float ARM_TOP_LIMIT = 2000;
@@ -1044,8 +1044,8 @@ void autonomous() {
 	}
 	imu.set_heading(0);
 
-	target_dist.fetch_add(68);
-	wait_cross(lateral_pid_process, 2.7);
+	target_dist.fetch_add(70);
+	wait_cross(lateral_pid_process, 2.6);
 	target_heading.store(90);
 	
 	
@@ -1058,7 +1058,7 @@ void autonomous() {
 	mogo.set_value(true);
 	wait(250);
 
-	target_heading.store(-3);
+	target_heading.store(-4);
 	wait_stable(angular_pid_process);
 
 	run_intake = true;
@@ -1125,7 +1125,7 @@ lateral_pid_process.max_speed = 127;
 	}
 	imu.set_heading(0);
 
-	target_dist.fetch_add(128);
+	target_dist.fetch_add(129.5);
 	wait_cross(lateral_pid_process, 6);
 	target_heading.store(-45);
 	wait_cross(lateral_pid_process, 34);
@@ -1140,7 +1140,7 @@ lateral_pid_process.max_speed = 127;
 	wait_stable(angular_pid_process);
 	lateral_pid_process.max_speed = 127;
 	target_dist.fetch_add(-36);
-	for (int i = 0; i < 10; --i) {
+	for (int i = 0; i < 10; ++i) {
 		lateral_pid_process.max_speed = 127 - i * 5;
 		wait(50);
 	}
@@ -1315,7 +1315,7 @@ void opcontrol() {
 		// arm increment
 
 		if (!override_inputs && master.get_digital(ARM_INCREMENT_UP) && !arm_up_p) {
-			arm_target_pos.store(ARM_INCREMENT);
+			arm_target_pos.store(arm_pos.load() + ARM_INCREMENT);
 		}
 		arm_up_p = master.get_digital(ARM_INCREMENT_UP);
 
