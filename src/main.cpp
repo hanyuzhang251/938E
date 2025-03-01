@@ -217,9 +217,9 @@ PIDController angular_pid (
 );
 
 PIDController arm_pid (      
-		0.3, // kp
+		0.4, // kp
 		0.02, // ki
-		0.5, // kd
+		1, // kd
 		30, // wind
 		999, // clamp
 		0, // decay
@@ -239,8 +239,9 @@ bool intake_override = false;
 
 bool racism = false; // true = red bad
 
+bool unstuck = false;
 bool color_sort = true;
-constexpr int CS_OUTTAKE_DELAY = 75;
+constexpr int CS_OUTTAKE_DELAY = 100;
 constexpr int OUTTAKE_TICKS = 500;
 
 constexpr float RED_HUE = 5;
@@ -265,7 +266,7 @@ constexpr int EJECT_BRAKE_CYCLES = 16;
 constexpr float ARM_SPEED = 70;
 constexpr float ARM_MAX_SPEED = 300;
 
-constexpr float ARM_INCREMENT = 80;
+constexpr float ARM_INCREMENT = 80 * 4.8;
 
 constexpr float ARM_BOTTOM_LIMIT = 0;
 constexpr float ARM_TOP_LIMIT = 2000;
@@ -485,7 +486,7 @@ bool check_tasks() {
 	return task_run;
 }
 
-char ctrl_log[3][15];
+char ctrl_log[3][20];
 int ctrl_log_ptr = 0;
 uint32_t ctrl_log_update = pros::millis();
 
@@ -648,18 +649,22 @@ void init() {
 							color_sort = !color_sort;
 							break;
 						}
+						case 2: {
+							unstuck = !unstuck;
+							break;
+						}
 						default: {}
 					}
 				}
 				p_setting_toggle = master.get_digital(SETTING_TOGGLE);
 
-				std::snprintf(ctrl_log[0], 15, "%ccolor: %s              ", ctrl_menu_ptr == 0 ? '>' : ' ', racism ? "BLUE" : "RED ");
-				std::snprintf(ctrl_log[1], 15, "%ccolorsort: %s              ", ctrl_menu_ptr == 0 ? '>' : ' ', color_sort ? "ON " : "OFF");
-				std::snprintf(ctrl_log[2], 15, "%couttake: %s              ", ctrl_menu_ptr == 0 ? '>' : ' ', color_sort ? "ON " : "OFF");
+				std::snprintf(ctrl_log[0], 20, "%ccolor: %s              ", ctrl_menu_ptr == 0 ? '>' : ' ', racism ? "BLUE" : "RED ");
+				std::snprintf(ctrl_log[1], 20, "%ccolorsort: %s              ", ctrl_menu_ptr == 1 ? '>' : ' ', color_sort ? "ON " : "OFF");
+				std::snprintf(ctrl_log[2], 20, "%couttake: %s              ", ctrl_menu_ptr == 2 ? '>' : ' ', unstuck ? "ON " : "OFF");
 			} else {
-				std::snprintf(ctrl_log[0], 15, "time: %ld               ", pros::millis() - run_start);
-				std::snprintf(ctrl_log[1], 15, "");
-				std::snprintf(ctrl_log[2], 15, "");
+				std::snprintf(ctrl_log[0], 20, "time: %ld               ", pros::millis() - run_start);
+				std::snprintf(ctrl_log[1], 20, "");
+				std::snprintf(ctrl_log[2], 20, "");
 			}
 
 			if (pros::millis() >= ctrl_log_update) {
@@ -883,6 +888,7 @@ void autonomous() {
 			error_mod
 	);
 
+
 	bool run_intake = false;
 	int intake_stuck_ticks = 0;
 	const int INTAKE_STUCK_LIMIT = 12;
@@ -987,7 +993,7 @@ void autonomous() {
 
 	lateral_pid_process.max_speed = 127;
 	wait(600);
-	target_heading.store(180);
+	target_heading.store(178);
 	wait_stable(angular_pid_process);
 	target_dist.fetch_add(77);////
 	wait_cross(lateral_pid_process, 4);
@@ -1038,7 +1044,7 @@ void autonomous() {
 	}
 	imu.set_heading(0);
 
-	target_dist.fetch_add(70);
+	target_dist.fetch_add(68);
 	wait_cross(lateral_pid_process, 2.7);
 	target_heading.store(90);
 	
@@ -1063,7 +1069,7 @@ void autonomous() {
 	wait_cross(lateral_pid_process, t + 12, false);
 	target_heading.store(40);
 	wait_cross(lateral_pid_process, t + 24 + 23, false);
-	target_heading.store(-4);
+	target_heading.store(-5);
 	wait_cross(lateral_pid_process, t + 24 + 34 + 16, false);
 	wait_stable(lateral_pid_process);
 
@@ -1138,7 +1144,7 @@ lateral_pid_process.max_speed = 127;
 		lateral_pid_process.max_speed = 127 - i * 5;
 		wait(50);
 	}
-	wait_stable(lateral_pid_process);
+	wait_stable(lateral_pid_process, 1500);
 	mogo.set_value(true);
 	wait(250);
 	run_intake = true;
@@ -1214,7 +1220,7 @@ void opcontrol() {
 	// dampens the error when moving downward to prevent dropping the arm
 	auto error_mod = [](float target, float current) {
 		float error = target - current;
-		return error / (error < 0 ? 2 : 1);
+		return error;
 	};
 	PIDProcess arm_pid_process (
 			arm_pos,
@@ -1248,7 +1254,7 @@ void opcontrol() {
 			intake_outtake_ticks = INTAKE_OUTTAKE_DURATION;
 		}
 		if (intake_outtake_ticks > 0) {
-			intake.move(-INTAKE_SPEED);
+			if (!intake_override && unstuck) intake.move(-INTAKE_SPEED);
 			--intake_outtake_ticks;
 		} else {
 			if (!intake_override) {
@@ -1309,7 +1315,7 @@ void opcontrol() {
 		// arm increment
 
 		if (!override_inputs && master.get_digital(ARM_INCREMENT_UP) && !arm_up_p) {
-			arm_target_pos.store(arm_pos.load() + ARM_INCREMENT);
+			arm_target_pos.store(ARM_INCREMENT);
 		}
 		arm_up_p = master.get_digital(ARM_INCREMENT_UP);
 
@@ -1318,14 +1324,20 @@ void opcontrol() {
 		// }
 		// arm_down_p = master.get_digital(ARM_INCREMENT_DOWN);
 
-		if (std::abs(arm_pid_process.error) > ARM_MAX_SPEED) {
+		if (std::abs(arm_pid_process.error) > ARM_MAX_SPEED && arm_target_pos.load() != ARM_INCREMENT) {
 			arm_target_pos = arm_pos.load() + sgn(arm_pid_process.error) * ARM_MAX_SPEED;
 		}
+
+		if (arm_target_pos.load() >= 2000) arm_target_pos.store(2000);
 
 		// run pid
 		pid_handle_process(arm_pid_process);
 		// move arm to PID arm_pos_output
 		arm.move(arm_pos_output.load());
+		
+		if (arm_pos.load() < 0) {
+			arm.set_zero_position(arm_pos.load());
+		}
 
 		if (arm.get_current_draw() > max_arm_current_draw)
 		max_arm_current_draw = arm.get_current_draw();
