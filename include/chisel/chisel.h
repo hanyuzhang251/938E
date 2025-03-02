@@ -4,3 +4,4 @@
 #include "version.h"
 #include "util.h"
 #include "pid.h"
+#include "drive.h"
