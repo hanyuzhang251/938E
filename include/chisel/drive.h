@@ -2,6 +2,7 @@
 
 #include "util.h"
 #include <functional>
+#include <cmath>
 
 namespace chisel {
 
@@ -12,7 +13,7 @@ constexpr auto sigmoid_curve = [](float input) {
 };
 constexpr auto sigma_curve = [](float input) {
     // finer control at low speeds
-    return 254 * 1 / M_PI / std::arcsin(input / 127);
+    return 254 * 1 / M_PI / std::asin(input / 127);
 };
 
 struct DriveCurve {
