@@ -47,11 +47,7 @@ void pid_handle_process(PIDProcess& process) {
     prev_error = error;
 
     // error update
-    error = target.load() - value.load();
-    // normalize error if applicable
-    if (normalize_err) {
-		error = normalize_err(target.load(), value.load());
-	}
+    error = process.get_error();
 
     // reset integral if we crossed target                                     
     if (sgn(prev_error) != sgn(error)) {
@@ -68,7 +64,7 @@ void pid_handle_process(PIDProcess& process) {
 	}
 
     // clamp integral
-    integral = std::min(pid.clamp, std::max(-pid.clamp, integral));
+    integral = clamp(integral, -pid.clamp, pid.clamp);
     
     // derivative update                                                       
     derivative = error - prev_error;
@@ -91,15 +87,12 @@ void pid_handle_process(PIDProcess& process) {
 		+ real_integral * pid.ki
 		+ real_derivative * pid.kd;
     // constrain power to slew
-    calc_power = std::min(
-		prev_output + pid.slew,
-		std::max(prev_output - pid.slew, calc_power)
-	);
+    calc_power = clamp(calc_power, prev_output - pid.slew, prev_output + pid.slew);
 	// constrain power to min/max speed
-    calc_power = std::min(max_speed, std::max(-max_speed, calc_power));
+    calc_power = clamp(calc_power, -max_speed, max_speed);
 
     // set output power
     output.store(calc_power);
 }
 
-}
+} // namespace chisel
