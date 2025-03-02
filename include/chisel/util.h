@@ -6,7 +6,7 @@
 #define d_button controller_digital_e_t
 #define a_button controller_analog_e_t
 
-#define CTRL_A_LY E_CONTROLLER_ANALOG_LEFT_X
+#define CTRL_A_LX E_CONTROLLER_ANALOG_LEFT_X
 #define CTRL_A_LY E_CONTROLLER_ANALOG_LEFT_Y
 
 #define CTRL_A_RX E_CONTROLLER_ANALOG_RIGHT_X
