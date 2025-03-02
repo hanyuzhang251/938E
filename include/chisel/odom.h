@@ -51,6 +51,6 @@ struct OdomProcess {
     auto operator()();
 };
 
-void odom_handel_process(OdomProcess& process);
+void odom_handle_process(OdomProcess& process);
 
 } // namespace chisel
