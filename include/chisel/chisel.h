@@ -3,3 +3,4 @@
 #include "main.h"
 #include "version.h"
 #include "util.h"
+#include "pid.h"
