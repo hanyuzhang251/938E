@@ -7,24 +7,12 @@
 
 namespace chisel {
 
-struct Pose {                                                                  
+struct Pose {
     std::atomic<float> x;
     std::atomic<float> y;
     std::atomic<float> h;
 
-    Pose(float x_pos, float y_pos, float head);
-
-    Pose(const Pose& other)
-        : x(other.x.load()), y(other.y.load()), h(other.h.load()) {}
-
-    Pose& operator=(const Pose& other) {
-        if (this != &other) {
-            x.store(other.x.load());
-            y.store(other.y.load());
-            h.store(other.h.load());
-        }
-        return *this;
-    }
+    Pose(float x_, float y_, float h_);
 
     auto operator()();
 };

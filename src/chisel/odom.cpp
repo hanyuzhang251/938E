@@ -2,15 +2,12 @@
 
 namespace chisel {
 
-Pose::Pose(float x_pos, float y_pos, float head) {
-    x.store(x_pos);
-    y.store(y_pos);
-    h.store(head);
-}
+Pose::Pose(float x_, float y_, float h_)
+    : x(x_), y(y_), h(h_) {};
 
 auto Pose::operator()() {
     return std::tie(x, y, h);
-}
+};
 
 Pose solve_imu_bias(pros::Imu inertial, int32_t timeout) {
     Pose bias (0, 0, 0);

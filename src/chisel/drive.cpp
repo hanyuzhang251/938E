@@ -2,10 +2,7 @@
 
 namespace chisel {
 
-DriveCurve::DriveCurve(
-    float deadband,
-    float min_out,
-    std::function<float(float)> curve)
+DriveCurve::DriveCurve(float deadband, float min_out, std::function<float(float)> curve)
     : deadband(deadband), min_out(min_out), curve(curve) {}
 
 float drive_calc_power(float input, DriveCurve& curve) {

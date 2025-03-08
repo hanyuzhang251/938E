@@ -2,18 +2,13 @@
 
 #include "main.h"
 #include "version.h"
-#include "chassis.h"
+#include "config.h"
 #include "util.h"
-#include "pid.h"
 #include "drive.h"
 #include "odom.h"
+#include "pid.h"
 
 namespace chisel {
     
-Chassis chassis;
-
-void setChassis(Chassis newChassis) {
-    chassis = newChassis;
-}
 
 }
