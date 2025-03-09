@@ -24,7 +24,7 @@ DriveTrain::DriveTrain(
         }
         printf("\b\b) ");
 
-        printf("%fin. track width, %fin. %f rpm wheels\n", track_width, wheel_size, rpm);
+        printf("track_width=%f, wheel_size=%f, rpm=%f\n", track_width, wheel_size, rpm);
     };
 
 } // namespace chisel
