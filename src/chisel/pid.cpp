@@ -6,7 +6,10 @@ PIDController::PIDController(
     float kp, float ki, float kd, float wind, float clamp, float slew,
     float small_error, float large_error, float tolerance)
     : kp(kp), ki(ki), kd(kd), wind(wind), clamp(clamp), slew(slew),
-    small_error(small_error), large_error(large_error), tolerance(tolerance) {}
+    small_error(small_error), large_error(large_error), tolerance(tolerance) {
+        printf("%screate new PIDController: kp=%f, ki=%f, kd=%f, wind=%f, clamp=%f, slew=%f, small_err=%f, large_err=%f, tolerance=%f\n",
+            prefix(), kp, ki, kd, wind, clamp, slew, small_error, large_error, tolerance);
+    }
 
 PIDProcess::PIDProcess(
     std::atomic<float>& value,
@@ -22,7 +25,9 @@ PIDProcess::PIDProcess(
       pid(pid),
       max_speed(max_speed), min_speed(min_speed),
       life(life),
-      normalize_err(normalize_err) {}
+      normalize_err(normalize_err) {
+        printf("%screate new PIDProcess: max_speed=%f, min_speed=%f, life=%d, %s\n", prefix(), max_speed, min_speed, life, (!normalize_err ? "default err calc" : "custom err calc"));
+      }
 
 float PIDProcess::get_error() {
     if (normalize_err) {
