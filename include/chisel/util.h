@@ -1,6 +1,9 @@
 #pragma once
 
 #include "main.h"
+#include <iostream>
+#include <iomanip>
+#include <sstream>
 #include <cstdint>
 
 #define digi_button controller_digital_e_t
@@ -46,6 +49,10 @@ template <typename T> T clamp(T value, T min, T max) {
 float deg_norm(float degree);
 
 float deg_err(float current, float target);
+
+std::string format_millis(uint32_t milliseconds);
+
+std::string prefix();
 
 struct Toggle {
     bool value;
