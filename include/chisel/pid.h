@@ -12,11 +12,15 @@ struct PIDController {
     float kd;
     float wind; // range of error for integral accumulation
     float clamp; // clamps the integral
-    float decay; // smoothly decreases integral
-    float slew; // maximum acceleration and decelleration
+    float slew; // maximum acceleration and deceleration
     float small_error; // error range describing almost to target
     float large_error; // error range to start settling
     float tolerance; // acceptable error
+
+    PIDController(
+        float kp, float ki, float kd, float wind, float clamp, float slew,
+        float small_error, float large_error, float tolerance
+    );
 };
 
 struct PIDProcess {                                                            

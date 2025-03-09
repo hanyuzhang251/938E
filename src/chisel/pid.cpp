@@ -2,21 +2,25 @@
 
 namespace chisel {
 
+PIDController::PIDController(
+    float kp, float ki, float kd, float wind, float clamp, float slew,
+    float small_error, float large_error, float tolerance)
+    : kp(kp), ki(ki), kd(kd), wind(wind), clamp(clamp), slew(slew),
+    small_error(small_error), large_error(large_error), tolerance(tolerance) {}
+
 PIDProcess::PIDProcess(
     std::atomic<float>& value,
     std::atomic<float>& target,
     std::atomic<float>& output,
     const PIDController& pid,
-    float max_speed,
-    float min_speed,
+    float max_speed, float min_speed,
     uint32_t life,
     std::function<float(float, float)> normalize_err)
     : value(value),
       target(target),
       output(output),
       pid(pid),
-      max_speed(max_speed),
-      min_speed(min_speed),
+      max_speed(max_speed), min_speed(min_speed),
       life(life),
       normalize_err(normalize_err) {}
 
@@ -58,9 +62,9 @@ void pid_handle_process(PIDProcess& process) {
     if (std::abs(error) <= pid.wind) {
 		integral += error;
 	}
-    // else decay integral
+    // set integral to zero
     else {
-		integral *= pid.decay;
+		integral = 0;
 	}
 
     // clamp integral
