@@ -4,7 +4,7 @@ namespace chisel {
 
 DriveCurve::DriveCurve(float deadband, float min_out, std::function<float(float)> curve)
     : deadband(deadband), min_out(min_out), curve(curve) {
-        printf("%screate new DriveCurve: deadband(%f), min_out(%f)\n", prefix(), deadband, min_out);
+        printf("%screate new DriveCurve: deadband=%f, min_out=%f\n", prefix(), deadband, min_out);
     }
 
 float drive_calc_power(float input, DriveCurve& curve) {
