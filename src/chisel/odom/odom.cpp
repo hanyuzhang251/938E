@@ -1,6 +1,7 @@
 #include "odom.h"
 
 #include <vector>
+#include <string>
 
 namespace chisel {
 
@@ -40,14 +41,15 @@ TrackingWheel::TrackingWheel(
     };
 
 TrackingSetup::TrackingSetup(
+    DriveTrain* drive_train,
     TrackingWheel* tracking_wheel_list_ptr,
     int tracking_wheel_count
-) {
+): drive_train(drive_train) {
     tracking_wheel_list.reserve(tracking_wheel_count);
     tracking_wheel_list.insert(tracking_wheel_list.end(),
         tracking_wheel_list_ptr, tracking_wheel_list_ptr + tracking_wheel_count);
 
-    printf("%screate new TrackingSetup: tracking_wheel_count=%d\n", prefix(), tracking_wheel_count);
+    printf("%screate new TrackingSetup: ime=%s odom=%s\n", prefix(), (!drive_train) ? "yes" : "no", (tracking_wheel_count > 0) ? std::to_string(tracking_wheel_count) : "no");
 }
 
 } // namespace chisel

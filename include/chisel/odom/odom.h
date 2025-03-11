@@ -3,6 +3,7 @@
 #include "main.h"
 #include "chisel/util.h"
 #include "chisel/config.h"
+#include "chisel/chassis/drive.h"
 #include "chisel/data/pose.h"
 #include <vector>
 
@@ -22,9 +23,11 @@ struct TrackingWheel {
 };
 
 struct TrackingSetup {
+    DriveTrain *drive_train;
     std::vector<TrackingWheel> tracking_wheel_list;
 
     TrackingSetup(
+        DriveTrain* drive_train,
         TrackingWheel* tracking_wheel_list_ptr,
         int tracking_wheel_count
     );
