@@ -38,6 +38,12 @@ struct Odom {
         TrackingWheel* tracking_wheel_list_ptr,
         int tracking_wheel_count
     );
+
+    void update_with_ime();
+
+    void update_with_odom();
+
+    void update();
 };
 
 } // namespace chisel

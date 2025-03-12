@@ -55,4 +55,9 @@ const int tracking_wheel_count
     printf("%screate new Odom: ime=%s odom=%s\n", prefix().c_str(), (!drive_train) ? "yes" : "no", ((tracking_wheel_count > 0) ? std::to_string(tracking_wheel_count) : "no").c_str());
 }
 
+void Odom::update_with_ime() {
+
+}
+
+
 } // namespace chisel
