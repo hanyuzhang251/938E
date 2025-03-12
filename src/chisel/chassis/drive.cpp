@@ -6,10 +6,10 @@ namespace chisel {
 
 DriveTrain::DriveTrain(
     pros::MotorGroup *left_motors, pros::MotorGroup *right_motors,
-    const float wheel_size, const float track_width, const float rpm
+    const float wheel_size, const float track_width, const float gear_ratio
 ):  
     left_motors(left_motors), right_motors(right_motors),
-    wheel_size(wheel_size), track_width(track_width), rpm(rpm) {
+    wheel_size(wheel_size), track_width(track_width), gear_ratio(gear_ratio) {
         printf("%screate new DriveTrain: ", prefix().c_str());
 
         printf("ld(");
@@ -24,7 +24,7 @@ DriveTrain::DriveTrain(
         }
         printf("\b\b) ");
 
-        printf("track_width=%f, wheel_size=%f, rpm=%f\n", track_width, wheel_size, rpm);
+        printf("track_width=%f, wheel_size=%f, gearing=%f\n", track_width, wheel_size, gear_ratio);
     };
 
 DriveCurve::DriveCurve(const float deadband, const float min_out, std::function<float(float)> curve)

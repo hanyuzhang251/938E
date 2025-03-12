@@ -13,11 +13,11 @@ struct DriveTrain {
 
     float wheel_size;
     float track_width;
-    float rpm;
+    float gear_ratio;
 
     DriveTrain(
         pros::MotorGroup *left_motors, pros::MotorGroup *right_motors,
-        float wheel_size, float track_width, float rpm
+        float wheel_size, float track_width, float gear_ratio
     );
 };
 
