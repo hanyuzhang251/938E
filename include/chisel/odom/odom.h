@@ -26,9 +26,13 @@ struct TrackingWheel {
 
 struct Odom {
     Pose pose;
-    Pose internal_pose;
+    Pose internal_pose = Pose(0, 0, 0);
     Pose pose_offset;
 
+    Pose ime_estimate = Pose(0, 0, 0);
+    Pose odom_estimate = Pose(0, 0, 0);
+
+    pros::Imu *imu;
     DriveTrain *drive_train;
     std::vector<TrackingWheel> tracking_wheel_list;
 
@@ -37,18 +41,20 @@ struct Odom {
 
     Odom(
         const Pose &pose,
-        const Pose &internal_pose,
         const Pose &pose_offset,
+        pros::Imu* imu,
         DriveTrain* drive_train,
         TrackingWheel* tracking_wheel_list_ptr,
         int tracking_wheel_count
     );
 
-    void update_with_ime();
+    void ime_predict();
 
-    void update_with_odom();
+    void odom_predict();
 
-    void update();
+    void push_prediction(bool consider_ime = true, bool consider_odom = true);
+
+    void load_pose();
 };
 
 } // namespace chisel
