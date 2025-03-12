@@ -47,10 +47,10 @@ struct PIDProcess {
         float max_speed,
         float min_speed,
         uint32_t life,
-        std::function<float(float, float)> normalize_err =
+        const std::function<float(float, float)>& normalize_err =
             [](float err, float maxErr) { return err / maxErr; });
 
-    float get_error();
+    float get_error() const;
 
     auto operator()();
 };

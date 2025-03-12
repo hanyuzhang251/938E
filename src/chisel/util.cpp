@@ -38,7 +38,7 @@ std::string format_millis(uint32_t milliseconds) {
 
 std::string prefix() {
     char buff[15];
-    std::snprintf(buff, 15, "[%s]:   ", format_millis(pros::millis()));
+    std::snprintf(buff, 15, "[%s]:   ", format_millis(pros::millis()).c_str());
 
     return buff;
 }

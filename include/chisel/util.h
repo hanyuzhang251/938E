@@ -58,7 +58,7 @@ struct Toggle {
     bool value;
 	bool ptrigger;
 
-	Toggle(bool value_ = false);
+	explicit Toggle(bool value_ = false);
 
 	void tick(bool trigger);
 };

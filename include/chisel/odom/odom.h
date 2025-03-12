@@ -17,7 +17,7 @@ struct TrackingWheel {
     float wheel_size;
 
     TrackingWheel(
-        pros::Rotation* rotation_sensor, Pose offset,
+        pros::Rotation* rotation_sensor, const Pose& offset,
         float wheel_size
     );
 };

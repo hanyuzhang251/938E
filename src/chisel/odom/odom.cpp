@@ -5,7 +5,7 @@
 
 namespace chisel {
 
-Pose solve_imu_bias(pros::Imu inertial, int32_t timeout) {
+Pose solve_imu_bias(const pros::Imu& inertial, int32_t timeout) {
     Pose bias (0, 0, 0);
     auto [bx, by, bh] = bias();
 
@@ -13,7 +13,7 @@ Pose solve_imu_bias(pros::Imu inertial, int32_t timeout) {
 
     int ticks = 0;
 
-    printf("%sstart solving imu bias\n", prefix());
+    printf("%sstart solving imu bias\n", prefix().c_str());
 
     while (pros::millis() < end) {
         bx.fetch_add(inertial.get_accel().x);
@@ -27,17 +27,17 @@ Pose solve_imu_bias(pros::Imu inertial, int32_t timeout) {
     bx.store(bx.load() / ticks);
     by.store(by.load() / ticks);
 
-    printf("%ssolved imu bias for %d ticks, result: bx=%f, by=%f\n", prefix(), ticks, bx.load(), by.load());
+    printf("%ssolved imu bias for %d ticks, result: bx=%f, by=%f\n", prefix().c_str(), ticks, bx.load(), by.load());
 
-    return Pose(bx.load(), by.load(), bh.load());
+    return {bx.load(), by.load(), bh.load()};
 }
 
 TrackingWheel::TrackingWheel(
-    pros::Rotation* rotation_sensor, Pose offset,
+    pros::Rotation* rotation_sensor, const Pose& offset,
     float wheel_size)
     : rotation_sensor(rotation_sensor), offset(offset),
     wheel_size(wheel_size) {
-        printf("%screate new TrackingWheel: sensor(%d), offset=(%f, %f, %f), wheel_size=%f\n", prefix(), rotation_sensor->get_port(), offset.x.load(), offset.y.load(), offset.h.load(), wheel_size);
+        printf("%screate new TrackingWheel: sensor(%d), offset=(%f, %f, %f), wheel_size=%f\n", prefix().c_str(), rotation_sensor->get_port(), offset.x.load(), offset.y.load(), offset.h.load(), wheel_size);
     };
 
 TrackingSetup::TrackingSetup(
@@ -49,7 +49,7 @@ TrackingSetup::TrackingSetup(
     tracking_wheel_list.insert(tracking_wheel_list.end(),
         tracking_wheel_list_ptr, tracking_wheel_list_ptr + tracking_wheel_count);
 
-    printf("%screate new TrackingSetup: ime=%s odom=%s\n", prefix(), (!drive_train) ? "yes" : "no", (tracking_wheel_count > 0) ? std::to_string(tracking_wheel_count) : "no");
+    printf("%screate new TrackingSetup: ime=%s odom=%s\n", prefix().c_str(), (!drive_train) ? "yes" : "no", ((tracking_wheel_count > 0) ? std::to_string(tracking_wheel_count) : "no").c_str());
 }
 
 } // namespace chisel
