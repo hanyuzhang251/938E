@@ -2,9 +2,9 @@
 
 #include "main.h"
 #include "chisel/util.h"
-#include "chisel/config.h"
 #include "chisel/chassis/drive.h"
 #include "chisel/data/pose.h"
+#include "chisel/config.h"
 #include <vector>
 
 namespace chisel {
@@ -22,11 +22,18 @@ struct TrackingWheel {
     );
 };
 
-struct TrackingSetup {
+struct Odom {
+    Pose pose;
+    Pose internal_pose;
+    Pose pose_offset;
+
     DriveTrain *drive_train;
     std::vector<TrackingWheel> tracking_wheel_list;
 
-    TrackingSetup(
+    Odom(
+        const Pose &pose,
+        const Pose &internal_pose,
+        const Pose &pose_offset,
         DriveTrain* drive_train,
         TrackingWheel* tracking_wheel_list_ptr,
         int tracking_wheel_count

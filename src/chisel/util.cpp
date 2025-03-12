@@ -15,7 +15,7 @@ float deg_norm(float degree) {
     return degree;
 }
 
-float deg_err(float current, float target) {
+float deg_err(const float current, const float target) {
     float diff = std::fmod(current - target + 180.0f, 360.0f);
     
     if (diff < 0.0f) diff += 360.0f;
@@ -23,7 +23,7 @@ float deg_err(float current, float target) {
     return diff - 180.0f;
 }
 
-std::string format_millis(uint32_t milliseconds) {
+std::string format_millis(const uint32_t milliseconds) {
     uint32_t minutes = (milliseconds / 60000) % 60;
     uint32_t seconds = (milliseconds / 1000) % 60;
     uint32_t millis = milliseconds % 1000;
@@ -43,9 +43,9 @@ std::string prefix() {
     return buff;
 }
 
-Toggle::Toggle(bool value_) : value(value_), ptrigger(false) {}
+Toggle::Toggle(const bool value_) : value(value_), ptrigger(false) {}
 
-void Toggle::tick(bool trigger) {
+void Toggle::tick(const bool trigger) {
     if (trigger && !ptrigger) value = !value;
     ptrigger = trigger;
 }

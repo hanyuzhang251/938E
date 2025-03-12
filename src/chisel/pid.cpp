@@ -3,8 +3,8 @@
 namespace chisel {
 
 PIDController::PIDController(
-    const float kp, float ki, float kd, float wind, float clamp, float slew,
-    float small_error, float large_error, float tolerance)
+    const float kp, const float ki, const float kd, const float wind, const float clamp, const float slew,
+    const float small_error, const float large_error, const float tolerance)
     : kp(kp), ki(ki), kd(kd), wind(wind), clamp(clamp), slew(slew),
     small_error(small_error), large_error(large_error), tolerance(tolerance) {
         printf("%screate new PIDController: kp=%f, ki=%f, kd=%f, wind=%f, clamp=%f, slew=%f, small_err=%f, large_err=%f, tolerance=%f\n",
@@ -16,8 +16,8 @@ PIDProcess::PIDProcess(
     std::atomic<float>& target,
     std::atomic<float>& output,
     const PIDController& pid,
-    float max_speed, float min_speed,
-    uint32_t life,
+    const float max_speed, const float min_speed,
+    const uint32_t life,
     const std::function<float(float, float)>& normalize_err)
     : value(value),
       target(target),

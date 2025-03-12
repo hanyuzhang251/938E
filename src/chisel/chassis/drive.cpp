@@ -6,7 +6,7 @@ namespace chisel {
 
 DriveTrain::DriveTrain(
     pros::MotorGroup *left_motors, pros::MotorGroup *right_motors,
-    float wheel_size, float track_width, float rpm
+    const float wheel_size, const float track_width, const float rpm
 ):  
     left_motors(left_motors), right_motors(right_motors),
     wheel_size(wheel_size), track_width(track_width), rpm(rpm) {

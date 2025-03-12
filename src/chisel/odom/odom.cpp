@@ -5,11 +5,11 @@
 
 namespace chisel {
 
-Pose solve_imu_bias(const pros::Imu& inertial, int32_t timeout) {
+Pose solve_imu_bias(const pros::Imu& inertial, const int32_t timeout) {
     Pose bias (0, 0, 0);
     auto [bx, by, bh] = bias();
 
-    int32_t end = pros::millis() + timeout;
+    const int32_t end = pros::millis() + timeout;
 
     int ticks = 0;
 
@@ -34,22 +34,25 @@ Pose solve_imu_bias(const pros::Imu& inertial, int32_t timeout) {
 
 TrackingWheel::TrackingWheel(
     pros::Rotation* rotation_sensor, const Pose& offset,
-    float wheel_size)
+    const float wheel_size)
     : rotation_sensor(rotation_sensor), offset(offset),
     wheel_size(wheel_size) {
         printf("%screate new TrackingWheel: sensor(%d), offset=(%f, %f, %f), wheel_size=%f\n", prefix().c_str(), rotation_sensor->get_port(), offset.x.load(), offset.y.load(), offset.h.load(), wheel_size);
     };
 
-TrackingSetup::TrackingSetup(
+Odom::Odom(
+    const Pose &pose,
+    const Pose &internal_pose,
+    const Pose &pose_offset,
     DriveTrain* drive_train,
     TrackingWheel* tracking_wheel_list_ptr,
-    int tracking_wheel_count
-): drive_train(drive_train) {
+const int tracking_wheel_count
+): pose(pose), internal_pose(internal_pose), pose_offset(pose_offset), drive_train(drive_train) {
     tracking_wheel_list.reserve(tracking_wheel_count);
     tracking_wheel_list.insert(tracking_wheel_list.end(),
         tracking_wheel_list_ptr, tracking_wheel_list_ptr + tracking_wheel_count);
 
-    printf("%screate new TrackingSetup: ime=%s odom=%s\n", prefix().c_str(), (!drive_train) ? "yes" : "no", ((tracking_wheel_count > 0) ? std::to_string(tracking_wheel_count) : "no").c_str());
+    printf("%screate new Odom: ime=%s odom=%s\n", prefix().c_str(), (!drive_train) ? "yes" : "no", ((tracking_wheel_count > 0) ? std::to_string(tracking_wheel_count) : "no").c_str());
 }
 
 } // namespace chisel
