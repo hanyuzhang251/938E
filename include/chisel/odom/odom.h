@@ -16,6 +16,8 @@ struct TrackingWheel {
     Pose offset;
     float wheel_size;
 
+    float prev_pos = 0;
+
     TrackingWheel(
         pros::Rotation* rotation_sensor, const Pose& offset,
         float wheel_size
@@ -29,6 +31,9 @@ struct Odom {
 
     DriveTrain *drive_train;
     std::vector<TrackingWheel> tracking_wheel_list;
+
+    float prev_left_pos = 0;
+    float prev_right_pos = 0;
 
     Odom(
         const Pose &pose,

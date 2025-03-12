@@ -56,7 +56,23 @@ const int tracking_wheel_count
 }
 
 void Odom::update_with_ime() {
+    const double left_pos = drive_train->left_motors->get_position();
+    const double right_pos = drive_train->right_motors->get_position();
 
+    const double dist = ((left_pos - prev_left_pos) + (right_pos - prev_right_pos)) / 2;
+
+    auto [ipos_x, ipos_y, ipos_h] = internal_pose();
+
+    const double h_rads = ipos_h * M_PI / 180;
+    ipos_x.fetch_add(std::cos(h_rads) * dist);
+    ipos_y.fetch_add(std::sin(h_rads) * dist);
+
+    auto [mpos_x, mpos_y, mpos_h] = pose_offset();
+    auto [pos_x, pos_y, pos_h] = pose();
+
+    pos_x.store(mpos_x.load() + ipos_x.load());
+    pos_y.store(mpos_y.load() + ipos_y.load());
+    pos_h.store(mpos_h.load() + ipos_h.load());
 }
 
 
