@@ -1,7 +1,6 @@
 #pragma once
 
 #include "main.h"
-#include "version.h"
 #include "config.h"
 #include "util.h"
 #include "chassis/chassis.h"
