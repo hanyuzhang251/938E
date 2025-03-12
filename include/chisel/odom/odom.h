@@ -9,7 +9,7 @@
 
 namespace chisel {
 
-Pose solve_imu_bias(int32_t timeout);
+Pose solve_imu_bias(uint32_t timeout);
 
 struct TrackingWheel {
     pros::Rotation *rotation_sensor;

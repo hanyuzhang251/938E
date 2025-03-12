@@ -5,19 +5,19 @@
 
 namespace chisel {
 
-Pose solve_imu_bias(const pros::Imu& inertial, const int32_t timeout) {
+Pose solve_imu_bias(const pros::Imu& imu, const uint32_t timeout) {
     Pose bias (0, 0, 0);
     auto [bx, by, bh] = bias();
 
-    const int32_t end = pros::millis() + timeout;
+    const uint32_t end = pros::millis() + timeout;
 
     int ticks = 0;
 
     printf("%sstart solving imu bias\n", prefix().c_str());
 
     while (pros::millis() < end) {
-        bx.fetch_add(inertial.get_accel().x);
-        by.fetch_add(inertial.get_accel().y);
+        bx.fetch_add(imu.get_accel().x);
+        by.fetch_add(imu.get_accel().y);
 
         ++ticks;
 
