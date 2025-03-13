@@ -1,7 +1,5 @@
 #include "drive.h"
 
-#include <utility>
-
 namespace chisel {
 
 DriveTrain::DriveTrain(

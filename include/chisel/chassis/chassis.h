@@ -4,6 +4,7 @@
 #include "chisel/chassis/drive.h"
 #include "chisel/odom/odom.h"
 #include "chisel/chassis/movement/movement.h"
+#include "chisel/util/moteritf.h"
 
 #include <atomic>
 #include <queue>
