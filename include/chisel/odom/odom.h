@@ -9,7 +9,7 @@
 
 namespace chisel {
 
-Pose solve_imu_bias(uint32_t timeout);
+Pose solve_imu_bias(const pros::Imu& imu, uint32_t timeout);
 
 struct TrackingWheel {
     pros::Rotation *rotation_sensor;
@@ -48,9 +48,9 @@ struct Odom {
         int tracking_wheel_count
     );
 
-    void ime_predict();
+    void predict_with_ime();
 
-    void odom_predict();
+    void predict_with_odom();
 
     void push_prediction(bool consider_ime = true, bool consider_odom = true);
 

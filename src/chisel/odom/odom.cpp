@@ -55,7 +55,7 @@ const int tracking_wheel_count
     printf("%screate new Odom: ime=%s odom=%s\n", prefix().c_str(), (!drive_train) ? "yes" : "no", ((tracking_wheel_count > 0) ? std::to_string(tracking_wheel_count) : "no").c_str());
 }
 
-void Odom::ime_predict() {
+void Odom::predict_with_ime() {
     const double left_pos = drive_train->left_motors->get_position();
     const double right_pos = drive_train->right_motors->get_position();
 
