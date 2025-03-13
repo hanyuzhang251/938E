@@ -1,8 +1,6 @@
 [
     {
         "arguments": [
-<<<<<<< HEAD
-=======
             "clang++",
             "-c",
             "-target",
@@ -41,7 +39,6 @@
     },
     {
         "arguments": [
->>>>>>> parent of 3645377 (Implement pid)
             "clang++",
             "-c",
             "-target",
