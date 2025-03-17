@@ -6,27 +6,32 @@
 
 namespace chisel {
 
-    constexpr int MOTOR_COAST = 1001;
-    constexpr int MOTOR_BRAKE = 1002;
+constexpr int MOTOR_COAST = 1001;
+constexpr int MOTOR_BRAKE = 1002;
 
-    struct Command {
-        float power;
-        int priority;
-        uint32_t life;
+struct Command {
+    float power;
+    int priority;
+    uint32_t life;
 
-        void dismiss();
+    void dismiss();
 
-        Command(float power, int priority, uint32_t life = 1000 * 60 * 20);
-    };
+    Command(float power, int priority, uint32_t life = 1000 * 60 * 20);
+};
 
-    struct MotorItf {
-        pros::Motor* motor;
+struct MotorItf {
+    pros::Motor* motor;
 
-        std::priority_queue<Command> command_queue;
+    auto comp = [](const Command* a, const Command* b){return a->priority < b->priority;};
+    std::priority_queue<Command*, std::vector<Command*>, std::decltype(comp)> command_queue;
 
-        explicit MotorItf(pros::Motor* motor);
+    explicit MotorItf(pros::Motor* motor);
 
-        void
-    };
+    void assign_command(Command* command);
+
+    void update();
+
+    void push();
+};
 
 } // namespace chisel
