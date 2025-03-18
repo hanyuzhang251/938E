@@ -6,8 +6,9 @@
 
 namespace chisel {
 
-constexpr int MOTOR_COAST = 1001;
-constexpr int MOTOR_BRAKE = 1002;
+constexpr float MOTOR_HOLD = 1001;
+constexpr float MOTOR_BRAKE = 1002;
+constexpr float MOTOR_COAST = 1002;
 
 struct Command {
     float power;
@@ -31,7 +32,7 @@ struct MotorItf {
 
     void update();
 
-    void push();
+    void push_update();
 };
 
 } // namespace chisel
