@@ -3,36 +3,47 @@
 #include "main.h"
 
 #include <queue>
+#include <vector>
 
 namespace chisel {
 
-constexpr float MOTOR_HOLD = 1001;
-constexpr float MOTOR_BRAKE = 1002;
-constexpr float MOTOR_COAST = 1002;
+    constexpr int32_t MOTOR_HOLD = 1001;
+    constexpr int32_t MOTOR_BRAKE = 1002;
+    constexpr int32_t MOTOR_COAST = 1003;
 
-struct Command {
-    float power;
-    int priority;
-    uint32_t life;
+    struct Command {
+        int32_t power;
+        int32_t priority;
+        uint32_t life;
 
-    void dismiss();
+        void dismiss();
 
-    Command(float power, int priority, uint32_t life = 1000 * 60 * 20);
-};
+        Command(int32_t power, int32_t priority, uint32_t life = 1000 * 60 * 20);
+    };
 
-struct MotorItf {
-    pros::Motor* motor;
+    struct MotorItf {
+        pros::Motor* motor;
 
-    auto comp = [](const Command* a, const Command* b){return a->priority < b->priority;};
-    std::priority_queue<Command*, std::vector<Command*>, std::decltype(comp)> command_queue;
+        int32_t final_power = 0;
+        pros::motor_brake_mode_e_t final_motor_brake_mode = pros::E_MOTOR_BRAKE_HOLD;
 
-    explicit MotorItf(pros::Motor* motor);
+        struct compare_command {
+            bool operator()(const Command* a, const Command* b) const {
+                return a->priority < b->priority;
+            }
+        };
 
-    void assign_command(Command* command);
+        std::priority_queue<Command*, std::vector<Command*>, compare_command> command_queue;
 
-    void update();
+        explicit MotorItf(pros::Motor* motor);
 
-    void push_update();
-};
+        void assign_command(Command* command);
+
+        int clean_commands();
+
+        void update();
+
+        [[nodiscard]] bool push_update() const;
+    };
 
 } // namespace chisel

@@ -17,7 +17,7 @@ static void generic_chassis_update(void* param) {
     }
 }
 
-Chassis::Chassis(DriveTrain* drive_train, Odom* odom, bool enabled_): drive_train(drive_train), odom(odom), enabled(enabled_) {
+Chassis::Chassis(DriveTrain* drive_train, Odom* odom, const bool enabled_): drive_train(drive_train), odom(odom), enabled(enabled_) {
     update_task = pros::Task(generic_chassis_update, this);
 }
 
