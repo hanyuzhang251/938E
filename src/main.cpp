@@ -32,4 +32,12 @@ chisel::Odom odom {
     0
 };
 
-chisel::Chassis chassis = {&drive_train, &odom, true};
+chisel::PIDSettings angular_pid_settings {
+    10, 0, 0, 0, 0, 999, 0, 0, 0
+};
+
+chisel::PIDSettings lateral_pid_settings {
+    10, 0, 0, 0, 0, 999, 0, 0, 0
+};
+
+chisel::Chassis chassis = {&drive_train, &odom, &angular_pid_settings, &lateral_pid_settings, true};

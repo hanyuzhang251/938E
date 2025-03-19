@@ -17,7 +17,8 @@ static void chassis_update(void* param) {
     }
 }
 
-Chassis::Chassis(DriveTrain* drive_train, Odom* odom, const bool enabled_): drive_train(drive_train), odom(odom), enabled(enabled_) {
+Chassis::Chassis(DriveTrain* drive_train, Odom* odom, PIDSettings* angular_pid_settings, PIDSettings* lateral_pid_settings, const bool enabled_):
+    drive_train(drive_train), odom(odom), angular_pid_settings(angular_pid_settings), lateral_pid_settings(lateral_pid_settings), enabled(enabled_) {
     update_task = pros::Task(chassis_update, this);
 }
 
