@@ -6,7 +6,7 @@
 
 namespace chisel {
 
-struct PIDController {                                                         
+struct PIDSettings {
     float kp;
     float ki;
     float kd;
@@ -17,17 +17,17 @@ struct PIDController {
     float large_error; // error range to start settling
     float tolerance; // acceptable error
 
-    PIDController(
+    PIDSettings(
         float kp, float ki, float kd, float wind, float clamp, float slew,
         float small_error, float large_error, float tolerance
     );
 };
 
-struct PIDProcess {                                                            
+struct PIDController {
     std::atomic<float>& value;
     std::atomic<float>& target;
     std::atomic<float>& output;
-    const PIDController& pid;
+    const PIDSettings& pid;
     float max_speed;
     float min_speed;
     uint32_t life;
@@ -39,11 +39,11 @@ struct PIDProcess {
     float integral = 0;
     float derivative = 0;
 
-    PIDProcess(
+    PIDController(
         std::atomic<float>& value,
         std::atomic<float>& target,
         std::atomic<float>& output,
-        const PIDController& pid,
+        const PIDSettings& pid,
         float max_speed,
         float min_speed,
         uint32_t life,
@@ -55,6 +55,6 @@ struct PIDProcess {
     auto operator()();
 };
 
-void pid_handle_process(PIDProcess& process);
+void pid_handle_process(PIDController& process);
 
 } // namespace chisel

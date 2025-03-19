@@ -21,27 +21,27 @@ struct DriveTrain {
     );
 };
 
-constexpr auto linear_curve = [](float input) {return input;};
-constexpr auto sigmoid_curve = [](float input) {
+constexpr auto linear_curve = [](const float input) {return input;};
+constexpr auto sigmoid_curve = [](const float input) {
     // finer control at high speeds
     return 127 * std::sin((M_PI * input) / 254);
 };
-constexpr auto sigma_curve = [](float input) {
+constexpr auto sigma_curve = [](const float input) {
     // finer control at low speeds
     return 254 * 1 / M_PI / std::asin(input / 127);
 };
 
-struct DriveCurve {
+struct DriveSettings {
     float deadband;
     float min_out;
     std::function<float(float)> curve;
 
-    DriveCurve(
+    DriveSettings(
         float deadband,
         float min_out,
-        std::function<float(float)> curve = [](float input) {return input;});
+        std::function<float(float)> curve = [](const float input) {return input;});
 };
 
-float drive_calc_power(float input, DriveCurve& curve);
+float drive_calc_power(float input, DriveSettings& curve);
 
 }

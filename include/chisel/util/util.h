@@ -32,7 +32,7 @@
 
 namespace chisel {
 
-inline void wait(uint32_t delta) {
+inline void wait(const uint32_t delta) {
     pros::delay(delta);
 }
 

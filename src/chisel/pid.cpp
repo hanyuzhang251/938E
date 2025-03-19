@@ -2,7 +2,7 @@
 
 namespace chisel {
 
-PIDController::PIDController(
+PIDSettings::PIDSettings(
     const float kp, const float ki, const float kd, const float wind, const float clamp, const float slew,
     const float small_error, const float large_error, const float tolerance)
     : kp(kp), ki(ki), kd(kd), wind(wind), clamp(clamp), slew(slew),
@@ -11,11 +11,11 @@ PIDController::PIDController(
             prefix().c_str(), kp, ki, kd, wind, clamp, slew, small_error, large_error, tolerance);
     }
 
-PIDProcess::PIDProcess(
+PIDController::PIDController(
     std::atomic<float>& value,
     std::atomic<float>& target,
     std::atomic<float>& output,
-    const PIDController& pid,
+    const PIDSettings& pid,
     const float max_speed, const float min_speed,
     const uint32_t life,
     const std::function<float(float, float)>& normalize_err)
@@ -29,7 +29,7 @@ PIDProcess::PIDProcess(
         printf("%screate new PIDProcess: max_speed=%f, min_speed=%f, life=%d, %s\n", prefix().c_str(), max_speed, min_speed, life, (!normalize_err ? "default err calc" : "custom err calc"));
       }
 
-float PIDProcess::get_error() const {
+float PIDController::get_error() const {
     if (normalize_err) {
         return normalize_err(target.load(), value.load());
     } else {
@@ -37,14 +37,14 @@ float PIDProcess::get_error() const {
     }
 }
 
-auto PIDProcess::operator()() {
+auto PIDController::operator()() {
     return std::tie(
         value, target, output, pid, min_speed, max_speed, life,
         normalize_err, prev_output, prev_error, error, integral,
         derivative);
 }
 
-void pid_handle_process(PIDProcess& process) {                                 
+void pid_handle_process(PIDController& process) {
 
     auto [value, target, output, pid, min_speed, max_speed, life, normalize_err,
           prev_output, prev_error, error, integral, derivative] = process();
