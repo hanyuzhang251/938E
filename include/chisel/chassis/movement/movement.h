@@ -6,7 +6,7 @@ namespace chisel {
 
 class Movement {
 public:
-    virtual void setup(Pose dest, bool async, float* args, int n_args) = 0;
+    virtual void setup(Pose dest, bool async, int n_args, float* args) = 0;
     virtual bool is_async() = 0;
 
     virtual void pull_pose(Pose new_pose) = 0;

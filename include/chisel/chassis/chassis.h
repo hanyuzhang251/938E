@@ -13,6 +13,9 @@ namespace chisel {
 
 struct Chassis {
     DriveTrain *drive_train;
+    DriveSettings *drive_settings;
+
+
     Odom *odom;
 
     PIDSettings *angular_pid_settings;
@@ -25,7 +28,7 @@ struct Chassis {
 
     void update() const;
 
-    Chassis(DriveTrain* drive_train, Odom* odom, PIDSettings* angular_pid_settings, PIDSettings* lateral_pid_settings, bool enabled_ = true);
+    Chassis(DriveTrain* drive_train, DriveSettings* drive_settings, Odom* odom, PIDSettings* angular_pid_settings, PIDSettings* lateral_pid_settings, bool enabled_ = true);
 };
 
 } // namespace chisel
