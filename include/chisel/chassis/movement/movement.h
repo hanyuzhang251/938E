@@ -6,13 +6,12 @@ namespace chisel {
 
 class Movement {
 public:
-    virtual void setup(Pose dest, bool async, int n_args, float* args) = 0;
-    virtual bool is_async() = 0;
+    bool async;
+    uint32_t life;
 
-    virtual void pull_pose(Pose new_pose) = 0;
+    Movement(const bool async, const uint32_t life) : async(async), life(life) {}
 
-    virtual void update() = 0;
-    virtual std::pair<float, float> get_controls();
+    virtual void setup() = 0;
 
     virtual ~Movement() = default;
 };
