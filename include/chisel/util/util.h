@@ -1,7 +1,7 @@
 #pragma once
 
 #include "main.h"
-#include <iostream>
+#include "chisel/data/pose.h"
 #include <iomanip>
 #include <sstream>
 #include <cstdint>
@@ -49,6 +49,8 @@ template <typename T> T clamp(T value, T min, T max) {
 float deg_norm(float degree);
 
 float deg_err(float current, float target);
+
+float deg_to_point(Pose point);
 
 std::string format_millis(uint32_t milliseconds);
 

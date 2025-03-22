@@ -78,7 +78,7 @@ void pid_handle_process(PIDController& process) {
     // derivative update                                                       
     derivative = error - prev_error;
 
-    float real_error = error;                                                  
+    const float real_error = error;                                                  
     float real_integral = integral;
     float real_derivative = derivative;
 

@@ -11,13 +11,13 @@ DriveTrain::DriveTrain(
         printf("%screate new DriveTrain: ", prefix().c_str());
 
         printf("ld(");
-        for (uint8_t port : left_motors->get_port_all()){
+        for (const uint8_t port : left_motors->get_port_all()){
             printf("%d, ", port);
         }
         printf("\b\b) ");
 
         printf("rd(");
-        for (uint8_t port : right_motors->get_port_all()){
+        for (const uint8_t port : right_motors->get_port_all()){
             printf("%d, ", port);
         }
         printf("\b\b) ");
@@ -33,7 +33,7 @@ DriveSettings::DriveSettings(const float deadband, const float min_out, std::fun
 float drive_calc_power(const float input, const DriveSettings& curve) {
     if (input < curve.deadband) return 0;
 
-    float output = curve.curve(input);
+    const float output = curve.curve(input);
 
     if (std::abs(curve.min_out) > std::abs(output)) {
         return sgn(output) * curve.min_out;

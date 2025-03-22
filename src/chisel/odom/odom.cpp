@@ -76,7 +76,7 @@ void Odom::push_prediction(bool consider_ime, bool consider_odom) {
 }
 
 void Odom::load_pose() {
-    pose = Pose::sum(internal_pose, pose_offset);
+    pose = Pose::add(internal_pose, pose_offset);
 }
 
 } // namespace chisel

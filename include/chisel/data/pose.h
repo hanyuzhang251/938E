@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <tuple>
 
 namespace chisel {
 
@@ -26,8 +27,12 @@ struct Pose {
         return std::tie(x, y, h);
     };
 
-    static Pose sum(const Pose &a, const Pose &b) {
+    static Pose add(const Pose &a, const Pose &b) {
         return {a.x.load() + b.x.load(), a.y.load() + b.y.load(), a.h.load() + b.h.load()};
+    }
+
+    static Pose sub(const Pose &a, const Pose &b) {
+        return {a.x.load() - b.x.load(), a.y.load() - b.y.load(), a.h.load() - b.h.load()};
     }
 };
 

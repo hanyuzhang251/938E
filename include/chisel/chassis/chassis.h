@@ -8,6 +8,7 @@
 
 #include <atomic>
 #include <queue>
+#include <memory>
 
 namespace chisel {
 
@@ -15,13 +16,12 @@ struct Chassis {
     DriveTrain *drive_train;
     DriveSettings *drive_settings;
 
-
     Odom *odom;
 
     PIDSettings *angular_pid_settings;
     PIDSettings *lateral_pid_settings;
 
-    std::queue<Movement> instruction_queue;
+    std::queue<std::unique_ptr<Movement>> instruction_queue;
 
     pros::Task update_task = nullptr;
     std::atomic<bool> enabled;

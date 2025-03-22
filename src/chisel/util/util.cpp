@@ -23,10 +23,15 @@ float deg_err(const float current, const float target) {
     return diff - 180.0f;
 }
 
+float deg_to_point(Pose point) {
+    return std::atan2(point.x, point.y) * 180 / M_PI;
+}
+
+
 std::string format_millis(const uint32_t milliseconds) {
-    uint32_t minutes = (milliseconds / 60000) % 60;
-    uint32_t seconds = (milliseconds / 1000) % 60;
-    uint32_t millis = milliseconds % 1000;
+    const uint32_t minutes = milliseconds / 60000 % 60;
+    const uint32_t seconds = milliseconds / 1000 % 60;
+    const uint32_t millis = milliseconds % 1000;
     
     std::ostringstream oss;
     oss << std::setfill('0') << std::setw(2) << minutes << ":"
