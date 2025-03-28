@@ -1,16 +1,17 @@
 #include "main.hpp"
+#include "ports.h"
 
 #include "chisel/util/motoritf.h"
 
-pros::MotorGroup left_motors ({1, 2, 3});
-pros::MotorGroup right_motors ({4, 5, 6});
+pros::MotorGroup left_motors ({DT_FL_PORT, DT_ML_PORT, DT_BL_PORT});
+pros::MotorGroup right_motors ({DT_FR_PORT, DT_MR_PORT, DT_BR_PORT});
 
-pros::Motor intake (7);
+pros::Motor intake (INTAKE_PORT);
 auto intake_itf = chisel::MotorItf(&intake);
 
-pros::Motor arm (8);
+pros::Motor arm (ARM_PORT);
 
-pros::Imu imu (21);
+pros::Imu imu (IMU_PORT);
 
 chisel::DriveTrain drive_train (
     &left_motors,

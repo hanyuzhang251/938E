@@ -56,5 +56,5 @@ public:
 private:
     float angular_pid_control = 0;
 };
-    
+
 } // namespace chisel

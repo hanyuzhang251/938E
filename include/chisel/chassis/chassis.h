@@ -5,6 +5,7 @@
 #include "chisel/odom/odom.h"
 #include "chisel/pid.h"
 #include "chisel/chassis/movement/movement.h"
+#include "chisel/chassis/movement/movetopoint.h"
 
 #include <atomic>
 #include <queue>
