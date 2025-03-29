@@ -31,11 +31,11 @@ DriveSettings::DriveSettings(const int32_t deadband, const int32_t min_out, std:
     }
 
 int32_t DriveSettings::drive_calc_power(const int32_t input) const {
-    if (input < deadband) return 0;
+    if (abs(input) < deadband) return 0;
 
     const int32_t output = curve(input);
 
-    if (std::abs(min_out) < std::abs(output)) {
+    if (min_out > std::abs(output)) {
         return sgn(output) * min_out;
     }
 
