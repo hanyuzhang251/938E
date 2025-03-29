@@ -46,14 +46,52 @@ Odom::Odom(
     pros::Imu* imu,
     DriveTrain* drive_train,
     TrackingWheel* tracking_wheel_list_ptr,
-const int tracking_wheel_count
-): pose(pose), pose_offset(pose_offset), imu(imu), drive_train(drive_train) {
+    const int tracking_wheel_count,
+    const int MaxImuInitAttempts
+): pose(pose), pose_offset(pose_offset), imu(imu), drive_train(drive_train), MaxImuResetAttempts(MaxImuInitAttempts) {
     tracking_wheel_list.reserve(tracking_wheel_count);
     tracking_wheel_list.insert(tracking_wheel_list.end(),
         tracking_wheel_list_ptr, tracking_wheel_list_ptr + tracking_wheel_count);
 
     printf("%screate new Odom: ime=%s odom=%s\n", prefix().c_str(), (!drive_train) ? "yes" : "no", ((tracking_wheel_count > 0) ? std::to_string(tracking_wheel_count) : "no").c_str());
 }
+
+int32_t Odom::initialize_imu() {
+    if (!imu) {
+        printf("%snot using imu; skipping imu initialization\n", prefix().c_str());
+        return 0;
+    }
+
+    printf("%sinitializing imu\n", prefix().c_str());
+    for (int i = 1; i <= MaxImuResetAttempts; ++i) {
+        if (imu->reset()) {
+            printf("%ssuccessfully reset imu on attempt %d\n", prefix().c_str(), i);
+            break;
+        }
+        if (i == MaxImuResetAttempts) {
+            printf("%smu reset unsuccessful, continuing without imu\n", prefix().c_str());
+            return -1;
+        }
+        printf("%smu reset unsuccessful, retrying...\n", prefix().c_str());
+    }
+
+    printf("%ssolving imu bias\n", prefix().c_str());
+    imu_bias = solve_imu_bias(*imu, 2000);
+
+    printf("%simu initialization complete\n", prefix().c_str());
+    return 0;
+}
+
+void Odom::initialize() {
+    printf("%sinitializing Odom\n", prefix().c_str());
+
+    if (initialize_imu() == -1) {
+        imu = nullptr;
+    }
+
+    printf("%sOdom initialization complete\n", prefix().c_str());
+}
+
 
 void Odom::predict_with_ime() {
     const double left_pos = drive_train->left_motors->get_position();

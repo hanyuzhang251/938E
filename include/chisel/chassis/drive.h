@@ -42,6 +42,6 @@ struct DriveSettings {
         std::function<float(float)> curve = [](const float input) {return input;});
 };
 
-float drive_calc_power(float input, DriveSettings& curve);
+int32_t drive_calc_power(int32_t input, DriveSettings &curve);
 
 }

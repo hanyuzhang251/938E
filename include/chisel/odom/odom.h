@@ -32,9 +32,13 @@ struct Odom {
     Pose ime_estimate = Pose(0, 0, 0);
     Pose odom_estimate = Pose(0, 0, 0);
 
+    Pose imu_bias = Pose(0, 0, 0);
+
     pros::Imu *imu;
     DriveTrain *drive_train;
     std::vector<TrackingWheel> tracking_wheel_list;
+
+    const int MaxImuResetAttempts;
 
     float prev_left_pos = 0;
     float prev_right_pos = 0;
@@ -45,8 +49,11 @@ struct Odom {
         pros::Imu* imu,
         DriveTrain* drive_train,
         TrackingWheel* tracking_wheel_list_ptr,
-        int tracking_wheel_count
+        int tracking_wheel_count,
+        int MaxImuInitAttempts = 5
     );
+
+    void initialize();
 
     void predict_with_ime();
 
@@ -55,6 +62,9 @@ struct Odom {
     void push_prediction(bool consider_ime = true, bool consider_odom = true);
 
     void load_pose();
+
+private:
+    int32_t initialize_imu();
 };
 
 } // namespace chisel

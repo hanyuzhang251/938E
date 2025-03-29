@@ -13,4 +13,4 @@ constexpr int32_t ARM_PORT = 9;
 constexpr int32_t DOINKER_PORT = 0;
 
 constexpr int32_t IMU_PORT = 0;
-constexpr int32_t VISION_PORT = 0;
+constexpr int32_t OPTICAL_PORT = 0;
