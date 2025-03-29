@@ -1,6 +1,7 @@
 #include "main.hpp"
 #include "devices.h"
-#include "skills.h"
+#include "auton/skills.h"
+#include "auton/solo_awp.h"
 
 bool init_done = false;
 
@@ -29,7 +30,7 @@ void competition_initialize() {
 }
 
 void autonomous() {
-    run_auton();
+    chisel::run_skills_auton();
 }
 
 void opcontrol() {
