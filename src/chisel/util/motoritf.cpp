@@ -18,8 +18,11 @@ void MotorItf::assign_command(Command* command) {
 }
 
 int MotorItf::clean_commands() {
+	if (command_queue.empty()) return 0;
+
 	int clear_count = 0;
-	while (true) {
+
+	while (!command_queue.empty()) {
 		if (const auto top_comand = command_queue.top(); top_comand->life <= 0) {
 			command_queue.pop();
 			++clear_count;
@@ -32,25 +35,20 @@ int MotorItf::clean_commands() {
 
 
 void MotorItf::update() {
+	if (command_queue.empty()) return;
+
 	const auto top_command = command_queue.top();
 	--top_command->life;
 
-	if (top_command->power >= -127 && top_command->power <= 127) {
+	if (abs(top_command->power) <= 127) {
 		final_power = top_command->power;
 	} else {
-		final_power = 0;
-		final_motor_brake_mode =
-			(top_command->power == MOTOR_HOLD) ? pros::E_MOTOR_BRAKE_HOLD :
-				(top_command->power == MOTOR_BRAKE) ? pros::E_MOTOR_BRAKE_BRAKE :
-					(top_command->power == MOTOR_COAST) ? pros::E_MOTOR_BRAKE_COAST :
-					pros::E_MOTOR_BRAKE_INVALID;
+		printf("%sinvalid motor power (%ld) sent to motorItf, ignoring command\n", prefix().c_str(), top_command->power);
 	}
 }
 
-bool MotorItf::push_update() const {
-	bool success = motor->set_brake_mode(final_motor_brake_mode);
-	success = success && motor->move(final_power);
-	return success;
+void MotorItf::push_update() const {
+	(void)motor->move(final_power);
 }
 
 } // namespace chisel

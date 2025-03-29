@@ -48,9 +48,9 @@ struct PIDController {
         float min_speed,
         uint32_t life,
         const std::function<float(float, float)>& normalize_err =
-            [](float err, float maxErr) { return err / maxErr; });
+            [](const float err, const float maxErr) { return err / maxErr; });
 
-    float get_error() const;
+    [[nodiscard]] float get_error() const;
 
     auto operator()();
 };

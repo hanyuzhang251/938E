@@ -6,11 +6,6 @@
 #include <vector>
 
 namespace chisel {
-
-    constexpr int32_t MOTOR_HOLD = 1001;
-    constexpr int32_t MOTOR_BRAKE = 1002;
-    constexpr int32_t MOTOR_COAST = 1003;
-
     struct Command {
         int32_t power;
         int32_t priority;
@@ -43,7 +38,7 @@ namespace chisel {
 
         void update();
 
-        [[nodiscard]] bool push_update() const;
+        void push_update() const;
     };
 
 } // namespace chisel

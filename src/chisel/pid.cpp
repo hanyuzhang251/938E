@@ -82,13 +82,13 @@ void pid_handle_process(PIDController& process) {
     float real_integral = integral;
     float real_derivative = derivative;
 
-    // scale integral on small error
-    real_integral *= (std::min(
-		1.0f,
-		std::max(0.3f, std::abs(error) / pid.small_error))
-	);
-    // scale derivative on large error
-	real_derivative *= (1 - std::min(1.0f, std::abs(error) / pid.large_error));
+ //    // scale integral on small error
+ //    real_integral *= (std::min(
+	// 	1.0f,
+	// 	std::max(0.3f, std::abs(error) / pid.small_error))
+	// );
+ //    // scale derivative on large error
+	// real_derivative *= (1 - std::min(1.0f, std::abs(error) / pid.large_error));
 
     // calculate power
     float calc_power =
