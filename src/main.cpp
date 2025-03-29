@@ -87,7 +87,7 @@ void opcontrol() {
         const int32_t lateral_move = drive_calc_power(master.get_analog(ANALOG_LEFT_Y), *chassis.lateral_drive_settings);
         const int32_t angular_move = drive_calc_power(master.get_analog(ANALOG_LEFT_X), *chassis.angular_drive_settings);
 
-        (void)left_motors.move(lateral_move + angular_move);
-        (void)left_motors.move(lateral_move - angular_move);
+        // (void)left_motors.move(lateral_move + angular_move);
+        // (void)left_motors.move(lateral_move - angular_move);
     }
 }
