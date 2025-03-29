@@ -1,5 +1,6 @@
 #include "main.hpp"
 #include "devices.h"
+#include "skills.h"
 
 bool init_done = false;
 
@@ -28,6 +29,7 @@ void competition_initialize() {
 }
 
 void autonomous() {
+    run_auton();
 }
 
 void opcontrol() {
