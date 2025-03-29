@@ -32,16 +32,16 @@ constexpr auto SIGMA_CURVE = [](const float input) {
 };
 
 struct DriveSettings {
-    float deadband;
-    float min_out;
-    std::function<float(float)> curve;
+    int32_t deadband;
+    int32_t min_out;
+    std::function<int32_t(int32_t)> curve;
 
     DriveSettings(
-        float deadband,
-        float min_out,
-        std::function<float(float)> curve = [](const float input) {return input;});
-};
+        int32_t deadband,
+        int32_t min_out,
+        std::function<int32_t(int32_t)> curve = [](const int32_t input) {return input;});
 
-int32_t drive_calc_power(int32_t input, DriveSettings &curve);
+    int32_t drive_calc_power(int32_t input) const;
+};
 
 }

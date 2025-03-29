@@ -25,18 +25,18 @@ DriveTrain::DriveTrain(
         printf("track_width=%f, wheel_size=%f, gearing=%f\n", track_width, wheel_size, gear_ratio);
     };
 
-DriveSettings::DriveSettings(const float deadband, const float min_out, std::function<float(float)> curve)
+DriveSettings::DriveSettings(const int32_t deadband, const int32_t min_out, std::function<int32_t(int32_t)> curve)
     : deadband(deadband), min_out(min_out), curve(std::move(curve)) {
         printf("%screate new DriveCurve: deadband=%f, min_out=%f\n", prefix().c_str(), deadband, min_out);
     }
 
-float drive_calc_power(const float input, const DriveSettings& curve) {
-    if (input < curve.deadband) return 0;
+int32_t DriveSettings::drive_calc_power(const int32_t input) const {
+    if (input < deadband) return 0;
 
-    const float output = curve.curve(input);
+    const int32_t output = curve(input);
 
-    if (std::abs(curve.min_out) > std::abs(output)) {
-        return sgn(output) * curve.min_out;
+    if (std::abs(min_out) > std::abs(output)) {
+        return sgn(output) * min_out;
     }
 
     return output;
