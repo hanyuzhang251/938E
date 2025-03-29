@@ -35,7 +35,7 @@ int32_t DriveSettings::drive_calc_power(const int32_t input) const {
 
     const int32_t output = curve(input);
 
-    if (std::abs(min_out) > std::abs(output)) {
+    if (std::abs(min_out) < std::abs(output)) {
         return sgn(output) * min_out;
     }
 

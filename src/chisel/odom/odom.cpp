@@ -83,13 +83,13 @@ int32_t Odom::initialize_imu() {
 }
 
 void Odom::initialize() {
-    printf("%sinitializing Odom\n", prefix().c_str());
+    printf("%sinitializing odom\n", prefix().c_str());
 
     if (initialize_imu() == -1) {
         imu = nullptr;
     }
 
-    printf("%sOdom initialization complete\n", prefix().c_str());
+    printf("%sodom initialization complete\n", prefix().c_str());
 }
 
 

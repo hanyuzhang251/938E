@@ -32,4 +32,11 @@ void TurnToPoint::push_controls() {
     controls.second = angular_pid_control;
 }
 
+MoveToPoint::MoveToPoint(Pose* pose, const Pose& target_point, const uint32_t life, const bool async)
+    : Movement(pose, life, async), target_point(target_point) {}
+
+void MoveToPoint::update() {
+
+}
+
 }

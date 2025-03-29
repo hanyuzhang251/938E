@@ -57,4 +57,17 @@ private:
     float angular_pid_control = 0;
 };
 
+class MoveToPoint final : public Movement {
+public:
+    Pose target_point;
+
+    MoveToPoint(Pose* pose, const Pose& target_point, uint32_t life = 5000, bool async = false);
+
+    void update() override;
+
+    void push_controls() override;
+
+    std::pair<float, float> get_controls() override;
+};
+
 } // namespace chisel

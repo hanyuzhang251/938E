@@ -5,7 +5,6 @@
 #include "chisel/odom/odom.h"
 #include "chisel/pid.h"
 #include "chisel/chassis/movement/movement.h"
-#include "chisel/chassis/movement/movetopoint.h"
 
 #include <atomic>
 #include <queue>
@@ -25,7 +24,6 @@ struct Chassis {
 
     std::queue<std::unique_ptr<Movement>> instruction_queue;
 
-    pros::Task update_task = nullptr;
     std::atomic<bool> enabled;
 
     void update() const;
