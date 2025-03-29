@@ -68,7 +68,7 @@ constexpr float ARM_SCORE_POS = 800;
 int arm_macro_cycle_index = 0;
 
 chisel::PIDSettings arm_pid_settings{
-    0.6, 0.1, 3, 70, 999, 999, 0, 0, 0
+    0.65, 0.05, 5, 100, 999, 999, 20, 250, 0
 };
 std::atomic<float> arm_pos(0);
 std::atomic<float> arm_target_pos(0);
@@ -148,7 +148,7 @@ int next_display_index = 0;
 
 void menu_update() {
     menu_toggle.tick(master.get_digital(MENU_TOGGLE_BUTTON));
-    if (menu_toggle.value) {
+    if (menu_toggle.value && menu_page != 254000) {
         menu_toggle.value = false;
 
         pointer_index = 0;
@@ -176,7 +176,6 @@ void menu_update() {
     if (menu_select_toggle.value) {
         menu_select_toggle.value = false;
         menu_select = true;
-        pointer_index = 0;
     }
 
     bool menu_back = false;
@@ -184,7 +183,6 @@ void menu_update() {
     if (menu_back_toggle.value) {
         menu_back_toggle.value = false;
         menu_back = true;
-        pointer_index = 0;
     }
 
     switch (menu_page) {
@@ -215,6 +213,7 @@ void menu_update() {
                     }
                     case 2: {
                         menu_page = 2;
+                        pointer_index = 0;
                         break;
                     }
                 }
@@ -222,30 +221,34 @@ void menu_update() {
 
             if (menu_back) {
                 menu_page = 0;
+                pointer_index = 0;
             }
 
             break;
         }
         case 2: {
             block_controls = true;
-            std::snprintf(ctrl_log[0], 15, "%cdebug...     ", pointer_index == 0 ? '>' : ' ');
-            std::snprintf(ctrl_log[1], 15, "%c             ", pointer_index == 1 ? '>' : ' ');
-            std::snprintf(ctrl_log[2], 15, "%c             ", pointer_index == 2 ? '>' : ' ');
+            std::snprintf(ctrl_log[0], 15, "%crepair...    ", pointer_index == 0 ? '>' : ' ');
+            std::snprintf(ctrl_log[1], 15, "%cdebug...     ", pointer_index == 1 ? '>' : ' ');
+            std::snprintf(ctrl_log[2], 15, "%clock bot     ", pointer_index == 2 ? '>' : ' ');
 
             if (pointer_index >= 3) pointer_index = 2;
 
             if (menu_select) {
                 switch (pointer_index) {
                     case 0: {
-                        menu_page = 333000;
+                        menu_page = 409000;
+                        pointer_index = 0;
                         break;
                     }
                     case 1: {
-                        color_sort_enabled = !color_sort_enabled;
+                        menu_page = 333000;
+                        pointer_index = 0;
                         break;
                     }
                     case 2: {
-                        menu_page = 2;
+                        menu_page = 254000;
+                        pointer_index = 0;
                         break;
                     }
                 }
@@ -253,10 +256,26 @@ void menu_update() {
 
             if (menu_back) {
                 menu_page = 1;
+                pointer_index = 0;
             }
 
             break;
         }
+        case 254000: {
+            block_controls = true;
+            block_movement = true;
+            std::snprintf(ctrl_log[0], 15, "robot locked   ");
+            std::snprintf(ctrl_log[1], 15, "               ");
+            std::snprintf(ctrl_log[2], 15, ">unlock        ");
+
+            if (menu_select) {
+                menu_page = 2;
+                pointer_index = 0;
+            }
+
+            break;
+        }
+
     }
 
     if (pros::millis() >= next_display_time) {
