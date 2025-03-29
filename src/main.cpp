@@ -12,6 +12,7 @@ constexpr int32_t DT_BR_PORT = 5;
 
 constexpr int32_t INTAKE_PORT = -2;
 constexpr int32_t ARM_PORT = -9;
+constexpr int32_t MOGO_PORT = 21;
 constexpr int32_t DOINKER_PORT = 21;
 
 constexpr int32_t IMU_PORT = 21;
@@ -70,6 +71,9 @@ chisel::PIDController arm_pid = {
     1000 * 60 * 20,
     nullptr
 };
+
+pros::adi::DigitalOut mogo (MOGO_PORT);
+pros::adi::DigitalOut doinker (DOINKER_PORT);
 
 pros::Imu imu (IMU_PORT);
 pros::Optical optical (OPTICAL_PORT);
@@ -260,8 +264,15 @@ void opcontrol() {
             arm_macro_cycle_index = 0;
         }
         arm_target_pos.store(chisel::clamp(arm_target_pos.load(), 0.0f, MAX_ARM_POS));
-        chisel::wait(PROCESS_DELAY);
 
-        printf("%samci:%d\n", chisel::prefix().c_str(), arm_macro_cycle_index);
+        // mogo
+        mogo_toggle.tick(master.get_digital(MOGO_TOGGLE_BUTTON));
+        (void)mogo.set_value(mogo_toggle.value);
+
+        // doinker
+        doinker_toggle.tick(master.get_digital(DOINKER_TOGGLE_BUTTON));
+        (void)doinker.set_value(doinker_toggle.value);
+
+        chisel::wait(PROCESS_DELAY);
     }
 }
