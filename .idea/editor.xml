@@ -100,7 +100,6 @@
     <option name="/Default/CodeStyle/CodeFormatting/CppFormatting/CONTINUOUS_LINE_INDENT/@EntryValue" value="Double" type="string" />
     <option name="/Default/CodeStyle/CodeFormatting/CppFormatting/TAB_WIDTH/@EntryValue" value="4" type="int" />
     <option name="/Default/CodeInspection/ExcludedFiles/FilesAndFoldersToSkip2/=7020124F_002D9FFC_002D4AC3_002D8F3D_002DAAB8E0240759_002Ff_003Amovetopoint_002Eh_002Fl_003Ainclude_003Fchisel_003Fchassis_003Fmovement_003Fmovetopoint_002Eh/@EntryIndexedValue" value="ForceIncluded" type="string" />
-    <option name="/Default/CodeInspection/ExcludedFiles/FilesAndFoldersToSkip2/=7020124F_002D9FFC_002D4AC3_002D8F3D_002DAAB8E0240759_002Ff_003Amovetopoint_002Eh_002Fl_003Ainclude_003Fchisel_003Fchassis_003Fmovement_003Fmovetopoint_002Eh/@EntryIndexRemoved" />
-    <option name="/Default/Environment/InlayHints/CppParameterNameHintsOptions2/HideForNonLiterals/@EntryValue" />
+    <option name="/Default/Environment/InlayHints/CppParameterNameHintsOptions2/ShowParameterNameHintsInMacroCalls/@EntryValue" value="Always" type="string" />
   </component>
 </project>
