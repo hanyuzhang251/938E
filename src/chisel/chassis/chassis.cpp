@@ -2,17 +2,30 @@
 
 namespace chisel {
 
-void Chassis::handle_instructions() {
-    auto top_movement = instruction_queue.front();
+int Chassis::clean_commands() {
+    if (command_queue.empty()) return 0;
 
-    if (top_movement->life <= 0) {
-        instruction_queue.pop();
+    int clear_count = 0;
+
+    while (!command_queue.empty()) {
+        if (const auto top_comand = command_queue.front(); top_comand->life <= 0) {
+            command_queue.pop();
+            ++clear_count;
+        } else {
+            break;
+        }
     }
+    return clear_count;
+}
+
+void Chassis::update_commands() const {
+    if (command_queue.empty()) return;
+
+    const auto top_movement = command_queue.front();
 
     top_movement->update();
     top_movement->push_controls();
 }
-
 
 void Chassis::update() {
     odom->predict_with_ime();
@@ -20,7 +33,8 @@ void Chassis::update() {
     odom->push_prediction(true, false);
     odom->load_pose();
 
-    if (!instruction_queue.empty()) handle_instructions();
+    clean_commands();
+    update_commands();
 }
 
 static void chassis_update(void* param) {

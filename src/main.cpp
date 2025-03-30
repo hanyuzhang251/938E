@@ -102,9 +102,9 @@ void menu_update() {
             block_controls = true;
             std::snprintf(ctrl_log[0], 15, "%crepair...    ", pointer_index == 0 ? '>' : ' ');
             std::snprintf(ctrl_log[1], 15, "%cdebug...     ", pointer_index == 1 ? '>' : ' ');
-            std::snprintf(ctrl_log[2], 15, "%clock bot     ", pointer_index == 2 ? '>' : ' ');
+            std::snprintf(ctrl_log[2], 15, "               ");
 
-            if (pointer_index >= 3) pointer_index = 2;
+            if (pointer_index >= 2) pointer_index = 1;
 
             if (menu_select) {
                 switch (pointer_index) {
@@ -118,11 +118,6 @@ void menu_update() {
                         pointer_index = 0;
                         break;
                     }
-                    case 2: {
-                        menu_page = 254000;
-                        pointer_index = 0;
-                        break;
-                    }
                 }
             }
 
@@ -133,14 +128,13 @@ void menu_update() {
 
             break;
         }
-        case 254000: {
+        case 333000: {
             block_controls = true;
-            block_movement = true;
-            std::snprintf(ctrl_log[0], 15, "robot locked   ");
-            std::snprintf(ctrl_log[1], 15, "               ");
-            std::snprintf(ctrl_log[2], 15, ">unlock        ");
+            std::snprintf(ctrl_log[0], 15, "x:%f           ", chassis.odom->pose.x.load());
+            std::snprintf(ctrl_log[1], 15, "y:%f           ", chassis.odom->pose.y.load());
+            std::snprintf(ctrl_log[2], 15, "h:%f           ", chassis.odom->pose.h.load());
 
-            if (menu_select) {
+            if (menu_back) {
                 menu_page = 2;
                 pointer_index = 0;
             }

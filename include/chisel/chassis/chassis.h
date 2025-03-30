@@ -1,6 +1,5 @@
 #pragma once
 
-#include "main.h"
 #include "chisel/chassis/drive.h"
 #include "chisel/odom/odom.h"
 #include "chisel/pid.h"
@@ -8,7 +7,6 @@
 
 #include <atomic>
 #include <queue>
-#include <memory>
 
 namespace chisel {
 
@@ -22,7 +20,7 @@ struct Chassis {
     PIDController *angular_pid_controller;
     PIDController *lateral_pid_controller;
 
-    std::queue<Movement*> instruction_queue;
+    std::queue<Movement*> command_queue;
 
     std::atomic<bool> enabled;
 
@@ -33,7 +31,9 @@ struct Chassis {
     void initialize() const;
 
 private:
-    void handle_instructions();
+    int clean_commands();
+
+    void update_commands() const;
 };
 
 } // namespace chisel

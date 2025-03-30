@@ -57,7 +57,8 @@ Odom::Odom(
 }
 
 int32_t Odom::initialize_imu() {
-    if (!imu) {
+
+    if (!imu || !imu->is_installed()) {
         printf("%snot using imu; skipping imu initialization\n", prefix().c_str());
         return 0;
     }
@@ -105,7 +106,14 @@ void Odom::predict_with_ime() {
     ipos_x.fetch_add(std::cos(h_rads) * dist);
     ipos_y.fetch_add(std::sin(h_rads) * dist);
 
-    ipos_h.store(imu->get_heading());
+    if (imu && imu->is_installed()) {
+        ipos_h.store(imu->get_heading());
+    } else {
+        const double left_change = left_pos - prev_left_pos;
+        const double right_change = right_pos - prev_right_pos;
+
+        ipos_h.fetch_add((left_change - right_change) / drive_train->track_width);
+    }
 }
 
 void Odom::push_prediction(bool consider_ime, bool consider_odom) {
