@@ -162,6 +162,8 @@ void async_update([[maybe_unused]] void *param) {
     while (true) {
         device_update();
 
+        menu_update();
+
         chisel::wait(PROCESS_DELAY);
     }
 }

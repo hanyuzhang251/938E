@@ -11,6 +11,8 @@
 namespace chisel {
 
 struct Chassis {
+    std::atomic<int> state = std::atomic(INIT_STATE);
+
     DriveTrain *drive_train;
     DriveSettings *lateral_drive_settings;
     DriveSettings *angular_drive_settings;

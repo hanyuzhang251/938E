@@ -30,6 +30,10 @@
 #define CTRL_DIGI_LEFT E_CONTROLLER_DTAL_LEFT
 #define CTRL_DIGI_RIGHT E_CONTROLLER_DIGITAL_RIGHT
 
+constexpr int INIT_STATE = 0;
+constexpr int AUTON_STATE = 1;
+constexpr int DRIVE_STATE = 2;
+
 namespace chisel {
 
 inline void wait(const uint32_t delta) {

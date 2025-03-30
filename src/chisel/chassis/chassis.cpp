@@ -25,6 +25,11 @@ void Chassis::update_commands() const {
 
     top_movement->update();
     top_movement->push_controls();
+
+    if (state.load() == AUTON_STATE) {
+        lateral_pid_controller->target.store(top_movement->controls.first);
+        angular_pid_controller->target.store(top_movement->controls.second);
+    }
 }
 
 void Chassis::update() {
