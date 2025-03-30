@@ -19,18 +19,21 @@ struct Chassis {
 
     Odom *odom;
 
-    PIDSettings *angular_pid_settings;
-    PIDSettings *lateral_pid_settings;
+    PIDController *angular_pid_controller;
+    PIDController *lateral_pid_controller;
 
-    std::queue<std::unique_ptr<Movement>> instruction_queue;
+    std::queue<Movement*> instruction_queue;
 
     std::atomic<bool> enabled;
 
-    void update() const;
+    void update();
 
-    Chassis(DriveTrain* drive_train, DriveSettings* lateral_drive_settings, DriveSettings* angular_drive_settings, Odom* odom, PIDSettings* angular_pid_settings, PIDSettings* lateral_pid_settings, bool enabled_ = true);
+    Chassis(DriveTrain* drive_train, DriveSettings* lateral_drive_settings, DriveSettings* angular_drive_settings, Odom* odom, PIDController* angular_pid_controller, PIDController* lateral_pid_controller, bool enabled_ = true);
 
     void initialize() const;
+
+private:
+    void handle_instructions();
 };
 
 } // namespace chisel
