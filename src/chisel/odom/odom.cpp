@@ -53,7 +53,7 @@ Odom::Odom(
     tracking_wheel_list.insert(tracking_wheel_list.end(),
         tracking_wheel_list_ptr, tracking_wheel_list_ptr + tracking_wheel_count);
 
-    printf("%screate new Odom: ime=%s odom=%s\n", prefix().c_str(), (!drive_train) ? "yes" : "no", ((tracking_wheel_count > 0) ? std::to_string(tracking_wheel_count) : "no").c_str());
+    printf("%screate new Odom: ime=%s odom=%s\n", prefix().c_str(), (drive_train) ? "yes" : "no", ((tracking_wheel_count > 0) ? std::to_string(tracking_wheel_count) : "no").c_str());
 }
 
 int32_t Odom::initialize_imu() {
@@ -96,24 +96,42 @@ void Odom::initialize() {
 
 
 void Odom::predict_with_ime() {
-    const double left_pos = drive_train->left_motors->get_position();
-    const double right_pos = drive_train->right_motors->get_position();
+    printf("\nIME PREDICTION START\n");
+    const float left_pos = drive_train->left_motors->get_position();
+    const float right_pos = drive_train->right_motors->get_position();
 
-    const double dist = ((left_pos - prev_left_pos) + (right_pos - prev_right_pos)) / 2;
+    printf("\tleft_pos=%f, right_pos=%f\n", left_pos, right_pos);
+    printf("\tp-left_pos=%f, p-right_pos=%f\n", prev_left_pos, prev_right_pos);
+
+    const float dist = ((left_pos - prev_left_pos) + (right_pos - prev_right_pos)) / 2;
+
+    printf("\tdist=%f\n", dist);
 
     auto [ipos_x, ipos_y, ipos_h] = ime_estimate();
+    printf("\tprev pos: (%f, %f, %f)\n", ipos_x.load(), ipos_y.load(), ipos_h.load());
 
-    const double h_rads = ipos_h * M_PI / 180;
+    const float h_rads = ipos_h.load() * M_PI / 180;
     ipos_x.fetch_add(std::cos(h_rads) * dist);
     ipos_y.fetch_add(std::sin(h_rads) * dist);
 
+    printf("\tc-x=%f, c-y==%f\n", std::cos(h_rads) * dist, std::sin(h_rads) * dist);
+
     if (imu) {
+        printf("\tusing imu for heading\n");
         ipos_h.store(imu->get_heading());
+        printf("\tnew_h=%f\n", imu->get_heading());
     } else {
-        const double left_change = left_pos - prev_left_pos;
-        const double right_change = right_pos - prev_right_pos;
+        printf("\tNOT using imu for heading\n");
+        const float left_change = left_pos - prev_left_pos;
+        const float right_change = right_pos - prev_right_pos;
+
+        printf("\tleft_change=%f, right_change=%f\n", left_change, right_change);
+
+        printf("\ttrack_width=%f\n", drive_train->track_width);
 
         ipos_h.fetch_add((left_change - right_change) / drive_train->track_width);
+
+        printf("\tnew_h=%f\n", ipos_h.load());
     }
 }
 

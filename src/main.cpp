@@ -130,6 +130,35 @@ void menu_update() {
         }
         case 333000: {
             block_controls = true;
+            std::snprintf(ctrl_log[0], 15, "%cpos_track    ", pointer_index == 0 ? '>' : ' ');
+            std::snprintf(ctrl_log[1], 15, "%carm          ", pointer_index == 1 ? '>' : ' ');
+
+            if (pointer_index >= 2) pointer_index = 1;
+
+            if (menu_select) {
+                switch (pointer_index) {
+                    case 0: {
+                        menu_page = 333001;
+                        pointer_index = 0;
+                        break;
+                    }
+                    case 1: {
+                        menu_page = 333002;
+                        pointer_index = 0;
+                        break;
+                    }
+                }
+            }
+
+            if (menu_back) {
+                menu_page = 2;
+                pointer_index = 0;
+            }
+
+            break;
+        }
+        case 333001: {
+            block_controls = true;
             std::snprintf(ctrl_log[0], 15, "x:%f           ", chassis.odom->pose.x.load());
             std::snprintf(ctrl_log[1], 15, "y:%f           ", chassis.odom->pose.y.load());
             std::snprintf(ctrl_log[2], 15, "h:%f           ", chassis.odom->pose.h.load());
@@ -141,7 +170,19 @@ void menu_update() {
 
             break;
         }
+        case 333002: {
+            block_controls = false;
+            std::snprintf(ctrl_log[0], 15, "a_pos:%f       ", arm_pos.load());
+            std::snprintf(ctrl_log[1], 15, "a_t-pos:%f     ", arm_target_pos.load());
+            std::snprintf(ctrl_log[2], 15, "a_p-out:%f     ", arm_pid_output.load());
 
+            if (menu_back) {
+                menu_page = 333000;
+                pointer_index = 0;
+            }
+
+            break;
+        }
     }
 
     if (pros::millis() >= next_display_time) {
@@ -197,6 +238,7 @@ void init() {
     printf("%sstandard init complete\n", chisel::prefix().c_str());
 
     chassis.initialize();
+    chassis.enabled.store(true);
 
     printf("%sinit complete\n", chisel::prefix().c_str());
 }

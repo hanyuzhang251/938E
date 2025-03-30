@@ -68,7 +68,7 @@ inline int arm_macro_cycle_index = 0;
 inline pros::Motor arm(ARM_PORT);
 
 inline chisel::PIDSettings arm_pid_settings{
-    0.65, 0.05, 5, 100, 999, 999, 20, 250, 0
+    0.7, 0, 1, 999, 999, 999, 0, 999, 0
 };
 inline std::atomic<float> arm_pos(0);
 inline std::atomic<float> arm_target_pos(0);
@@ -154,7 +154,7 @@ inline chisel::PIDController lateral_pid_controller {
 
 inline chisel::Chassis chassis = {
     &drive_train, &lateral_drive_settings, &angular_drive_settings, &odom, &angular_pid_controller, &lateral_pid_controller,
-    true
+    false
 };
 
 inline void device_update() {

@@ -28,7 +28,7 @@ struct Chassis {
 
     void update();
 
-    Chassis(DriveTrain* drive_train, DriveSettings* lateral_drive_settings, DriveSettings* angular_drive_settings, Odom* odom, PIDController* angular_pid_controller, PIDController* lateral_pid_controller, bool enabled_ = true);
+    Chassis(DriveTrain* drive_train, DriveSettings* lateral_drive_settings, DriveSettings* angular_drive_settings, Odom* odom, PIDController* angular_pid_controller, PIDController* lateral_pid_controller, bool enabled_ = false);
 
     void initialize() const;
 
