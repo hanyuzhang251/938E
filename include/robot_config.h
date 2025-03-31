@@ -43,7 +43,7 @@ constexpr int32_t DT_BR_PORT = 5;
 
 constexpr int32_t INTAKE_PORT = -2;
 constexpr int32_t ARM_PORT = -9;
-constexpr int32_t MOGO_PORT = 21;
+constexpr int32_t MOGO_PORT = 1;
 constexpr int32_t DOINKER_PORT = 21;
 
 constexpr int32_t IMU_PORT = 21;
@@ -59,11 +59,14 @@ inline chisel::Command auton_intake_command = {0, 551};
 
 constexpr float ARM_SPEED = 240;
 
-constexpr float MAX_ARM_POS = 1800;
-constexpr float ARM_LOAD_POS = 250;
+constexpr float ARM_LOW_POS = 300;
+constexpr float MAX_ARM_POS = 1100;
+constexpr float ARM_LOAD_POS = 230;
 constexpr float ARM_SCORE_POS = 800;
 
 inline int arm_macro_cycle_index = 0;
+
+inline bool arm_clamp = true;
 
 inline pros::Motor arm(ARM_PORT);
 
@@ -81,8 +84,31 @@ inline chisel::PIDController arm_pid = {
     127,
     0,
     1000 * 60 * 20,
-    nullptr
+    [](const float target, const float value) {
+        const float error = target - value;
+
+        if (!arm_clamp || target > ARM_LOW_POS || value > ARM_LOW_POS || value < target) {
+            return error;
+        }
+
+        return error / (2 * (ARM_LOW_POS / value));
+    }
 };
+
+inline void reset_arm() {
+    (void)arm.set_brake_mode(pros::MotorBrake::coast);
+    (void)arm.tare_position();
+    arm_target_pos.store(0);
+
+    for (int i = 0; i < 500; ++i) {
+        (void)arm.move(0);
+        chisel::wait(1);
+    }
+
+    arm_target_pos.store(0);
+    (void)arm.tare_position();
+    (void)arm.set_brake_mode(pros::MotorBrake::hold);
+}
 
 inline pros::adi::DigitalOut mogo(MOGO_PORT);
 inline pros::adi::DigitalOut doinker(DOINKER_PORT);
@@ -94,8 +120,8 @@ inline chisel::DriveTrain drive_train(
     &left_motors,
     &right_motors,
     2.75f, // wheel diameter
-    15, // track width
-    450 // wheel rpm
+    9.5, // track width
+    3.0f/4.0f // ratio
 );
 
 inline chisel::DriveSettings lateral_drive_settings{
@@ -156,6 +182,13 @@ inline chisel::Chassis chassis = {
     &drive_train, &lateral_drive_settings, &angular_drive_settings, &odom, &angular_pid_controller, &lateral_pid_controller,
     false
 };
+
+inline void device_init() {
+    (void) left_motors.set_brake_mode_all(MOTOR_BRAKE_COAST);
+    (void) right_motors.set_brake_mode_all(MOTOR_BRAKE_COAST);
+
+    optical.set_integration_time(PROCESS_DELAY);
+}
 
 inline void device_update() {
     intake_itf.clean_commands();

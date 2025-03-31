@@ -15,9 +15,11 @@ struct DriveTrain {
     float track_width;
     float gear_ratio;
 
+    float magic_number;
+
     DriveTrain(
         pros::MotorGroup *left_motors, pros::MotorGroup *right_motors,
-        float wheel_size, float track_width, float gear_ratio
+        float wheel_diameter, float track_width, float gear_ratio
     );
 };
 
@@ -41,7 +43,7 @@ struct DriveSettings {
         int32_t min_out,
         std::function<int32_t(int32_t)> curve = [](const int32_t input) {return input;});
 
-    int32_t drive_calc_power(int32_t input) const;
+    [[nodiscard]] int32_t drive_calc_power(int32_t input) const;
 };
 
 }

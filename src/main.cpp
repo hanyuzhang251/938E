@@ -128,22 +128,92 @@ void menu_update() {
 
             break;
         }
+        case 409000: {
+            block_controls = true;
+            std::snprintf(ctrl_log[0], 15, "%carm...       ", pointer_index == 0 ? '>' : ' ');
+            std::snprintf(ctrl_log[1], 15, "               ");
+            std::snprintf(ctrl_log[2], 15, "               ");
+
+            if (pointer_index >= 1) pointer_index = 0;
+
+            if (menu_select) {
+                switch (pointer_index) {
+                    case 0: {
+                        menu_page = 409100;
+                        pointer_index = 0;
+                        break;
+                    }
+                }
+            }
+
+            if (menu_back) {
+                menu_page = 1;
+                pointer_index = 0;
+            }
+
+            break;
+        }
+        case 409100: {
+            block_controls = false;
+            std::snprintf(ctrl_log[0], 15, "%ca_clamp: %s   ", pointer_index == 0 ? '>' : ' ', arm_clamp ? "ON " : "OFF");
+            std::snprintf(ctrl_log[1], 15, "%c%c a_tare_pos ", pointer_index == 1 ? '>' : ' ', arm_pos.load() > -5 && arm_pos.load() < 5 ? 'O' : '@');
+            std::snprintf(ctrl_log[2], 15, "%c%c a_q-reset  ", pointer_index == 2 ? '>' : ' ', arm_pos.load() > -5 && arm_pos.load() < 5 ? 'O' : '@');
+
+            if (pointer_index >= 3) pointer_index = 2;
+
+            if (menu_select) {
+                switch (pointer_index) {
+                    case 0: {
+                        arm_clamp = !arm_clamp;
+                        break;
+                    }
+                    case 1: {
+                        pros::Task reset_arm_task([]{reset_arm();});
+                        pointer_index = 0;
+                        break;
+                    }
+                    case 2: {
+                        pros::Task([&]{
+                            const bool p_arm_clamp = arm_clamp;
+                            arm_clamp = false;
+
+                            arm_target_pos.fetch_add(-9999);
+
+                            while (arm.get_current_draw() < 2300) {
+                                chisel::wait(PROCESS_DELAY);
+                            }
+
+                            reset_arm();
+
+                            arm_clamp = p_arm_clamp;
+                        });
+                    }
+                }
+            }
+
+            if (menu_back) {
+                menu_page = 409000;
+                pointer_index = 0;
+            }
+
+            break;
+        }
         case 333000: {
             block_controls = true;
-            std::snprintf(ctrl_log[0], 15, "%cpos_track    ", pointer_index == 0 ? '>' : ' ');
-            std::snprintf(ctrl_log[1], 15, "%carm          ", pointer_index == 1 ? '>' : ' ');
+            std::snprintf(ctrl_log[0], 15, "%cpos_track... ", pointer_index == 0 ? '>' : ' ');
+            std::snprintf(ctrl_log[1], 15, "%carm...       ", pointer_index == 1 ? '>' : ' ');
 
             if (pointer_index >= 2) pointer_index = 1;
 
             if (menu_select) {
                 switch (pointer_index) {
                     case 0: {
-                        menu_page = 333001;
+                        menu_page = 333100;
                         pointer_index = 0;
                         break;
                     }
                     case 1: {
-                        menu_page = 333002;
+                        menu_page = 333200;
                         pointer_index = 0;
                         break;
                     }
@@ -157,24 +227,24 @@ void menu_update() {
 
             break;
         }
-        case 333001: {
+        case 333100: {
             block_controls = true;
-            std::snprintf(ctrl_log[0], 15, "x:%f           ", chassis.odom->pose.x.load());
-            std::snprintf(ctrl_log[1], 15, "y:%f           ", chassis.odom->pose.y.load());
-            std::snprintf(ctrl_log[2], 15, "h:%f           ", chassis.odom->pose.h.load());
+            std::snprintf(ctrl_log[0], 15, "x_pos:%f           ", chassis.odom->pose.x.load());
+            std::snprintf(ctrl_log[1], 15, "y_pos:%f           ", chassis.odom->pose.y.load());
+            std::snprintf(ctrl_log[2], 15, "head:%f           ", chassis.odom->pose.h.load());
 
             if (menu_back) {
-                menu_page = 2;
+                menu_page = 333000;
                 pointer_index = 0;
             }
 
             break;
         }
-        case 333002: {
+        case 333200: {
             block_controls = false;
             std::snprintf(ctrl_log[0], 15, "a_pos:%f       ", arm_pos.load());
             std::snprintf(ctrl_log[1], 15, "a_t-pos:%f     ", arm_target_pos.load());
-            std::snprintf(ctrl_log[2], 15, "a_p-out:%f     ", arm_pid_output.load());
+            std::snprintf(ctrl_log[2], 15, "a_wattage:%ld  ", arm.get_current_draw());
 
             if (menu_back) {
                 menu_page = 333000;
@@ -221,10 +291,7 @@ void init() {
 
     init_done = true;
 
-    (void) left_motors.set_brake_mode_all(MOTOR_BRAKE_COAST);
-    (void) right_motors.set_brake_mode_all(MOTOR_BRAKE_COAST);
-
-    optical.set_integration_time(PROCESS_DELAY);
+    device_init();
 
     pros::lcd::initialize();
     master.clear();
@@ -316,7 +383,8 @@ void opcontrol() {
                 arm_target_pos.store(arm_pos.load() - ARM_SPEED);
                 arm_macro_cycle_index = 0;
             }
-            arm_target_pos.store(chisel::clamp(arm_target_pos.load(), 0.0f, MAX_ARM_POS));
+            if (arm_clamp)
+                arm_target_pos.store(chisel::clamp(arm_target_pos.load(), 0.0f, MAX_ARM_POS));
 
             // mogo
             mogo_toggle.tick(master.get_digital(MOGO_TOGGLE_BUTTON));

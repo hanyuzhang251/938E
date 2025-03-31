@@ -1,5 +1,7 @@
 #include "chisel/chassis/chassis.h"
 
+#include "robot_config.h"
+
 namespace chisel {
 
 int Chassis::clean_commands() {
@@ -29,6 +31,9 @@ void Chassis::update_commands() const {
     if (state.load() == AUTON_STATE) {
         lateral_pid_controller->target.store(top_movement->controls.first);
         angular_pid_controller->target.store(top_movement->controls.second);
+
+        (void)drive_train->left_motors->move(lateral_pid_output.load() + angular_pid_output.load());
+        (void)drive_train->left_motors->move(lateral_pid_output.load() - angular_pid_output.load());
     }
 }
 
@@ -56,7 +61,7 @@ static void chassis_update(void* param) {
 
 Chassis::Chassis(DriveTrain* drive_train, DriveSettings *lateral_drive_settings, DriveSettings *angular_drive_settings, Odom* odom, chisel::PIDController* angular_pid_controller, PIDController* lateral_pid_controller, const bool enabled_):
     drive_train(drive_train), lateral_drive_settings(lateral_drive_settings), angular_drive_settings(angular_drive_settings), odom(odom), angular_pid_controller(angular_pid_controller), lateral_pid_controller(lateral_pid_controller), enabled(enabled_) {
-    auto update_task = pros::Task(chassis_update, this);
+    pros::Task(chassis_update, this);
 }
 
 void Chassis::initialize() const {
