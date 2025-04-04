@@ -23,8 +23,12 @@ float deg_err(const float current, const float target) {
     return diff - 180.0f;
 }
 
-float deg_to_point(Pose point) {
+float deg_to_point(const Pose& point) {
     return std::atan2(point.x, point.y) * 180 / M_PI;
+}
+
+float dist_to_point(const Pose& point) {
+    return std::sqrt(point.x * point.x + point.y * point.y);
 }
 
 

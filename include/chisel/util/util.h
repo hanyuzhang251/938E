@@ -54,7 +54,9 @@ float deg_norm(float degree);
 
 float deg_err(float current, float target);
 
-float deg_to_point(Pose point);
+float deg_to_point(const Pose& point);
+
+float dist_to_point(Pose point);
 
 std::string format_millis(uint32_t milliseconds);
 

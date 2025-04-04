@@ -68,6 +68,9 @@ public:
     void push_controls() override;
 
     std::pair<float, float> get_controls() override;
+
+private:
+    std::pair<float, float> pid_controls {0, 0};
 };
 
 } // namespace chisel
