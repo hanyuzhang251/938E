@@ -48,10 +48,14 @@ Odom::Odom(
     TrackingWheel* tracking_wheel_list_ptr,
     const int tracking_wheel_count,
     const int MaxImuInitAttempts
-): pose(pose), pose_offset(pose_offset), imu(imu), drive_train(drive_train), MaxImuResetAttempts(MaxImuInitAttempts) {
+):  pose(pose),
+    pose_offset(pose_offset),
+    imu(imu),
+    drive_train(drive_train),
+    MaxImuResetAttempts(MaxImuInitAttempts)
+{
     tracking_wheel_list.reserve(tracking_wheel_count);
-    tracking_wheel_list.insert(tracking_wheel_list.end(),
-        tracking_wheel_list_ptr, tracking_wheel_list_ptr + tracking_wheel_count);
+    tracking_wheel_list.insert(tracking_wheel_list.end(), tracking_wheel_list_ptr, tracking_wheel_list_ptr + tracking_wheel_count);
 
     printf("%screate new Odom: ime=%s odom=%s\n", prefix().c_str(), (drive_train) ? "yes" : "no", ((tracking_wheel_count > 0) ? std::to_string(tracking_wheel_count) : "no").c_str());
 }
