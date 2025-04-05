@@ -60,7 +60,7 @@ inline chisel::Command auton_intake_command = {0, 551};
 constexpr float ARM_SPEED = 240;
 
 constexpr float ARM_LOW_POS = 300;
-constexpr float MAX_ARM_POS = 1100;
+constexpr float MAX_ARM_POS = 1550;
 constexpr float ARM_LOAD_POS = 230;
 constexpr float ARM_SCORE_POS = 800;
 
@@ -71,7 +71,7 @@ inline bool arm_clamp = true;
 inline pros::Motor arm(ARM_PORT);
 
 inline chisel::PIDSetting arm_pid_settings{
-    0.7, 0, 1, 999, 999, 999, 0, 999, 0
+    0.7, 0, 1, 0, 999, 999, 999, 0, 999
 };
 inline std::atomic<float> arm_pos(0);
 inline std::atomic<float> arm_target_pos(0);
@@ -81,8 +81,8 @@ inline chisel::PIDController arm_pid = {
     arm_target_pos,
     arm_pid_output,
     arm_pid_settings,
-    127,
     0,
+    127,
     1000 * 60 * 20,
     [](const float target, const float value) {
         const float error = target - value;
@@ -145,7 +145,7 @@ inline chisel::Odom odom{
 };
 
 inline chisel::PIDSetting angular_pid_settings{
-    10, 0, 0, 0, 0, 999, 0, 0, 0
+    10, 0, 0, 0, 0, 0, 999, 0, 0
 };
 inline std::atomic<float> target_heading (0);
 inline std::atomic<float> angular_pid_output (0);

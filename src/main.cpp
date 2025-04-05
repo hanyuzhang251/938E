@@ -395,6 +395,6 @@ void opcontrol() {
             (void) doinker.set_value(doinker_toggle.value);
         }
 
-        chisel::wait(PROCESS_DELAY);
+        wait(PROCESS_DELAY);
     }
 }
