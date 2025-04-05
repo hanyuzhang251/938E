@@ -50,6 +50,13 @@ template <typename T> T clamp(T value, T min, T max) {
     return value;
 }
 
+template <typename T> T abs_clamp(T value, T min, T max) {
+    const T abs_val = clamp(std::abs(value), min, max);
+
+    return abs_val * sgn(value);
+}
+
+
 float deg_norm(float degree);
 
 float deg_err(float current, float target);

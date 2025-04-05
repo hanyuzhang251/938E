@@ -5,13 +5,13 @@
 namespace chisel {
 
 int Chassis::clean_commands() {
-    if (command_queue.empty()) return 0;
+    if (motion_queue.empty()) return 0;
 
     int clear_count = 0;
 
-    while (!command_queue.empty()) {
-        if (const auto top_comand = command_queue.front(); top_comand->life <= 0) {
-            command_queue.pop();
+    while (!motion_queue.empty()) {
+        if (const auto top_comand = motion_queue.front(); top_comand->life <= 0) {
+            motion_queue.pop();
             ++clear_count;
         } else {
             break;
@@ -20,20 +20,26 @@ int Chassis::clean_commands() {
     return clear_count;
 }
 
-void Chassis::update_commands() const {
-    if (command_queue.empty()) return;
+void Chassis::update_motions() const {
+    if (motion_queue.empty()) return;
 
-    const auto top_movement = command_queue.front();
+    const auto top_motion = motion_queue.front();
 
-    top_movement->update();
-    top_movement->push_controls();
+    top_motion->update();
+    top_motion->push_controls();
 
     if (state.load() == AUTON_STATE) {
-        lateral_pid_controller->target.store(top_movement->controls.first);
-        angular_pid_controller->target.store(top_movement->controls.second);
+        lateral_pid_controller->target.store(top_motion->controls.first);
+        angular_pid_controller->target.store(top_motion->controls.second);
 
-        (void)drive_train->left_motors->move(lateral_pid_output.load() + angular_pid_output.load());
-        (void)drive_train->left_motors->move(lateral_pid_output.load() - angular_pid_output.load());
+        float left_power = lateral_pid_output.load() + angular_pid_output.load();
+        float right_power = lateral_pid_output.load() - angular_pid_output.load();
+
+        left_power = abs_clamp(left_power, top_motion->min_speed, top_motion->max_speed);
+        right_power = abs_clamp(right_power, top_motion->min_speed, top_motion->max_speed);
+
+        (void)drive_train->left_motors->move(left_power);
+        (void)drive_train->left_motors->move(right_power);
     }
 }
 
@@ -45,7 +51,7 @@ void Chassis::update() {
     odom->load_pose();
 
     clean_commands();
-    update_commands();
+    update_motions();
 }
 
 static void chassis_update(void* param) {

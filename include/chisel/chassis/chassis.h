@@ -22,7 +22,7 @@ struct Chassis {
     PIDController *angular_pid_controller;
     PIDController *lateral_pid_controller;
 
-    std::queue<Movement*> command_queue;
+    std::queue<Motion*> motion_queue;
 
     std::atomic<bool> enabled;
 
@@ -35,7 +35,7 @@ struct Chassis {
 private:
     int clean_commands();
 
-    void update_commands() const;
+    void update_motions() const;
 };
 
 } // namespace chisel
