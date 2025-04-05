@@ -10,7 +10,5 @@
 #include "pid.h"
 
 namespace chisel {
-    
-
 
 }

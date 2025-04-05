@@ -70,7 +70,7 @@ inline bool arm_clamp = true;
 
 inline pros::Motor arm(ARM_PORT);
 
-inline chisel::PIDSettings arm_pid_settings{
+inline chisel::PIDSetting arm_pid_settings{
     0.7, 0, 1, 999, 999, 999, 0, 999, 0
 };
 inline std::atomic<float> arm_pos(0);
@@ -144,7 +144,7 @@ inline chisel::Odom odom{
     0
 };
 
-inline chisel::PIDSettings angular_pid_settings{
+inline chisel::PIDSetting angular_pid_settings{
     10, 0, 0, 0, 0, 999, 0, 0, 0
 };
 inline std::atomic<float> target_heading (0);
@@ -160,7 +160,7 @@ inline chisel::PIDController angular_pid_controller {
     chisel::deg_err
 };
 
-inline chisel::PIDSettings lateral_pid_settings{
+inline chisel::PIDSetting lateral_pid_settings{
     10, 0, 0, 0, 0, 999, 0, 0, 0
 };
 inline std::atomic<float> prev_dist (0);
@@ -196,6 +196,6 @@ inline void device_update() {
     intake_itf.push_update();
 
     arm_pos.store(arm.get_position());
-    chisel::pid_handle_process(arm_pid);
+    pid_handle_process(arm_pid);
     (void)arm.move(arm_pid_output.load());
 }
