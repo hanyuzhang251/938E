@@ -52,13 +52,15 @@ void TurnToPoint::push_controls() {
     controls.second = angular_pid_control;
 }
 
-MoveToPoint::MoveToPoint(Pose* pose, const Pose& target_point, const uint32_t life, const bool async)
-    : Motion(pose, life, async), target_point(target_point) {}
+MoveToPoint::MoveToPoint(Pose* pose, const Pose& target_point, const uint32_t life, const bool async, const bool reversed)
+    : Motion(pose, life, async), target_point(target_point), reversed(reversed) {}
 
 void MoveToPoint::update() {
     const Pose relative_target = Pose::sub(target_point, *curr_pose);
 
-    const float target_heading = deg_to_point(relative_target);
+    float target_heading = deg_to_point(relative_target);
+    if (reversed) target_heading = deg_norm(target_heading - 180);
+
     const float dist_to_travel = dist_to_point(relative_target);
 
     const float heading_proximity = 1 - std::abs(deg_err(curr_pose->h, target_heading)) / 90;

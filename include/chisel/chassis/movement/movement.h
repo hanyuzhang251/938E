@@ -81,7 +81,9 @@ class MoveToPoint final : public Motion {
 public:
     Pose target_point;
 
-    MoveToPoint(Pose* pose, const Pose& target_point, uint32_t life = 5000, bool async = false);
+    bool reversed;
+
+    MoveToPoint(Pose* pose, const Pose& target_point, uint32_t life = 5000, bool async = false, bool reversed = false);
 
     void update() override;
 
