@@ -55,7 +55,11 @@ std::string prefix() {
 Toggle::Toggle(const bool value_) : value(value_), ptrigger(false) {}
 
 void Toggle::tick(const bool trigger) {
+    // If we are now pressing the button and we just started pressing the button (button wasn't pressed before),
+    // toggle the value.
     if (trigger && !ptrigger) value = !value;
+
+    // Update previous trigger.
     ptrigger = trigger;
 }
 

@@ -193,7 +193,7 @@ inline void device_init() {
 inline void device_update() {
     intake_itf.clean_commands();
     intake_itf.update();
-    intake_itf.push_update();
+    intake_itf.push_control();
 
     arm_pos.store(arm.get_position());
     pid_handle_process(arm_pid);
