@@ -85,9 +85,26 @@ namespace chisel {
         void update();
 
         /**
-         * @brief Moves the motor to the power (terrible wording).
+         * @brief Moves the motor to the power.
          */
         void push_control() const;
+
+        void update_command_priority(Command* cmd, const int32_t new_priority) {
+            // Remove all commands and re-insert them (inefficient but works for small queues)
+            std::vector<Command*> temp;
+            while (!command_queue.empty()) {
+                Command* top = command_queue.top();
+                command_queue.pop();
+                if (top == cmd) {
+                    cmd->priority = new_priority;
+                }
+                temp.push_back(top);
+            }
+            for (Command* c : temp) {
+                command_queue.push(c);
+            }
+        }
+
     };
 
 } // namespace chisel

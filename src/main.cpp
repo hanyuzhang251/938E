@@ -6,7 +6,69 @@
 pros::Controller master(pros::E_CONTROLLER_MASTER);
 
 bool alliance = true; // true = red, false = blue
-bool color_sort_enabled = false;
+bool color_sort_enabled = true;
+
+bool red_ring_seen = false;
+bool blue_ring_seen = false;
+
+uint32_t last_outtake = 0;
+
+void queue_outtake() {
+    wait(200);
+
+    color_sort_command.power = -30;
+    intake_itf.update_command_priority(&color_sort_command, 999);
+
+    intake_itf.clean_commands();
+    intake_itf.update();
+    intake_itf.push_control();
+
+    wait(150);
+
+    intake_itf.update_command_priority(&color_sort_command, 0);
+
+    // color_sort_command.priority = 0;
+}
+
+void color_sort_update() {
+    blue_ring_seen = false;
+    red_ring_seen = false;
+
+    if (!color_sort_enabled) return;
+
+    const double r_hue_min = std::fmod(RED_RING_HUE - RING_HUE_TOLOERANCE + 360, 360.0f);
+    const double r_hue_max = std::fmod(RED_RING_HUE + RING_HUE_TOLOERANCE, 360.0f);
+    const double b_hue_min = std::fmod(BLUE_RING_HUE - RING_HUE_TOLOERANCE + 360, 360.0f);
+    const double b_hue_max = std::fmod(BLUE_RING_HUE + RING_HUE_TOLOERANCE, 360.0f);
+
+    bool b_ring = false;
+
+    if (b_hue_min <= b_hue_max) {
+        // if it's normal, just check the ranges
+        b_ring = b_hue_min <= optical.get_hue() && optical.get_hue() <= b_hue_max;
+    } else if (b_hue_min >= b_hue_max) {
+        // if the range goes around 0, say hue min is 330 while hue_max is 30,
+        // 0 and 360 are used as bounds.
+        b_ring = optical.get_hue() <= b_hue_max || optical.get_hue() >= b_hue_min;
+    }
+    if (b_ring) blue_ring_seen = true;
+
+    bool r_ring = false;
+    if (r_hue_min <= r_hue_max) {
+        // if it's normal, just check the ranges
+        r_ring = r_hue_min <= optical.get_hue() && optical.get_hue() <= r_hue_max;
+    } else if (r_hue_min >= r_hue_max) {
+        // if the range goes around 0, say hue min is 330 while hue_max is 30,
+        // 0 and 360 are used as bounds.
+        r_ring = optical.get_hue() <= r_hue_max || optical.get_hue() >= r_hue_min;
+    }
+    if (r_ring) red_ring_seen = true;
+
+    if (pros::millis() - last_outtake >= COLOR_SORT_COOLDOWN && (alliance && b_ring || !alliance && r_ring)) {
+        pros::Task([]{queue_outtake();});
+        last_outtake = pros::millis();
+    }
+}
 
 bool block_movement = false;
 bool block_controls = false;
@@ -202,8 +264,9 @@ void menu_update() {
             block_controls = true;
             std::snprintf(ctrl_log[0], 15, "%cpos_track... ", pointer_index == 0 ? '>' : ' ');
             std::snprintf(ctrl_log[1], 15, "%carm...       ", pointer_index == 1 ? '>' : ' ');
+            std::snprintf(ctrl_log[2], 15, "%coptical...   ", pointer_index == 2 ? '>' : ' ');
 
-            if (pointer_index >= 2) pointer_index = 1;
+            if (pointer_index >= 3) pointer_index = 2;
 
             if (menu_select) {
                 switch (pointer_index) {
@@ -214,6 +277,11 @@ void menu_update() {
                     }
                     case 1: {
                         menu_page = 333200;
+                        pointer_index = 0;
+                        break;
+                    }
+                    case 2: {
+                        menu_page = 333300;
                         pointer_index = 0;
                         break;
                     }
@@ -229,9 +297,9 @@ void menu_update() {
         }
         case 333100: {
             block_controls = true;
-            std::snprintf(ctrl_log[0], 15, "x_pos:%f           ", chassis.odom->pose.x.load());
-            std::snprintf(ctrl_log[1], 15, "y_pos:%f           ", chassis.odom->pose.y.load());
-            std::snprintf(ctrl_log[2], 15, "head:%f           ", chassis.odom->pose.h.load());
+            std::snprintf(ctrl_log[0], 15, "x_pos:%f       ", chassis.odom->pose.x.load());
+            std::snprintf(ctrl_log[1], 15, "y_pos:%f       ", chassis.odom->pose.y.load());
+            std::snprintf(ctrl_log[2], 15, "head:%f        ", chassis.odom->pose.h.load());
 
             if (menu_back) {
                 menu_page = 333000;
@@ -242,9 +310,30 @@ void menu_update() {
         }
         case 333200: {
             block_controls = false;
-            std::snprintf(ctrl_log[0], 15, "a_pos:%f       ", arm_pos.load());
-            std::snprintf(ctrl_log[1], 15, "a_t-pos:%f     ", arm_target_pos.load());
-            std::snprintf(ctrl_log[2], 15, "a_wattage:%ld  ", arm.get_current_draw());
+            std::snprintf(ctrl_log[0], 15, "pos:%f         ", arm_pos.load());
+            std::snprintf(ctrl_log[1], 15, "t_pos:%f       ", arm_target_pos.load());
+            std::snprintf(ctrl_log[2], 15, "c_draw:%ld     ", arm.get_current_draw());
+
+            if (menu_back) {
+                menu_page = 333000;
+                pointer_index = 0;
+            }
+
+            break;
+        }
+        case 333300: {
+            block_controls = false;
+            if (pointer_index == 0) {
+                std::snprintf(ctrl_log[0], 15, "hue:%d         ", static_cast<int>(std::round(optical.get_hue())));
+                std::snprintf(ctrl_log[1], 15, "dist:%ld       ", optical.get_proximity());
+                std::snprintf(ctrl_log[2], 15, "int-time:%f    ", optical.get_integration_time());
+            } else if (pointer_index == 1) {
+                std::snprintf(ctrl_log[0], 15, "r-seen:%s      ", red_ring_seen ? "YES" : "NO ");
+                std::snprintf(ctrl_log[1], 15, "b-seen:%s      ", blue_ring_seen ? "YES" : "NO ");
+                std::snprintf(ctrl_log[2], 15, "               ");
+            }
+
+            if (pointer_index >= 2) pointer_index = 1;
 
             if (menu_back) {
                 menu_page = 333000;
@@ -271,11 +360,13 @@ void async_update([[maybe_unused]] void *param) {
     printf("%sasync update task started\n", chisel::prefix().c_str());
 
     while (true) {
+        color_sort_update();
+
         device_update();
 
         menu_update();
 
-        chisel::wait(PROCESS_DELAY);
+        wait(PROCESS_DELAY);
     }
 }
 
@@ -322,6 +413,18 @@ void competition_initialize() {
 
 void autonomous() {
     printf("%sauton start\n", chisel::prefix().c_str());
+
+    chassis.state = AUTON_STATE;
+
+    target_dist.fetch_add(12);
+
+    wait(3000);
+
+    target_dist.fetch_sub(12);
+
+    wait(3000);
+
+
 }
 
 void opcontrol() {

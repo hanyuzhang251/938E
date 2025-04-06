@@ -1,7 +1,8 @@
 #include "odom.h"
 
-#include <vector>
+#include "robot_config.h"
 #include <string>
+#include <vector>
 
 namespace chisel {
 
@@ -105,6 +106,8 @@ void Odom::predict_with_ime() {
 
     float dist = ((left_pos - prev_left_pos) + (right_pos - prev_right_pos)) / 2;
     dist *= drive_train->magic_number;
+
+    current_dist.fetch_add(dist);
 
     auto [ipos_x, ipos_y, ipos_h] = ime_estimate();
 

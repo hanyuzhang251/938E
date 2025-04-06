@@ -8,7 +8,8 @@ DriveTrain::DriveTrain(
 ):  
     left_motors(left_motors), right_motors(right_motors),
     wheel_size(wheel_diameter), track_width(track_width), gear_ratio(gear_ratio) {
-        magic_number = gear_ratio / 360 * M_PI * wheel_diameter;
+        // Multiply by 1.2f here cause the tracking is off. Why? idfk
+        magic_number = gear_ratio / 360 * M_PI * wheel_diameter * 1.2f;
 
         printf("%screate new DriveTrain: ", prefix().c_str());
 

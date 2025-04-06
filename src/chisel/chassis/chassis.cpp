@@ -21,19 +21,39 @@ int Chassis::clean_commands() {
 }
 
 void Chassis::update_motions() const {
-    if (motion_queue.empty()) return;
+    printf("\nUPDATE MOTIONS CALLED\n");
+
+    if (motion_queue.empty()) {
+        printf("\tno motions available, returning\n");
+        return;
+    }
 
     const auto top_motion = motion_queue.front();
+    top_motion->life--;
+
+    printf("\ttop motion life=%ld\n", top_motion->life);
+
+    printf("\ttop motion pose=(%f, %f, %f)\n", top_motion->curr_pose->x.load(), top_motion->curr_pose->y.load(), top_motion->curr_pose->h.load());
 
     top_motion->update();
     top_motion->push_controls();
 
+    printf("\ttop motion raw controls: lat=%f, ang=%f\n", top_motion->get_controls().first, top_motion->get_controls().second);
+
     if (state.load() == AUTON_STATE) {
         lateral_pid_controller->target.store(top_motion->controls.first);
-        angular_pid_controller->target.store(top_motion->controls.second);
+
+        printf("\tUPDATING LATERAL PID...\n");
+        pid_handle_process(*lateral_pid_controller);
+        printf("\tUPDATING ANGULAR PID...\n");
+        pid_handle_process(*angular_pid_controller);
+
+        printf("\tlat-o=%f, ang-o=%f\n", lateral_pid_controller->output.load(), angular_pid_controller->output.load());
 
         float left_power = lateral_pid_output.load() + angular_pid_output.load();
         float right_power = lateral_pid_output.load() - angular_pid_output.load();
+
+        printf("\tleft-p=%f, right-p=%f\n", left_power, right_power);
 
         left_power = abs_clamp(left_power, top_motion->min_speed, top_motion->max_speed);
         right_power = abs_clamp(right_power, top_motion->min_speed, top_motion->max_speed);
@@ -44,7 +64,6 @@ void Chassis::update_motions() const {
 }
 
 void Chassis::update() {
-    printf("%sCHASSIS UPDATE CALLED\n", prefix().c_str());
     odom->predict_with_ime();
     // don't consider odom cause we don't have it yet
     odom->push_prediction(true, false);
@@ -58,7 +77,6 @@ static void chassis_update(void* param) {
     auto *chassis = static_cast<Chassis*>(param);
     while(true) {
         if (chassis->enabled.load()) {
-            printf("%sCHASSIS ENABLED (%d), CALLING CHASSIS UPDATE\n", prefix().c_str(), chassis->enabled.load());
             chassis->update();
         }
         wait(PROCESS_DELAY);
