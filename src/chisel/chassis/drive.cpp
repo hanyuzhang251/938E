@@ -4,10 +4,13 @@ namespace chisel {
 
 DriveTrain::DriveTrain(
     pros::MotorGroup *left_motors, pros::MotorGroup *right_motors,
-    const float wheel_size, const float track_width, const float gear_ratio
+    const float wheel_diameter, const float track_width, const float gear_ratio
 ):  
     left_motors(left_motors), right_motors(right_motors),
-    wheel_size(wheel_size), track_width(track_width), gear_ratio(gear_ratio) {
+    wheel_size(wheel_diameter), track_width(track_width), gear_ratio(gear_ratio) {
+        // Multiply by 1.2f here cause the tracking is off. Why? idfk
+        magic_number = gear_ratio / 360 * M_PI * wheel_diameter * 1.2f;
+
         printf("%screate new DriveTrain: ", prefix().c_str());
 
         printf("ld(");
@@ -22,7 +25,7 @@ DriveTrain::DriveTrain(
         }
         printf("\b\b) ");
 
-        printf("track_width=%f, wheel_size=%f, gearing=%f\n", track_width, wheel_size, gear_ratio);
+        printf("track_width=%f, wheel_diameter=%f, gearing=%f, m-num=%f\n", track_width, wheel_diameter, gear_ratio, magic_number);
     };
 
 DriveSettings::DriveSettings(const int32_t deadband, const int32_t min_out, std::function<int32_t(int32_t)> curve)
@@ -31,11 +34,11 @@ DriveSettings::DriveSettings(const int32_t deadband, const int32_t min_out, std:
     }
 
 int32_t DriveSettings::drive_calc_power(const int32_t input) const {
-    if (input < deadband) return 0;
+    if (abs(input) < deadband) return 0;
 
     const int32_t output = curve(input);
 
-    if (std::abs(min_out) > std::abs(output)) {
+    if (min_out > std::abs(output)) {
         return sgn(output) * min_out;
     }
 
