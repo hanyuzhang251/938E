@@ -61,7 +61,8 @@ void MoveToPoint::update() {
     float target_heading = deg_to_point(relative_target);
     if (reversed) target_heading = deg_norm(target_heading - 180);
 
-    const float dist_to_travel = dist_to_point(relative_target);
+    float dist_to_travel = dist_to_point(relative_target);
+    if (reversed) dist_to_travel *= -1;
 
     const float heading_proximity = 1 - std::abs(deg_err(curr_pose->h, target_heading)) / 90;
 
