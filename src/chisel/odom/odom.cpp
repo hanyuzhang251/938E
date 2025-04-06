@@ -48,16 +48,22 @@ Odom::Odom(
     TrackingWheel* tracking_wheel_list_ptr,
     const int tracking_wheel_count,
     const int MaxImuInitAttempts
-): pose(pose), pose_offset(pose_offset), imu(imu), drive_train(drive_train), MaxImuResetAttempts(MaxImuInitAttempts) {
+):  pose(pose),
+    pose_offset(pose_offset),
+    imu(imu),
+    drive_train(drive_train),
+    MaxImuResetAttempts(MaxImuInitAttempts)
+{
     tracking_wheel_list.reserve(tracking_wheel_count);
-    tracking_wheel_list.insert(tracking_wheel_list.end(),
-        tracking_wheel_list_ptr, tracking_wheel_list_ptr + tracking_wheel_count);
+    tracking_wheel_list.insert(tracking_wheel_list.end(), tracking_wheel_list_ptr, tracking_wheel_list_ptr + tracking_wheel_count);
 
-    printf("%screate new Odom: ime=%s odom=%s\n", prefix().c_str(), (!drive_train) ? "yes" : "no", ((tracking_wheel_count > 0) ? std::to_string(tracking_wheel_count) : "no").c_str());
+    printf("%screate new Odom: ime=%s odom=%s\n", prefix().c_str(), (drive_train) ? "yes" : "no", ((tracking_wheel_count > 0) ? std::to_string(tracking_wheel_count) : "no").c_str());
 }
 
 int32_t Odom::initialize_imu() {
-    if (!imu) {
+
+    if (!imu || !imu->is_installed()) {
+        imu = nullptr;
         printf("%snot using imu; skipping imu initialization\n", prefix().c_str());
         return 0;
     }
@@ -83,29 +89,40 @@ int32_t Odom::initialize_imu() {
 }
 
 void Odom::initialize() {
-    printf("%sinitializing Odom\n", prefix().c_str());
+    printf("%sinitializing odom\n", prefix().c_str());
 
     if (initialize_imu() == -1) {
         imu = nullptr;
     }
 
-    printf("%sOdom initialization complete\n", prefix().c_str());
+    printf("%sodom initialization complete\n", prefix().c_str());
 }
 
 
 void Odom::predict_with_ime() {
-    const double left_pos = drive_train->left_motors->get_position();
-    const double right_pos = drive_train->right_motors->get_position();
+    const float left_pos = drive_train->left_motors->get_position();
+    const float right_pos = drive_train->right_motors->get_position();
 
-    const double dist = ((left_pos - prev_left_pos) + (right_pos - prev_right_pos)) / 2;
+    float dist = ((left_pos - prev_left_pos) + (right_pos - prev_right_pos)) / 2;
+    dist *= drive_train->magic_number;
 
     auto [ipos_x, ipos_y, ipos_h] = ime_estimate();
 
-    const double h_rads = ipos_h * M_PI / 180;
+    const float h_rads = ipos_h.load() * M_PI / 180;
     ipos_x.fetch_add(std::cos(h_rads) * dist);
     ipos_y.fetch_add(std::sin(h_rads) * dist);
 
-    ipos_h.store(imu->get_heading());
+    if (imu) {
+        ipos_h.store(imu->get_heading());
+    } else {
+        const float left_change = left_pos - prev_left_pos;
+        const float right_change = right_pos - prev_right_pos;
+
+        ipos_h.fetch_add((left_change - right_change) / drive_train->track_width);
+    }
+
+    prev_left_pos = left_pos;
+    prev_right_pos = right_pos;
 }
 
 void Odom::push_prediction(bool consider_ime, bool consider_odom) {

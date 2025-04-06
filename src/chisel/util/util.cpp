@@ -23,8 +23,12 @@ float deg_err(const float current, const float target) {
     return diff - 180.0f;
 }
 
-float deg_to_point(Pose point) {
+float deg_to_point(const Pose& point) {
     return std::atan2(point.x, point.y) * 180 / M_PI;
+}
+
+float dist_to_point(const Pose& point) {
+    return std::sqrt(point.x * point.x + point.y * point.y);
 }
 
 
@@ -51,7 +55,11 @@ std::string prefix() {
 Toggle::Toggle(const bool value_) : value(value_), ptrigger(false) {}
 
 void Toggle::tick(const bool trigger) {
+    // If we are now pressing the button and we just started pressing the button (button wasn't pressed before),
+    // toggle the value.
     if (trigger && !ptrigger) value = !value;
+
+    // Update previous trigger.
     ptrigger = trigger;
 }
 
