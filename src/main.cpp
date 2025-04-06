@@ -17,17 +17,11 @@ void queue_outtake() {
     wait(200);
 
     color_sort_command.power = -30;
-    intake_itf.update_command_priority(&color_sort_command, 999);
-
-    intake_itf.clean_commands();
-    intake_itf.update();
-    intake_itf.push_control();
+    color_sort_command.priority = 999;
 
     wait(150);
 
-    intake_itf.update_command_priority(&color_sort_command, 0);
-
-    // color_sort_command.priority = 0;
+    color_sort_command.priority = 0;
 }
 
 void color_sort_update() {

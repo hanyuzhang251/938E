@@ -2,12 +2,10 @@
 
 #include "main.h"
 
-#include <queue>
 #include <vector>
 #include "chisel/config.h"
 
 namespace chisel {
-
     /**
      * @brief Stores the power, priority, and life of the command.
      */
@@ -38,73 +36,41 @@ namespace chisel {
     };
 
     /**
-     * @brief Uses a priority queue to allow motor controls based on priority of command.
-     *
-     * Brief could be much better, but I find it difficult to word it in a better way.
-     * Uses a priority queue of commands sorted by their priority, and moves the motor to the power.
+     * @brief Interface for managing motor control using a prioritized command system.
      */
     struct MotorItf {
-        pros::Motor* motor;
+        pros::Motor *motor;
 
         int32_t final_power = 0;
 
-        /**
-         * @brief Sorts commands by their priority.
-         */
-        struct compare_command {
-            bool operator()(const Command* a, const Command* b) const {
-                return a->priority < b->priority;
-            }
-        };
-
-        std::priority_queue<Command*, std::vector<Command*>, compare_command> command_queue;
+        std::vector<Command *> command_list;
+        Command* top_command = nullptr;
 
         /**
          * @brief MotorItf constructor.
          *
          * @param motor Pointer to the motor to control.
          */
-        explicit MotorItf(pros::Motor* motor);
+        explicit MotorItf(pros::Motor *motor);
 
         /**
-         * @param command Pointer to the command to be emplaced to the priority queue.
+         * @param command Pointer to the command to be added.
          */
-        void assign_command(Command* command);
-
+        void assign_command(Command *command);
 
         /**
-         * @brief Cleans the priority queue by removing commands that have died (life <= 0)
-         *
-         * @return The number of commands cleaned. Will often be zero.
+         * @brief Cleans the comand list by removing commands with life <= 0
          */
-        int clean_commands();
+        void clean_commands();
 
         /**
-         * @brief Gets the motor power from the top command. Also removes a tick of life from it.
+         * @brief Finds the top command and sets the final power. Also decrements life for allcommands.
          */
         void update();
 
         /**
-         * @brief Moves the motor to the power.
+         * @brief Sets the motor power to the final power.
          */
         void push_control() const;
-
-        void update_command_priority(Command* cmd, const int32_t new_priority) {
-            // Remove all commands and re-insert them (inefficient but works for small queues)
-            std::vector<Command*> temp;
-            while (!command_queue.empty()) {
-                Command* top = command_queue.top();
-                command_queue.pop();
-                if (top == cmd) {
-                    cmd->priority = new_priority;
-                }
-                temp.push_back(top);
-            }
-            for (Command* c : temp) {
-                command_queue.push(c);
-            }
-        }
-
     };
-
 } // namespace chisel
