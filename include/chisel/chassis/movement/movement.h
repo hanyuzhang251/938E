@@ -35,8 +35,6 @@ public:
 
     void push_controls() override;
 
-    std::pair<float, float> get_controls() override;
-
 private:
     float angular_pid_control = 0;
 };
