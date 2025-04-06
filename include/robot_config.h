@@ -56,7 +56,7 @@ inline pros::Motor intake(INTAKE_PORT);
 inline auto intake_itf = chisel::MotorItf(&intake);
 inline chisel::Command driver_intake_command = {0, 326};
 inline chisel::Command auton_intake_command = {0, 551};
-inline chisel::Command color_sort_command = {0, 0, 999999999};
+inline chisel::Command color_sort_command = {0, 0};
 
 constexpr double BLUE_RING_HUE = 215;
 constexpr double RED_RING_HUE = 5;
