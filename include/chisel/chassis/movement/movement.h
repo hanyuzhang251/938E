@@ -5,54 +5,94 @@
 
 namespace chisel {
 
-class Movement {
-public:
-    Pose* curr_pose;
+    struct ExitCondition {
+        float range;
+        uint32_t time;
 
-    uint32_t life;
-    bool async;
+        ExitCondition(float range, uint32_t time);
 
-    std::pair<float, float> controls;
+        [[nodiscard]] bool get_exit() const;
 
-    Movement(Pose* pose, uint32_t life, bool async);
+        void update(float error);
 
-    virtual void update() = 0;
+        void reset();
 
-    virtual void push_controls() = 0;
+    private:
+        uint32_t start_time = UINT32_MAX;
+        bool exit = false;
+    };
 
-    virtual std::pair<float, float> get_controls();
+    class Motion {
+    public:
+        Pose* curr_pose;
 
-    virtual ~Movement() = default;
-};
+        uint32_t life;
+        bool async;
 
-class TurnToHeading final : public Movement {
-public:
-    float target_heading;
+        float min_speed;
+        float max_speed;
 
-    TurnToHeading(Pose* pose, float target_heading, uint32_t life = 3000, bool async = false);
+        std::pair<float, float> controls;
 
-    void update() override;
+        Motion(Pose* pose, uint32_t life, bool async, float min_speed = 0, float max_speed = 127);
 
-    void push_controls() override;
+        virtual void update() = 0;
 
-private:
-    float angular_pid_control = 0;
-};
+        virtual void push_controls() = 0;
 
-class TurnToPoint final : public Movement {
-public:
-    Pose target_point;
+        virtual std::pair<float, float> get_controls();
 
-    TurnToPoint(Pose* pose, const Pose& target_point, uint32_t life = 3000, bool async = false);
+        virtual ~Motion() = default;
+    };
 
-    void update() override;
+    class TurnToHeading final : public Motion {
+    public:
+        float target_heading;
 
-    void push_controls() override;
+        TurnToHeading(Pose* pose, float target_heading, uint32_t life = 3000, bool async = false);
 
-    std::pair<float, float> get_controls() override;
+        void update() override;
 
-private:
-    float angular_pid_control = 0;
-};
+        void push_controls() override;
+
+        std::pair<float, float> get_controls() override;
+
+    private:
+        float angular_pid_control = 0;
+    };
+
+    class TurnToPoint final : public Motion {
+    public:
+        Pose target_point;
+
+        TurnToPoint(Pose* pose, const Pose& target_point, uint32_t life = 3000, bool async = false);
+
+        void update() override;
+
+        void push_controls() override;
+
+        std::pair<float, float> get_controls() override;
+
+    private:
+        float angular_pid_control = 0;
+    };
+
+    class MoveToPoint final : public Motion {
+    public:
+        Pose target_point;
+
+        bool reversed;
+
+        MoveToPoint(Pose* pose, const Pose& target_point, uint32_t life = 5000, bool async = false, bool reversed = false);
+
+        void update() override;
+
+        void push_controls() override;
+
+        std::pair<float, float> get_controls() override;
+
+    private:
+        std::pair<float, float> pid_controls {0, 0};
+    };
 
 } // namespace chisel

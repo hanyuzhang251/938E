@@ -15,6 +15,8 @@ struct DriveTrain {
     float track_width;
     float gear_ratio;
 
+    float magic_number;
+
     DriveTrain(
         pros::MotorGroup *left_motors, pros::MotorGroup *right_motors,
         float wheel_size, float track_width, float gear_ratio

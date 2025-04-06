@@ -7,6 +7,7 @@
 #include "chassis/drive.h"
 #include "chisel/odom/odom.h"
 #include "pid.h"
+#include "util/motoritf.h"
 
 namespace chisel {
     
