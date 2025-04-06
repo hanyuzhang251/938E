@@ -562,7 +562,7 @@ void get_robot_position() {
 
 	x_ipos.fetch_add(                                                          
 		std::cos(iheading * M_PI / 180)
-		* (dist.load() - prev_dist.load(w)));
+		* (dist.load() - prev_dist.load()));
 	y_ipos.fetch_add(
 		std::sin(iheading * M_PI / 180)
 		* (dist.load() - prev_dist.load()));

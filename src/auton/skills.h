@@ -1,5 +1,7 @@
 #pragma once
 
+#include "main.hpp"
+
 namespace chisel {
 
 inline void run_skills_auton() {
