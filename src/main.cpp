@@ -14,21 +14,26 @@ bool blue_ring_seen = false;
 uint32_t last_outtake = 0;
 
 void queue_outtake() {
-    wait(200);
+    wait(100);
 
     color_sort_command.power = -30;
     color_sort_command.priority = 999;
 
-    wait(150);
+    wait(200);
 
     color_sort_command.priority = 0;
 }
 
 void color_sort_update() {
+    const bool p_brs = blue_ring_seen;
+    const bool p_rrs = red_ring_seen;
+
     blue_ring_seen = false;
     red_ring_seen = false;
 
     if (!color_sort_enabled) return;
+
+    if (optical.get_proximity() < 200) return;
 
     const double r_hue_min = std::fmod(RED_RING_HUE - RING_HUE_TOLOERANCE + 360, 360.0f);
     const double r_hue_max = std::fmod(RED_RING_HUE + RING_HUE_TOLOERANCE, 360.0f);
@@ -58,7 +63,7 @@ void color_sort_update() {
     }
     if (r_ring) red_ring_seen = true;
 
-    if (pros::millis() - last_outtake >= COLOR_SORT_COOLDOWN && (alliance && b_ring || !alliance && r_ring)) {
+    if (pros::millis() - last_outtake >= COLOR_SORT_COOLDOWN && (alliance && !b_ring && p_brs || !alliance && !r_ring && p_rrs)) {
         pros::Task([] { queue_outtake(); });
         last_outtake = pros::millis();
     }
@@ -447,6 +452,8 @@ void wait_cross(const chisel::PIDController &pid_process, float point, const boo
 void autonomous() {
     printf("%sauton start\n", chisel::prefix().c_str());
 
+    intake_itf.assign_command(&auton_intake_command);
+
     const float multi = alliance ? 1 : -1;
 
     odom.internal_pose.x = 0;
@@ -455,9 +462,13 @@ void autonomous() {
     odom.pose.x = 0;
     odom.pose.y = 0;
     odom.pose.h = 0;
-    odom.pose_offset.x = -59;
-    odom.pose_offset.y = 13;
-    odom.pose_offset.h = -35 * multi;
+    odom.pose_offset.x = -52;
+    odom.pose_offset.y = 36;
+    odom.pose_offset.h = -25 * multi;
+
+    (void)mogo.set_value(true);
+
+    target_heading.store (odom.pose_offset.h);
 
     current_dist.store(0);
     target_dist.store(current_dist.load());
@@ -466,20 +477,62 @@ void autonomous() {
     pointer_index = 0;
     wait(15);
 
+    pros::Task([&] {
+        const bool p_arm_clamp = arm_clamp;
+        arm_clamp = false;
+
+        arm_target_pos.fetch_add(-9999);
+
+        while (arm.get_current_draw() < 2300) {
+            chisel::wait(PROCESS_DELAY);
+        }
+
+        reset_arm();
+
+        arm_clamp = p_arm_clamp;
+    });
+
     auton_intake_command.power = 127;
 
-    target_dist.fetch_add(55);
-    wait_stable(lateral_pid_controller);
-
-    auton_intake_command.power = 0;
-
-    target_dist.fetch_add(-15);
-    target_heading.store(-50 * multi);
+    target_dist.fetch_add(47);
+    (void)rdoinker.set_value(true);
 
     wait_stable(lateral_pid_controller);
 
-    (void)mogo.set_value(true);
+    target_dist.fetch_add(-30);
+
+    pros::Task([&] {
+        const uint32_t end = pros::millis() + 1200;
+        while (!red_ring_seen && pros::millis() < end) {
+            wait(PROCESS_DELAY / 2);
+        }
+        auton_intake_command.power = 0;
+    });
+
+    wait_cross(lateral_pid_controller, -2);
+    target_heading.store(-80 * multi);
+
+    wait_stable(lateral_pid_controller);
+
+    (void)mogo.set_value(false);
+    (void)rdoinker.set_value(false);
+    wait(250);
+
     auton_intake_command.power = 127;
+
+    target_heading.store(-60 * multi);
+    wait_stable(angular_pid_controller);
+
+    target_dist.fetch_add(33);
+
+    wait_cross(lateral_pid_controller, 15);
+    target_heading.store(-90 * multi);
+
+    wait_cross(lateral_pid_controller, 29);
+    arm_target_pos.store(ARM_LOAD_POS);
+    wait_stable(lateral_pid_controller);
+
+    wait(3000);
 
     chassis.state = DRIVE_STATE;
 }
@@ -551,8 +604,11 @@ void opcontrol() {
             (void) mogo.set_value(mogo_toggle.value);
 
             // doinker
-            doinker_toggle.tick(master.get_digital(DOINKER_TOGGLE_BUTTON));
-            (void) doinker.set_value(doinker_toggle.value);
+            ldoinker_toggle.tick(master.get_digital(LDOINKER_TOGGLE_BUTTON));
+            (void) ldoinker.set_value(ldoinker_toggle.value);
+
+            rdoinker_toggle.tick(master.get_digital(RDOINKER_TOGGLE_BUTTON));
+            (void) rdoinker.set_value(rdoinker_toggle.value);
         }
 
         wait(PROCESS_DELAY);

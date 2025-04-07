@@ -21,11 +21,14 @@ constexpr pros::anlg_button TURN_JOYSTICK = pros::E_CONTROLLER_ANALOG_RIGHT_X;
 constexpr pros::digi_button INTAKE_FWD_BUTTON = pros::E_CONTROLLER_DIGITAL_L1;
 constexpr pros::digi_button INTAKE_REV_BUTTON = pros::E_CONTROLLER_DIGITAL_L2;
 
-constexpr pros::digi_button DOINKER_TOGGLE_BUTTON = pros::E_CONTROLLER_DIGITAL_X;
-inline chisel::Toggle doinker_toggle(false);
+constexpr pros::digi_button LDOINKER_TOGGLE_BUTTON = pros::E_CONTROLLER_DIGITAL_LEFT;
+inline chisel::Toggle ldoinker_toggle(false);
+
+constexpr pros::digi_button RDOINKER_TOGGLE_BUTTON = pros::E_CONTROLLER_DIGITAL_RIGHT;
+inline chisel::Toggle rdoinker_toggle(false);
 
 constexpr pros::digi_button MOGO_TOGGLE_BUTTON = pros::E_CONTROLLER_DIGITAL_A;
-inline chisel::Toggle mogo_toggle(false);
+inline chisel::Toggle mogo_toggle(true);
 
 constexpr pros::digi_button ARM_UP_BUTTON = pros::E_CONTROLLER_DIGITAL_R1;
 constexpr pros::digi_button ARM_DOWN_BUTTON = pros::E_CONTROLLER_DIGITAL_R2;
@@ -44,7 +47,8 @@ constexpr int32_t DT_BR_PORT = 5;
 constexpr int32_t INTAKE_PORT = -2;
 constexpr int32_t ARM_PORT = -9;
 constexpr int32_t MOGO_PORT = 1;
-constexpr int32_t DOINKER_PORT = 21;
+constexpr int32_t LDOINKER_PORT = 2;
+constexpr int32_t RDOINKER_PORT = 3;
 
 constexpr int32_t IMU_PORT = 16;
 constexpr int32_t OPTICAL_PORT = 11;
@@ -118,7 +122,8 @@ inline void reset_arm() {
 }
 
 inline pros::adi::DigitalOut mogo(MOGO_PORT);
-inline pros::adi::DigitalOut doinker(DOINKER_PORT);
+inline pros::adi::DigitalOut ldoinker(LDOINKER_PORT);
+inline pros::adi::DigitalOut rdoinker(RDOINKER_PORT);
 
 inline pros::Imu imu(IMU_PORT);
 inline pros::Optical optical(OPTICAL_PORT);
