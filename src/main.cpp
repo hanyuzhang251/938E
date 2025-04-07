@@ -447,7 +447,7 @@ void wait_cross(const chisel::PIDController &pid_process, float point, const boo
 void autonomous() {
     printf("%sauton start\n", chisel::prefix().c_str());
 
-    const int multi = alliance ? 1 : -1;
+    const float multi = alliance ? 1 : -1;
 
     odom.internal_pose.x = 0;
     odom.internal_pose.y = 0;
@@ -457,7 +457,7 @@ void autonomous() {
     odom.pose.h = 0;
     odom.pose_offset.x = -59;
     odom.pose_offset.y = 13;
-    odom.pose_offset.h = -35.0f * multi;
+    odom.pose_offset.h = -35 * multi;
 
     current_dist.store(0);
     target_dist.store(current_dist.load());
@@ -466,25 +466,20 @@ void autonomous() {
     pointer_index = 0;
     wait(15);
 
-    target_dist.fetch_add(24);
+    auton_intake_command.power = 127;
+
+    target_dist.fetch_add(55);
+    wait_stable(lateral_pid_controller);
+
+    auton_intake_command.power = 0;
+
+    target_dist.fetch_add(-15);
+    target_heading.store(-50 * multi);
 
     wait_stable(lateral_pid_controller);
 
-    target_dist.fetch_add(-24);
-
-    wait_stable(lateral_pid_controller);
-
-    target_dist.fetch_add(-12);
-
-    wait_stable(lateral_pid_controller);
-
-    target_dist.fetch_add(36);
-
-    wait_stable(lateral_pid_controller);
-
-    target_dist.fetch_add(-24);
-
-    wait_stable(lateral_pid_controller);
+    (void)mogo.set_value(true);
+    auton_intake_command.power = 127;
 
     chassis.state = DRIVE_STATE;
 }
