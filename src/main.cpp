@@ -59,7 +59,7 @@ void color_sort_update() {
     if (r_ring) red_ring_seen = true;
 
     if (pros::millis() - last_outtake >= COLOR_SORT_COOLDOWN && (alliance && b_ring || !alliance && r_ring)) {
-        pros::Task([]{queue_outtake();});
+        pros::Task([] { queue_outtake(); });
         last_outtake = pros::millis();
     }
 }
@@ -123,8 +123,10 @@ void menu_update() {
         }
         case 1: {
             block_controls = true;
-            std::snprintf(ctrl_log[0], 15, "%cside: %s      ", pointer_index == 0 ? '>' : ' ', alliance ? "RED " : "BLUE");
-            std::snprintf(ctrl_log[1], 15, "%ccs: %s       ", pointer_index == 1 ? '>' : ' ', color_sort_enabled ? "ON " : "OFF");
+            std::snprintf(ctrl_log[0], 15, "%cside: %s      ", pointer_index == 0 ? '>' : ' ',
+                          alliance ? "RED " : "BLUE");
+            std::snprintf(ctrl_log[1], 15, "%ccs: %s       ", pointer_index == 1 ? '>' : ' ',
+                          color_sort_enabled ? "ON " : "OFF");
             std::snprintf(ctrl_log[2], 15, "%cmore...      ", pointer_index == 2 ? '>' : ' ');
 
             if (pointer_index >= 3) pointer_index = 2;
@@ -211,9 +213,12 @@ void menu_update() {
         }
         case 409100: {
             block_controls = false;
-            std::snprintf(ctrl_log[0], 15, "%ca_clamp: %s   ", pointer_index == 0 ? '>' : ' ', arm_clamp ? "ON " : "OFF");
-            std::snprintf(ctrl_log[1], 15, "%c%c a_tare_pos ", pointer_index == 1 ? '>' : ' ', arm_pos.load() > -5 && arm_pos.load() < 5 ? 'O' : '@');
-            std::snprintf(ctrl_log[2], 15, "%c%c a_q-reset  ", pointer_index == 2 ? '>' : ' ', arm_pos.load() > -5 && arm_pos.load() < 5 ? 'O' : '@');
+            std::snprintf(ctrl_log[0], 15, "%ca_clamp: %s   ", pointer_index == 0 ? '>' : ' ',
+                          arm_clamp ? "ON " : "OFF");
+            std::snprintf(ctrl_log[1], 15, "%c%c a_tare_pos ", pointer_index == 1 ? '>' : ' ',
+                          arm_pos.load() > -5 && arm_pos.load() < 5 ? 'O' : '@');
+            std::snprintf(ctrl_log[2], 15, "%c%c a_q-reset  ", pointer_index == 2 ? '>' : ' ',
+                          arm_pos.load() > -5 && arm_pos.load() < 5 ? 'O' : '@');
 
             if (pointer_index >= 3) pointer_index = 2;
 
@@ -224,12 +229,12 @@ void menu_update() {
                         break;
                     }
                     case 1: {
-                        pros::Task reset_arm_task([]{reset_arm();});
+                        pros::Task reset_arm_task([] { reset_arm(); });
                         pointer_index = 0;
                         break;
                     }
                     case 2: {
-                        pros::Task([&]{
+                        pros::Task([&] {
                             const bool p_arm_clamp = arm_clamp;
                             arm_clamp = false;
 
@@ -291,9 +296,17 @@ void menu_update() {
         }
         case 333100: {
             block_controls = true;
-            std::snprintf(ctrl_log[0], 15, "x_pos:%f       ", chassis.odom->pose.x.load());
-            std::snprintf(ctrl_log[1], 15, "y_pos:%f       ", chassis.odom->pose.y.load());
-            std::snprintf(ctrl_log[2], 15, "head:%f        ", chassis.odom->pose.h.load());
+            if (pointer_index == 0) {
+                std::snprintf(ctrl_log[0], 15, "x_pos:%f       ", chassis.odom->pose.x.load());
+                std::snprintf(ctrl_log[1], 15, "y_pos:%f       ", chassis.odom->pose.y.load());
+                std::snprintf(ctrl_log[2], 15, "head:%f        ", chassis.odom->pose.h.load());
+            } else if (pointer_index == 1) {
+                std::snprintf(ctrl_log[0], 15, "dist:%f        ", current_dist.load());
+                std::snprintf(ctrl_log[1], 15, "               ");
+                std::snprintf(ctrl_log[2], 15, "               ");
+            }
+
+            if (pointer_index >= 2) pointer_index = 1;
 
             if (menu_back) {
                 menu_page = 333000;
@@ -405,20 +418,75 @@ void competition_initialize() {
     init();
 }
 
+void wait_stable(const chisel::PIDController &pid_process, const uint32_t timeout = 5000, const int buffer_ticks = 3,
+                 const int min_stable_ticks = 8) {
+    int stable_ticks = 0;
+    const uint32_t end_time = pros::millis() + timeout;
+
+    while (stable_ticks < min_stable_ticks) {
+        pros::lcd::print(4, "error: %f", pid_process.get_error());
+        if (std::abs(pid_process.get_error()) <= pid_process.pid.tolerance) ++stable_ticks;
+        else stable_ticks = 0;
+
+        if (pros::millis() >= end_time) return;
+        wait(PROCESS_DELAY);
+    }
+    for (int i = 0; i < buffer_ticks; ++i) wait(PROCESS_DELAY);
+}
+
+void wait_cross(const chisel::PIDController &pid_process, float point, const bool relative = true, const int buffer_ticks = 0) {
+    if (relative) point += pid_process.value.load();
+
+   const bool side = pid_process.value.load() >= point;
+    while ((pid_process.value.load() >= point) == side) {
+        wait(PROCESS_DELAY);
+    }
+    for (int i = 0; i < buffer_ticks; ++i) wait(PROCESS_DELAY);
+}
+
 void autonomous() {
     printf("%sauton start\n", chisel::prefix().c_str());
 
+    const int multi = alliance ? 1 : -1;
+
+    odom.internal_pose.x = 0;
+    odom.internal_pose.y = 0;
+    odom.internal_pose.h = 0;
+    odom.pose.x = 0;
+    odom.pose.y = 0;
+    odom.pose.h = 0;
+    odom.pose_offset.x = -59;
+    odom.pose_offset.y = 13;
+    odom.pose_offset.h = -35.0f * multi;
+
+    current_dist.store(0);
+    target_dist.store(current_dist.load());
     chassis.state = AUTON_STATE;
+    menu_page = 333100;
+    pointer_index = 0;
+    wait(15);
 
-    target_dist.fetch_add(12);
+    target_dist.fetch_add(24);
 
-    wait(3000);
+    wait_stable(lateral_pid_controller);
 
-    target_dist.fetch_sub(12);
+    target_dist.fetch_add(-24);
 
-    wait(3000);
+    wait_stable(lateral_pid_controller);
 
+    target_dist.fetch_add(-12);
 
+    wait_stable(lateral_pid_controller);
+
+    target_dist.fetch_add(36);
+
+    wait_stable(lateral_pid_controller);
+
+    target_dist.fetch_add(-24);
+
+    wait_stable(lateral_pid_controller);
+
+    chassis.state = DRIVE_STATE;
 }
 
 void opcontrol() {

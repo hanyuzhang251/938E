@@ -56,10 +56,19 @@ MoveToPoint::MoveToPoint(Pose* pose, const Pose& target_point, const uint32_t li
     : Motion(pose, life, async), target_point(target_point), reversed(reversed) {}
 
 void MoveToPoint::update() {
+    // Calculate the relative target for conciseness
     const Pose relative_target = Pose::sub(target_point, *curr_pose);
 
+    // Find heading to the target point.
     float target_heading = deg_to_point(relative_target);
+    // Reverse if reversed
     if (reversed) target_heading = deg_norm(target_heading - 180);
+
+    if (deg_err(curr_pose->h, target_heading) < 8) {
+        ++head_stable_ticks;
+    } else {
+        head_stable_ticks = 0;
+    }
 
     float dist_to_travel = dist_to_point(relative_target);
     if (reversed) dist_to_travel *= -1;

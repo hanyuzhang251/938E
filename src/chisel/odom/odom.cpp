@@ -98,7 +98,10 @@ void Odom::predict_with_ime() {
     const double left_pos = drive_train->left_motors->get_position();
     const double right_pos = drive_train->right_motors->get_position();
 
-    const double dist = ((left_pos - prev_left_pos) + (right_pos - prev_right_pos)) / 2;
+    const double dist = ((left_pos - prev_left_pos) + (right_pos - prev_right_pos)) / 2 * drive_train->magic_number;
+
+    prev_left_pos = left_pos;
+    prev_right_pos = right_pos;
 
     current_dist.fetch_add(dist);
 

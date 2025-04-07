@@ -155,7 +155,7 @@ inline chisel::PIDSetting angular_pid_settings{
     2, // kp
     0.1, // ki
     35, // kd
-    0, // tolerance
+    2, // tolerance
     30, // wind
     999, // clamp
     999, // slew
@@ -176,11 +176,11 @@ inline chisel::PIDController angular_pid_controller {
 };
 
 inline chisel::PIDSetting lateral_pid_settings{
-    10, // kp
+    5, // kp
     0.1, // ki
     0, // kd
-    0, // tolerance
-    999, // wind
+    1.5f, // tolerance
+    12, // wind
     999, // clamp
     999, // slew
     0, // small error
@@ -196,7 +196,7 @@ inline chisel::PIDController lateral_pid_controller {
     lateral_pid_output,
     lateral_pid_settings,
     0,
-    30,
+    127,
     1000 * 60 * 20,
     nullptr
 };
@@ -214,6 +214,9 @@ inline void device_init() {
     optical.set_led_pwm(100);
 
     intake_itf.assign_command(&color_sort_command);
+
+    target_dist.store(0);
+    current_dist.store(0);
 }
 
 inline void device_update() {

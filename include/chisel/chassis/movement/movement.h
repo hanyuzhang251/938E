@@ -55,8 +55,6 @@ namespace chisel {
 
         void push_controls() override;
 
-        std::pair<float, float> get_controls() override;
-
     private:
         float angular_pid_control = 0;
     };
@@ -70,8 +68,6 @@ namespace chisel {
         void update() override;
 
         void push_controls() override;
-
-        std::pair<float, float> get_controls() override;
 
     private:
         float angular_pid_control = 0;
@@ -89,10 +85,14 @@ namespace chisel {
 
         void push_controls() override;
 
-        std::pair<float, float> get_controls() override;
-
     private:
         std::pair<float, float> pid_controls {0, 0};
+
+        bool head_stable = false;
+
+        uint32_t head_stable_ticks = 0;
+
+        const uint32_t MinHeadStableTicks = 24;
     };
 
 } // namespace chisel
