@@ -423,7 +423,7 @@ void competition_initialize() {
     init();
 }
 
-void wait_stable(const chisel::PIDController &pid_process, const uint32_t timeout = 5000, const int buffer_ticks = 3,
+static void wait_stable(const chisel::PIDController &pid_process, const uint32_t timeout = 5000, const int buffer_ticks = 3,
                  const int min_stable_ticks = 8) {
     int stable_ticks = 0;
     const uint32_t end_time = pros::millis() + timeout;
@@ -439,7 +439,7 @@ void wait_stable(const chisel::PIDController &pid_process, const uint32_t timeou
     for (int i = 0; i < buffer_ticks; ++i) wait(PROCESS_DELAY);
 }
 
-void wait_cross(const chisel::PIDController &pid_process, float point, const bool relative = true, const int buffer_ticks = 0) {
+static void wait_cross(const chisel::PIDController &pid_process, float point, const bool relative = true, const int buffer_ticks = 0) {
     if (relative) point += pid_process.value.load();
 
    const bool side = pid_process.value.load() >= point;
@@ -449,8 +449,10 @@ void wait_cross(const chisel::PIDController &pid_process, float point, const boo
     for (int i = 0; i < buffer_ticks; ++i) wait(PROCESS_DELAY);
 }
 
+//#include "bezier_motion.hpp"
+
 void autonomous() {
-    printf("%sauton start\n", chisel::prefix().c_str());
+    /*printf("%sauton start\n", chisel::prefix().c_str());
 
     intake_itf.assign_command(&auton_intake_command);
 
@@ -534,7 +536,30 @@ void autonomous() {
 
     wait(3000);
 
+    chassis.state = DRIVE_STATE;*/
+    //left_motors.move(127);
+	//target_dist.fetch_add(90);
+    /*chassis.state = AUTON_STATE;
+    
+	//target_dist.store(30);
+	//wait_stable(lateral_pid_controller);
+    bezier_motion::bezier(bezier_motion::vec2(51, 40), 0.5, bezier_motion::vec2(0.76, 0.76))
+        .execute_pid_motion(NO_PREVIOUS_CONTROL_POINT, [](double lin_dist){
+            lateral_pid_controller.max_speed = 127;
+            lateral_pid_controller.min_speed = 6;
+            target_dist.store(lin_dist);
+            wait_stable(lateral_pid_controller);
+        }, [](double ang_offset_heading){
+            angular_pid_controller.max_speed = 127;
+            angular_pid_controller.min_speed = 6;
+            target_heading.store(ang_offset_heading);
+            wait_stable(angular_pid_controller);
+        });*/
+    chassis.state = AUTON_STATE;
+    extern void somerandomauto(); 
+    somerandomauto();
     chassis.state = DRIVE_STATE;
+
 }
 
 void opcontrol() {
