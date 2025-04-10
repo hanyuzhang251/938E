@@ -515,22 +515,31 @@ void autonomous() {
     wait_stable(lateral_pid_controller);
 
     (void)mogo.set_value(false);
+    wait(200);
+
+    target_heading.store(-120 * multi);
+    wait(200);
+
     (void)rdoinker.set_value(false);
-    wait(250);
+    wait(300);
 
     auton_intake_command.power = 127;
 
-    target_heading.store(-60 * multi);
+    target_heading.store(-67 * multi);
     wait_stable(angular_pid_controller);
 
-    target_dist.fetch_add(33);
-
-    wait_cross(lateral_pid_controller, 15);
-    target_heading.store(-90 * multi);
+    target_dist.fetch_add(40);
 
     wait_cross(lateral_pid_controller, 29);
+    target_heading.store(-80 * multi);
+
+    wait_cross(lateral_pid_controller, 2);
     arm_target_pos.store(ARM_LOAD_POS);
-    wait_stable(lateral_pid_controller);
+    wait_stable(lateral_pid_controller, 2000);
+    target_heading.store(-53 * multi);
+    wait(1500);
+    auton_intake_command.power = -5;
+    arm_target_pos.store(ARM_SCORE_POS + 200);
 
     wait(3000);
 

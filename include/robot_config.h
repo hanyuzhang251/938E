@@ -72,7 +72,7 @@ constexpr float ARM_SPEED = 240;
 
 constexpr float ARM_LOW_POS = 300;
 constexpr float MAX_ARM_POS = 1550;
-constexpr float ARM_LOAD_POS = 230;
+constexpr float ARM_LOAD_POS = 185;
 constexpr float ARM_SCORE_POS = 800;
 
 inline int arm_macro_cycle_index = 0;
