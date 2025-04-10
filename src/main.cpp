@@ -537,30 +537,36 @@ void autonomous() {
     target_heading.store(-196 * multi);
     wait_stable(angular_pid_controller);
 
-    target_dist.fetch_add(65);
+    target_dist.fetch_add(67);
     wait_cross(lateral_pid_controller, 18.15);
     target_heading.store(-130 * multi);
 
-    target_dist.fetch_add(24);
+    target_dist.fetch_add(12);
     for (int i = 1; i <= 10; ++i) {
-        lateral_pid_controller.max_speed = 127 - i * 10;
+        lateral_pid_controller.max_speed = 127 - i * 9;
         wait(50);
     }
-    wait_stable(lateral_pid_controller);
-    target_dist.fetch_add(-24);
-    wait_stable(lateral_pid_controller);
+    wait_stable(lateral_pid_controller, 1500);
+    target_dist.store(current_dist.load() -12);
+    wait_stable(lateral_pid_controller, 1500);
     lateral_pid_controller.max_speed = 127;
-    target_dist.fetch_add(24);
+    target_dist.store(current_dist.load() + 16);
+    wait(1500);
 
-    wait(2000);
+    target_dist.store(current_dist.load() - 120);
+    target_heading.store(-90 * multi);
 
-    auton_intake_command.dismiss();
+    wait(5000);
 
     chassis.state = DRIVE_STATE;
 }
 
 void opcontrol() {
     printf("%sopcontrol start\n", chisel::prefix().c_str());
+
+    auton_intake_command.power = 0;
+    auton_intake_command.priority = -999;
+    auton_intake_command.dismiss();
 
     intake_itf.assign_command(&driver_intake_command);
 
