@@ -5,7 +5,7 @@
 
 pros::Controller master(pros::E_CONTROLLER_MASTER);
 
-bool alliance = true; // true = red, false = blue
+bool alliance = false; // true = red, false = blue
 bool color_sort_enabled = true;
 
 bool red_ring_seen = false;
@@ -464,7 +464,13 @@ void autonomous() {
     odom.pose.h = 0;
     odom.pose_offset.x = -52;
     odom.pose_offset.y = 36;
-    odom.pose_offset.h = -25 * multi;
+    odom.pose_offset.h = -127 * multi;
+
+    arm.tare_position_all();
+    arm_pos.store(0);
+    arm_target_pos.store(0);
+    arm.tare_position();
+    arm.tare_position_all();
 
     (void)mogo.set_value(true);
 
@@ -477,71 +483,76 @@ void autonomous() {
     pointer_index = 0;
     wait(15);
 
-    pros::Task([&] {
-        const bool p_arm_clamp = arm_clamp;
-        arm_clamp = false;
+    arm_target_pos.fetch_add(ARM_SCORE_POS);
+    wait(700);
 
-        arm_target_pos.fetch_add(-9999);
-
-        while (arm.get_current_draw() < 2300) {
-            chisel::wait(PROCESS_DELAY);
-        }
-
-        reset_arm();
-
-        arm_clamp = p_arm_clamp;
-    });
-
-    auton_intake_command.power = 127;
-
-    target_dist.fetch_add(47);
-    (void)rdoinker.set_value(true);
-
-    wait_stable(lateral_pid_controller);
-
-    target_dist.fetch_add(-30);
-
-    pros::Task([&] {
-        const uint32_t end = pros::millis() + 1200;
-        while (!red_ring_seen && pros::millis() < end) {
-            wait(PROCESS_DELAY / 2);
-        }
-        auton_intake_command.power = 0;
-    });
-
-    wait_cross(lateral_pid_controller, -2);
-    target_heading.store(-80 * multi);
-
-    wait_stable(lateral_pid_controller);
-
-    (void)mogo.set_value(false);
-    wait(200);
-
+    target_dist.fetch_add(-5);
+    wait_cross(lateral_pid_controller, -3);
     target_heading.store(-120 * multi);
-    wait(200);
+    wait(500);
+    target_dist.fetch_add(2);
+    wait(100);
+    ldoinker.set_value(true);
+    wait(500);
 
-    (void)rdoinker.set_value(false);
+    arm_target_pos.fetch_add(-ARM_SCORE_POS - 70);
+
+    target_dist.fetch_add(-34);
+    angular_pid_controller.max_speed=35;
+    lateral_pid_controller.max_speed=50;
+    target_heading.store(175 * multi);
+    wait_stable(lateral_pid_controller);
+    target_dist.fetch_add(-7);
+    wait(800);
+    mogo.set_value(false);
     wait(300);
 
+    target_heading.store(70 * multi);
+    wait_stable((angular_pid_controller));
+    ldoinker.set_value(false);
+    wait(300);
+    angular_pid_controller.max_speed = 127;
+    target_heading.store(90 * multi);
+    wait_stable(angular_pid_controller);
+    lateral_pid_controller.max_speed = 127;
+    target_dist.fetch_add(30);
     auton_intake_command.power = 127;
 
-    target_heading.store(-67 * multi);
+    wait_stable(lateral_pid_controller);
+
+
+    target_heading.store(180 * multi);
+    wait_stable((angular_pid_controller));
+
+    arm_target_pos.fetch_add(arm_pos.load() -ARM_SCORE_POS - 200);
+    pros::Task([] {
+        wait(1000);reset_arm();
+    });
+
+    target_dist.fetch_add(34);
+    wait_cross(lateral_pid_controller, 18);
+    target_heading.store(130 * multi);
+
     wait_stable(angular_pid_controller);
+    lateral_pid_controller.max_speed = 30;
+    target_dist.fetch_add(12);
+    wait(1200);
+    lateral_pid_controller.max_speed = 30;
+    target_dist.store(current_dist.load() - 12);
+    wait(600);
 
-    target_dist.fetch_add(40);
+    target_dist.store(current_dist.load() + 3);
 
-    wait_cross(lateral_pid_controller, 29);
-    target_heading.store(-80 * multi);
+    ldoinker.set_value(true);
+    wait(200);
+    target_heading.store(180 * multi);
+    wait(1000);
+    ldoinker.set_value(false);
+    target_heading.store(-45 * multi);
+    wait(1000);
+    target_dist.fetch_add(-12);
+    wait(500);
 
-    wait_cross(lateral_pid_controller, 2);
-    arm_target_pos.store(ARM_LOAD_POS);
-    wait_stable(lateral_pid_controller, 2000);
-    target_heading.store(-53 * multi);
-    wait(1500);
-    auton_intake_command.power = -5;
-    arm_target_pos.store(ARM_SCORE_POS + 200);
-
-    wait(3000);
 
     chassis.state = DRIVE_STATE;
 }
