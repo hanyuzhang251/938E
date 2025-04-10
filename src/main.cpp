@@ -547,6 +547,7 @@ void autonomous() {
         wait(50);
     }
     wait_stable(lateral_pid_controller, 1500);
+    lateral_pid_controller.max_speed = 27;
     target_dist.store(current_dist.load() -12);
     wait_stable(lateral_pid_controller, 1500);
     lateral_pid_controller.max_speed = 127;
@@ -563,6 +564,8 @@ void autonomous() {
 
 void opcontrol() {
     printf("%sopcontrol start\n", chisel::prefix().c_str());
+    block_movement = false;
+    block_controls = false;
 
     auton_intake_command.power = 0;
     auton_intake_command.priority = -999;
