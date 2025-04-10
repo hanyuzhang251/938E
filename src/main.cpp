@@ -515,33 +515,46 @@ void autonomous() {
     wait_stable(lateral_pid_controller);
 
     (void)mogo.set_value(false);
-    wait(200);
+    wait(150);
 
-    target_heading.store(-120 * multi);
-    wait(200);
+    target_heading.store(-90 * multi);
+    wait(300);
 
     (void)rdoinker.set_value(false);
-    wait(300);
+    wait(200);
 
     auton_intake_command.power = 127;
 
     target_heading.store(-67 * multi);
     wait_stable(angular_pid_controller);
 
-    target_dist.fetch_add(40);
+    target_dist.fetch_add(35);
+    lateral_pid_controller.max_speed = 100;
+    wait_stable(lateral_pid_controller);
+    lateral_pid_controller.max_speed = 127;
+    wait(800);
 
-    wait_cross(lateral_pid_controller, 29);
-    target_heading.store(-80 * multi);
+    target_heading.store(-196 * multi);
+    wait_stable(angular_pid_controller);
 
-    wait_cross(lateral_pid_controller, 2);
-    arm_target_pos.store(ARM_LOAD_POS);
-    wait_stable(lateral_pid_controller, 2000);
-    target_heading.store(-53 * multi);
-    wait(1500);
-    auton_intake_command.power = -5;
-    arm_target_pos.store(ARM_SCORE_POS + 200);
+    target_dist.fetch_add(65);
+    wait_cross(lateral_pid_controller, 18.15);
+    target_heading.store(-130 * multi);
 
-    wait(3000);
+    target_dist.fetch_add(24);
+    for (int i = 1; i <= 10; ++i) {
+        lateral_pid_controller.max_speed = 127 - i * 10;
+        wait(50);
+    }
+    wait_stable(lateral_pid_controller);
+    target_dist.fetch_add(-24);
+    wait_stable(lateral_pid_controller);
+    lateral_pid_controller.max_speed = 127;
+    target_dist.fetch_add(24);
+
+    wait(2000);
+
+    auton_intake_command.dismiss();
 
     chassis.state = DRIVE_STATE;
 }

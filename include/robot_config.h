@@ -184,7 +184,7 @@ inline chisel::PIDSetting lateral_pid_settings{
     5, // kp
     0.1, // ki
     0, // kd
-    1.5f, // tolerance
+    2.5f, // tolerance
     12, // wind
     999, // clamp
     999, // slew
