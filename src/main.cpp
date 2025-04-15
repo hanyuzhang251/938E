@@ -5,7 +5,7 @@
 
 pros::Controller master(pros::E_CONTROLLER_MASTER);
 
-bool alliance = true; // true = red, false = blue
+bool alliance = false; // true = red, false = blue
 bool color_sort_enabled = true;
 
 bool red_ring_seen = false;
@@ -33,39 +33,43 @@ void color_sort_update() {
 
     if (!color_sort_enabled) return;
 
-    if (optical.get_proximity() < 200) return;
-
     const double r_hue_min = std::fmod(RED_RING_HUE - RING_HUE_TOLOERANCE + 360, 360.0f);
     const double r_hue_max = std::fmod(RED_RING_HUE + RING_HUE_TOLOERANCE, 360.0f);
     const double b_hue_min = std::fmod(BLUE_RING_HUE - RING_HUE_TOLOERANCE + 360, 360.0f);
     const double b_hue_max = std::fmod(BLUE_RING_HUE + RING_HUE_TOLOERANCE, 360.0f);
 
     bool b_ring = false;
-
-    if (b_hue_min <= b_hue_max) {
-        // if it's normal, just check the ranges
-        b_ring = b_hue_min <= optical.get_hue() && optical.get_hue() <= b_hue_max;
-    } else if (b_hue_min >= b_hue_max) {
-        // if the range goes around 0, say hue min is 330 while hue_max is 30,
-        // 0 and 360 are used as bounds.
-        b_ring = optical.get_hue() <= b_hue_max || optical.get_hue() >= b_hue_min;
-    }
-    if (b_ring) blue_ring_seen = true;
-
     bool r_ring = false;
-    if (r_hue_min <= r_hue_max) {
-        // if it's normal, just check the ranges
-        r_ring = r_hue_min <= optical.get_hue() && optical.get_hue() <= r_hue_max;
-    } else if (r_hue_min >= r_hue_max) {
-        // if the range goes around 0, say hue min is 330 while hue_max is 30,
-        // 0 and 360 are used as bounds.
-        r_ring = optical.get_hue() <= r_hue_max || optical.get_hue() >= r_hue_min;
-    }
-    if (r_ring) red_ring_seen = true;
 
-    if (pros::millis() - last_outtake >= COLOR_SORT_COOLDOWN && (alliance && !b_ring && p_brs || !alliance && !r_ring && p_rrs)) {
-        pros::Task([] { queue_outtake(); });
-        last_outtake = pros::millis();
+    if (optical.get_proximity() >= 200) {
+        if (b_hue_min <= b_hue_max) {
+            // if it's normal, just check the ranges
+            b_ring = b_hue_min <= optical.get_hue() && optical.get_hue() <= b_hue_max;
+        } else if (b_hue_min >= b_hue_max) {
+            // if the range goes around 0, say hue min is 330 while hue_max is 30,
+            // 0 and 360 are used as bounds.
+            b_ring = optical.get_hue() <= b_hue_max || optical.get_hue() >= b_hue_min;
+        }
+        if (b_ring) blue_ring_seen = true;
+
+        if (r_hue_min <= r_hue_max) {
+            // if it's normal, just check the ranges
+            r_ring = r_hue_min <= optical.get_hue() && optical.get_hue() <= r_hue_max;
+        } else if (r_hue_min >= r_hue_max) {
+            // if the range goes around 0, say hue min is 330 while hue_max is 30,
+            // 0 and 360 are used as bounds.
+            r_ring = optical.get_hue() <= r_hue_max || optical.get_hue() >= r_hue_min;
+        }
+        if (r_ring) red_ring_seen = true;
+    }
+
+    if (pros::millis() - last_outtake >= COLOR_SORT_COOLDOWN) {
+        if ((alliance && !b_ring && p_brs || !alliance && !r_ring && p_rrs)) {
+            pros::Task([] {
+                queue_outtake();
+                last_outtake = pros::millis();
+            });
+        }
     }
 }
 
@@ -128,25 +132,52 @@ void menu_update() {
         }
         case 1: {
             block_controls = true;
-            std::snprintf(ctrl_log[0], 15, "%cside: %s      ", pointer_index == 0 ? '>' : ' ',
-                          alliance ? "RED " : "BLUE");
-            std::snprintf(ctrl_log[1], 15, "%ccs: %s       ", pointer_index == 1 ? '>' : ' ',
-                          color_sort_enabled ? "ON " : "OFF");
-            std::snprintf(ctrl_log[2], 15, "%cmore...      ", pointer_index == 2 ? '>' : ' ');
+            if (pointer_index == 3) {
+                std::snprintf(ctrl_log[0], 15, "%cmore...      ", pointer_index == 3 ? '>' : ' ');
+                std::snprintf(ctrl_log[1], 15, "               ");
+                std::snprintf(ctrl_log[2], 15, "               ");
+            } else {
+                std::snprintf(ctrl_log[0], 15, "%creset_arm    ", pointer_index == 0 ? '>' : ' ');
+                std::snprintf(ctrl_log[1], 15, "%cside: %s      ", pointer_index == 1 ? '>' : ' ',
+                              alliance ? "RED " : "BLUE");
+                std::snprintf(ctrl_log[2], 15, "%ccs: %s       ", pointer_index == 2 ? '>' : ' ',
+                              color_sort_enabled ? "ON " : "OFF");
+            }
 
-            if (pointer_index >= 3) pointer_index = 2;
+            if (pointer_index >= 4) pointer_index = 3;
 
             if (menu_select) {
                 switch (pointer_index) {
                     case 0: {
-                        alliance = !alliance;
+                        pros::Task([&] {
+                            const bool p_arm_clamp = arm_clamp;
+                            arm_clamp = false;
+
+                            arm_target_pos.fetch_add(-9999);
+
+                            while (arm.get_current_draw() < 2300) {
+                                chisel::wait(PROCESS_DELAY);
+                            }
+
+                            reset_arm();
+
+                            arm_clamp = p_arm_clamp;
+                        });
+
+                        menu_toggle.tick(true);
+                        menu_toggle.tick(false);
+
                         break;
                     }
                     case 1: {
-                        color_sort_enabled = !color_sort_enabled;
+                        alliance = !alliance;
                         break;
                     }
                     case 2: {
+                        color_sort_enabled = !color_sort_enabled;
+                        break;
+                    }
+                    case 3: {
                         menu_page = 2;
                         pointer_index = 0;
                         break;

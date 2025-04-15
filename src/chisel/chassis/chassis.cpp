@@ -21,10 +21,10 @@ int Chassis::clean_commands() {
 }
 
 void Chassis::update_motions() const {
-    printf("\nUPDATE MOTIONS CALLED\n");
+    // printf("\nUPDATE MOTIONS CALLED\n");
 
     if (motion_queue.empty()) {
-        printf("\tno motions available, returning\n");
+        // printf("\tno motions available, returning\n");
         return;
     }
 
