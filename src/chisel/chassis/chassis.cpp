@@ -41,7 +41,8 @@ void Chassis::update_motions() const {
     printf("\ttop motion raw controls: lat=%f, ang=%f\n", top_motion->get_controls().first, top_motion->get_controls().second);
 
     if (state.load() == AUTON_STATE) {
-        lateral_pid_controller->target.store(top_motion->controls.first);
+        lateral_pid_controller->target.store(lateral_pid_controller->value.load() + top_motion->controls.first);
+        angular_pid_controller->target.store(angular_pid_controller->value.load() + top_motion->controls.second);
 
         printf("\tUPDATING LATERAL PID...\n");
         pid_handle_process(*lateral_pid_controller);
@@ -59,7 +60,7 @@ void Chassis::update_motions() const {
         right_power = abs_clamp(right_power, top_motion->min_speed, top_motion->max_speed);
 
         (void)drive_train->left_motors->move(left_power);
-        (void)drive_train->left_motors->move(right_power);
+        (void)drive_train->right_motors->move(right_power);
     }
 }
 

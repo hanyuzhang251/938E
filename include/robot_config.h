@@ -233,14 +233,14 @@ inline void device_update() {
     pid_handle_process(arm_pid);
     (void)arm.move(arm_pid_output.load());
 
-    if (chassis.state == AUTON_STATE) {
-        pid_handle_process(angular_pid_controller);
-        pid_handle_process(lateral_pid_controller);
-
-        float left_power = lateral_pid_output.load() + angular_pid_output.load();
-        float right_power = lateral_pid_output.load() - angular_pid_output.load();
-
-        (void)drive_train.left_motors->move(left_power);
-        (void)drive_train.right_motors->move(right_power);
-    }
+    // if (chassis.state == AUTON_STATE) {
+    //     pid_handle_process(angular_pid_controller);
+    //     pid_handle_process(lateral_pid_controller);
+    //
+    //     float left_power = lateral_pid_output.load() + angular_pid_output.load();
+    //     float right_power = lateral_pid_output.load() - angular_pid_output.load();
+    //
+    //     (void)drive_train.left_motors->move(left_power);
+    //     (void)drive_train.right_motors->move(right_power);
+    // }
 }

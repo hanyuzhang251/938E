@@ -21,15 +21,19 @@ void ExitCondition::reset() {
     exit = false;
 }
 
-Motion::Motion(Pose* pose, const uint32_t life, const bool async, const float min_speed, const float max_speed)
-    : curr_pose(pose), life(life), async(async), min_speed(min_speed), max_speed(max_speed) {}
+Motion::Motion(Pose* pose, const uint32_t life, const bool async, const float min_speed, const float max_speed,
+    const ExitCondition &lateral_exit, const ExitCondition &angular_exit)
+    : curr_pose(pose), life(life), async(async), min_speed(min_speed), max_speed(max_speed),
+    lateral_exit(lateral_exit), angular_exit(angular_exit) {}
 
 std::pair<float, float> Motion::get_controls() {
     return controls;
 }
 
-TurnToHeading::TurnToHeading(Pose* pose, const float target_heading, const uint32_t life, const bool async)
-    : Motion(pose, life, async), target_heading(target_heading) {}
+TurnToHeading::TurnToHeading(Pose* pose, const float target_heading, const uint32_t life, const bool async,
+    const float min_speed, const float max_speed,
+    const ExitCondition &lateral_exit, const ExitCondition &angular_exit)
+    : Motion(pose, life, async, min_speed, max_speed, lateral_exit, angular_exit), target_heading(target_heading) {}
 
 void TurnToHeading::update() {
     angular_pid_control = deg_err(target_heading, curr_pose->h);
@@ -40,7 +44,9 @@ void TurnToHeading::push_controls() {
     controls.second = angular_pid_control;
 }
 
-TurnToPoint::TurnToPoint(Pose* pose, const Pose& target_point, const uint32_t life, const bool async)
+TurnToPoint::TurnToPoint(Pose* pose, const Pose &target_point, const uint32_t life, const bool async,
+    const float min_speed, const float max_speed,
+    const ExitCondition &lateral_exit, const ExitCondition &angular_exit)
     : Motion(pose, life, async), target_point(target_point) {}
 
 void TurnToPoint::update() {
@@ -52,7 +58,9 @@ void TurnToPoint::push_controls() {
     controls.second = angular_pid_control;
 }
 
-MoveToPoint::MoveToPoint(Pose* pose, const Pose& target_point, const uint32_t life, const bool async, const bool reversed)
+MoveToPoint::MoveToPoint(Pose* pose, const Pose &target_point, const uint32_t life, const bool async,
+    const float min_speed, const float max_speed,
+    const ExitCondition &lateral_exit, const ExitCondition &angular_exit)
     : Motion(pose, life, async), target_point(target_point), reversed(reversed) {}
 
 void MoveToPoint::update() {

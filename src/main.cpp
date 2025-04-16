@@ -485,17 +485,15 @@ void autonomous() {
 
     intake_itf.assign_command(&auton_intake_command);
 
-    const float multi = alliance ? 1 : -1;
-
     odom.internal_pose.x = 0;
     odom.internal_pose.y = 0;
     odom.internal_pose.h = 0;
     odom.pose.x = 0;
     odom.pose.y = 0;
     odom.pose.h = 0;
-    odom.pose_offset.x = -52;
-    odom.pose_offset.y = 36;
-    odom.pose_offset.h = -25 * multi;
+    odom.pose_offset.x = 0;
+    odom.pose_offset.y = 0;
+    odom.pose_offset.h = 0;
 
     (void)mogo.set_value(true);
 
@@ -523,72 +521,12 @@ void autonomous() {
         arm_clamp = p_arm_clamp;
     });
 
-    auton_intake_command.power = 127;
+    // auton_intake_command.power = 127;
 
-    target_dist.fetch_add(47);
-    (void)rdoinker.set_value(true);
+    chassis.motion_queue.emplace(new chisel::TurnToHeading(&odom.pose, 90));
+    chassis.motion_queue.emplace(new chisel::TurnToHeading(&odom.pose, 0));
 
-    wait_stable(lateral_pid_controller);
-
-    target_dist.fetch_add(-30);
-
-    pros::Task([&] {
-        const uint32_t end = pros::millis() + 1200;
-        while (!red_ring_seen && pros::millis() < end) {
-            wait(PROCESS_DELAY / 2);
-        }
-        auton_intake_command.power = 0;
-    });
-
-    wait_cross(lateral_pid_controller, -2);
-    target_heading.store(-80 * multi);
-
-    wait_stable(lateral_pid_controller);
-
-    (void)mogo.set_value(false);
-    wait(150);
-
-    target_heading.store(-90 * multi);
-    wait(300);
-
-    (void)rdoinker.set_value(false);
-    wait(200);
-
-    auton_intake_command.power = 127;
-
-    target_heading.store(-67 * multi);
-    wait_stable(angular_pid_controller);
-
-    target_dist.fetch_add(35);
-    lateral_pid_controller.max_speed = 100;
-    wait_stable(lateral_pid_controller);
-    lateral_pid_controller.max_speed = 127;
-    wait(800);
-
-    target_heading.store(-196 * multi);
-    wait_stable(angular_pid_controller);
-
-    target_dist.fetch_add(67);
-    wait_cross(lateral_pid_controller, 18.15);
-    target_heading.store(-130 * multi);
-
-    target_dist.fetch_add(12);
-    for (int i = 1; i <= 10; ++i) {
-        lateral_pid_controller.max_speed = 127 - i * 9;
-        wait(50);
-    }
-    wait_stable(lateral_pid_controller, 1500);
-    lateral_pid_controller.max_speed = 27;
-    target_dist.store(current_dist.load() -12);
-    wait_stable(lateral_pid_controller, 1500);
-    lateral_pid_controller.max_speed = 127;
-    target_dist.store(current_dist.load() + 16);
-    wait(1500);
-
-    target_dist.store(current_dist.load() - 120);
-    target_heading.store(-90 * multi);
-
-    wait(5000);
+    wait(10000);
 
     chassis.state = DRIVE_STATE;
 }

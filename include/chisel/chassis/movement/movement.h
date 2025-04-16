@@ -32,9 +32,14 @@ namespace chisel {
         float min_speed;
         float max_speed;
 
+        ExitCondition lateral_exit;
+        ExitCondition angular_exit;
+
         std::pair<float, float> controls;
 
-        Motion(Pose* pose, uint32_t life, bool async, float min_speed = 0, float max_speed = 127);
+        Motion(Pose* pose, uint32_t life, bool async,
+            float min_speed = 0, float max_speed = 127,
+            const ExitCondition &lateral_exit = {1.5, 80}, const ExitCondition &angular_exit = {1.5, 80});
 
         virtual void update() = 0;
 
@@ -49,7 +54,9 @@ namespace chisel {
     public:
         float target_heading;
 
-        TurnToHeading(Pose* pose, float target_heading, uint32_t life = 3000, bool async = false);
+        TurnToHeading(Pose* pose, float target_heading, uint32_t life = 3000, bool async = false,
+            float min_speed, float max_speed,
+            const ExitCondition &lateral_exit = {1.5, 80}, const ExitCondition &angular_exit = {1.5, 80});
 
         void update() override;
 
@@ -63,7 +70,9 @@ namespace chisel {
     public:
         Pose target_point;
 
-        TurnToPoint(Pose* pose, const Pose& target_point, uint32_t life = 3000, bool async = false);
+        TurnToPoint(Pose* pose, const Pose& target_point, uint32_t life = 3000, bool async = false,
+            float min_speed, float max_speed,
+            const ExitCondition &lateral_exit = {1.5, 80}, const ExitCondition &angular_exit = {1.5, 80});
 
         void update() override;
 
@@ -79,7 +88,9 @@ namespace chisel {
 
         bool reversed;
 
-        MoveToPoint(Pose* pose, const Pose& target_point, uint32_t life = 5000, bool async = false, bool reversed = false);
+        MoveToPoint(Pose* pose, const Pose& target_point, uint32_t life = 3000, bool async = false,
+            float min_speed, float max_speed,
+            const ExitCondition &lateral_exit = {1.5, 80}, const ExitCondition &angular_exit = {1.5, 80});
 
         void update() override;
 
