@@ -37,9 +37,9 @@ namespace chisel {
 
         std::pair<float, float> controls;
 
-        Motion(Pose* pose, uint32_t life, bool async,
-            float min_speed = 0, float max_speed = 127,
-            const ExitCondition &lateral_exit = {1.5, 80}, const ExitCondition &angular_exit = {1.5, 80});
+        explicit Motion(Pose* pose, float min_speed = 0, float max_speed = 127,
+                        uint32_t life = 3000, bool async = false,
+                        const ExitCondition &lateral_exit = {1.5, 80}, const ExitCondition &angular_exit = {1.5, 80});
 
         virtual void update() = 0;
 
@@ -54,9 +54,9 @@ namespace chisel {
     public:
         float target_heading;
 
-        TurnToHeading(Pose* pose, float target_heading, uint32_t life = 3000, bool async = false,
-            float min_speed, float max_speed,
-            const ExitCondition &lateral_exit = {1.5, 80}, const ExitCondition &angular_exit = {1.5, 80});
+        TurnToHeading(Pose* pose, float target_heading, float min_speed, float max_speed,
+            uint32_t life = 3000, bool async = false,
+            const ExitCondition &lateral_exit = {MAXFLOAT, 0}, const ExitCondition &angular_exit = {1.5, 80});
 
         void update() override;
 
@@ -70,8 +70,8 @@ namespace chisel {
     public:
         Pose target_point;
 
-        TurnToPoint(Pose* pose, const Pose& target_point, uint32_t life = 3000, bool async = false,
-            float min_speed, float max_speed,
+        TurnToPoint(Pose* pose, const Pose& target_point, float min_speed, float max_speed,
+            uint32_t life = 3000, bool async = false,
             const ExitCondition &lateral_exit = {1.5, 80}, const ExitCondition &angular_exit = {1.5, 80});
 
         void update() override;
@@ -88,8 +88,8 @@ namespace chisel {
 
         bool reversed;
 
-        MoveToPoint(Pose* pose, const Pose& target_point, uint32_t life = 3000, bool async = false,
-            float min_speed, float max_speed,
+        MoveToPoint(Pose* pose, const Pose& target_point, float min_speed, float max_speed,
+            uint32_t life = 3000, bool async = false,
             const ExitCondition &lateral_exit = {1.5, 80}, const ExitCondition &angular_exit = {1.5, 80});
 
         void update() override;

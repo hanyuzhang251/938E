@@ -20,6 +20,10 @@ int Chassis::clean_commands() {
     return clear_count;
 }
 
+void Chassis::assign_motion(Motion *motion) {
+    motion_queue.emplace(motion);
+}
+
 void Chassis::update_motions() const {
     // printf("\nUPDATE MOTIONS CALLED\n");
 
@@ -48,6 +52,13 @@ void Chassis::update_motions() const {
         pid_handle_process(*lateral_pid_controller);
         printf("\tUPDATING ANGULAR PID...\n");
         pid_handle_process(*angular_pid_controller);
+
+        top_motion->lateral_exit.update(lateral_pid_controller->error);
+        top_motion->angular_exit.update(angular_pid_controller->error);
+
+        if (top_motion->lateral_exit.get_exit() && top_motion->angular_exit.get_exit()) {
+            top_motion->life = -1;
+        }
 
         printf("\tlat-o=%f, ang-o=%f\n", lateral_pid_controller->output.load(), angular_pid_controller->output.load());
 

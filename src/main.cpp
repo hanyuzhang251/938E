@@ -523,8 +523,8 @@ void autonomous() {
 
     // auton_intake_command.power = 127;
 
-    chassis.motion_queue.emplace(new chisel::TurnToHeading(&odom.pose, 90));
-    chassis.motion_queue.emplace(new chisel::TurnToHeading(&odom.pose, 0));
+    chassis.motion_queue.emplace(new chisel::TurnToHeading(&odom.pose, 90, 0, 30));
+    chassis.motion_queue.emplace(new chisel::TurnToHeading(&odom.pose, 0, 0, 30));
 
     wait(10000);
 
