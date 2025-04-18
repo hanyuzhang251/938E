@@ -5,16 +5,36 @@
 
 namespace chisel {
 
+    /**
+    * @brief Exit condition for motions.
+    */
     struct ExitCondition {
         float range;
         uint32_t time;
 
+        /**
+         * @brief Exit condition constructor.
+         *
+         * @param range Absolute range of error to exit.
+         * @param time Milliseconds error has to be in the range to exit.
+         */
         ExitCondition(float range, uint32_t time);
 
+        /**
+         * @return Whether the exit condition is met.
+         */
         [[nodiscard]] bool get_exit() const;
 
+        /**
+         * @brief Updates exit condition
+         *
+         * @param error Current error.
+         */
         void update(float error);
 
+        /**
+         * @brief Resets the exit condition
+         */
         void reset();
 
     private:
@@ -22,6 +42,9 @@ namespace chisel {
         bool exit = false;
     };
 
+    /**
+     * Abstract base motion class
+     */
     class Motion {
     public:
         Pose* curr_pose;
@@ -37,14 +60,36 @@ namespace chisel {
 
         std::pair<float, float> controls;
 
+        /**
+         * @brief Motion constructor
+         *
+         * @param pose Pointer to the current pose
+         * @param min_speed Absolute minimum speed for the motion
+         * @param max_speed Absolute maximum speed for the motion
+         * @param life Life of the motion in ticks, defined as PROCESS_DELAY
+         * @param async Whether the motion is asynchronous or not.
+         * @param lateral_exit Lateral exit condition
+         * @param angular_exit Angular exit condition
+         */
         explicit Motion(Pose* pose, float min_speed = 0, float max_speed = 127,
                         uint32_t life = 3000, bool async = false,
                         const ExitCondition &lateral_exit = {1.5, 80}, const ExitCondition &angular_exit = {1.5, 80});
 
+        /**
+         * @brief Runs calculations for the motion
+         *
+         * Is implemented in inheriting motions.
+         */
         virtual void update() = 0;
 
+        /**
+         * @brief Stores pid controls in pair<float, float> controls variable of base class
+         */
         virtual void push_controls() = 0;
 
+        /**
+        * @brief Returns pid controls
+        */
         virtual std::pair<float, float> get_controls();
 
         virtual ~Motion() = default;
