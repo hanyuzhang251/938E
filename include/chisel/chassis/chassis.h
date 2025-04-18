@@ -32,6 +32,8 @@ namespace chisel {
 
         void initialize() const;
 
+        void assign_motion(Motion* motion);
+
     private:
         int clean_commands();
 

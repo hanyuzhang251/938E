@@ -65,7 +65,7 @@ auto PIDController::operator()() {
 }
 
 void pid_handle_process(PIDController& process) {
-    printf("\t\tPID PROCESS UPDATE\n");
+    // printf("\t\tPID PROCESS UPDATE\n");
     // Structural binding of PID controller for conciseness.
     auto [value, target, output, pid, min_speed, max_speed, life, normalize_err,
           prev_output, prev_error, error, integral, derivative] = process();
@@ -73,47 +73,47 @@ void pid_handle_process(PIDController& process) {
     // If the controller is no longer alive, don't update it.
     // In addition, caller of the function should also ensure the PID controller is still alive.
     if (life <= 0) {
-        printf("\t\tpid process died, returning\n");
+        // printf("\t\tpid process died, returning\n");
         return;
     }
     life -= 1;
-    printf("\t\tpid process life=%ld\n", life);
+    // printf("\t\tpid process life=%ld\n", life);
 
     // Update prev values.
     prev_output = output.load();
     prev_error = error;
-    printf("\t\tp-out=%fd, p-err=%d\n", prev_output, prev_error);
+    // printf("\t\tp-out=%fd, p-err=%d\n", prev_output, prev_error);
 
     // Update the current error.
     // While the get_error() method does not normally ensure continuity with the current state,
     // it's okay here because we're updating the controller right now.
     error = process.get_error();
-    printf("\t\terror=%f", error);
+    // printf("\t\terror=%f", error);
 
     // If we crossed the target, we should set the integral to zero.
     if (sgn(prev_error) != sgn(error)) {
-        printf("\t\tintegral crossed, setting to 0\n");
+        // printf("\t\tintegral crossed, setting to 0\n");
 		integral = 0;
 	}
 
     // If the integral is in the windup range, update integral.
     if (std::abs(error) <= pid.wind) {
         integral += error;
-        printf("\t\terror in range (%f), integral=%f\n", pid.wind, integral);
+        // printf("\t\terror in range (%f), integral=%f\n", pid.wind, integral);
     }
     // Otherwise, set integral to zero.
     else {
-        printf("\t\terror is not in range (%f), integral=0\n", pid.wind);
+        // printf("\t\terror is not in range (%f), integral=0\n", pid.wind);
         integral = 0;
     }
 
     // Clamp the integral.
     integral = clamp(integral, -pid.clamp, pid.clamp);
-    printf("\t\tclamp integral to range (%f), integral=%f\n", pid.clamp, integral);
+    // printf("\t\tclamp integral to range (%f), integral=%f\n", pid.clamp, integral);
     
     // Update derivative
     derivative = error - prev_error;
-    printf("\t\tderivative=%f\n", derivative);
+    // printf("\t\tderivative=%f\n", derivative);
 
     // Not sure why we create a const instance of the error,
     // but this was written two bots ago and it worked then so I'm gonna keep it like this.
@@ -130,14 +130,14 @@ void pid_handle_process(PIDController& process) {
 
     // Calculate power.
     float calc_power = real_error * pid.kp + real_integral * pid.ki + real_derivative * pid.kd;
-    printf("\t\traw output=%f\n", calc_power);
+    // printf("\t\traw output=%f\n", calc_power);
 
     // Clamp power to slew.
     calc_power = clamp(calc_power, prev_output - pid.slew, prev_output + pid.slew);
-    printf("\t\tclamp output to range (%f), output=%f\n", pid.slew, calc_power);
+    // printf("\t\tclamp output to range (%f), output=%f\n", pid.slew, calc_power);
 	// Clamp power to min/max speed
     calc_power = abs_clamp(calc_power, min_speed, max_speed);
-    printf("\t\tclamp output to abs range (%f->%f), output=%f\n", min_speed, max_speed, calc_power);
+    // printf("\t\tclamp output to abs range (%f->%f), output=%f\n", min_speed, max_speed, calc_power);
 
     // Set output power.
     output.store(calc_power);

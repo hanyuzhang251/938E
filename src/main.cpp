@@ -33,39 +33,43 @@ void color_sort_update() {
 
     if (!color_sort_enabled) return;
 
-    if (optical.get_proximity() < 200) return;
-
     const double r_hue_min = std::fmod(RED_RING_HUE - RING_HUE_TOLOERANCE + 360, 360.0f);
     const double r_hue_max = std::fmod(RED_RING_HUE + RING_HUE_TOLOERANCE, 360.0f);
     const double b_hue_min = std::fmod(BLUE_RING_HUE - RING_HUE_TOLOERANCE + 360, 360.0f);
     const double b_hue_max = std::fmod(BLUE_RING_HUE + RING_HUE_TOLOERANCE, 360.0f);
 
     bool b_ring = false;
-
-    if (b_hue_min <= b_hue_max) {
-        // if it's normal, just check the ranges
-        b_ring = b_hue_min <= optical.get_hue() && optical.get_hue() <= b_hue_max;
-    } else if (b_hue_min >= b_hue_max) {
-        // if the range goes around 0, say hue min is 330 while hue_max is 30,
-        // 0 and 360 are used as bounds.
-        b_ring = optical.get_hue() <= b_hue_max || optical.get_hue() >= b_hue_min;
-    }
-    if (b_ring) blue_ring_seen = true;
-
     bool r_ring = false;
-    if (r_hue_min <= r_hue_max) {
-        // if it's normal, just check the ranges
-        r_ring = r_hue_min <= optical.get_hue() && optical.get_hue() <= r_hue_max;
-    } else if (r_hue_min >= r_hue_max) {
-        // if the range goes around 0, say hue min is 330 while hue_max is 30,
-        // 0 and 360 are used as bounds.
-        r_ring = optical.get_hue() <= r_hue_max || optical.get_hue() >= r_hue_min;
-    }
-    if (r_ring) red_ring_seen = true;
 
-    if (pros::millis() - last_outtake >= COLOR_SORT_COOLDOWN && (alliance && !b_ring && p_brs || !alliance && !r_ring && p_rrs)) {
-        pros::Task([] { queue_outtake(); });
-        last_outtake = pros::millis();
+    if (optical.get_proximity() >= 200) {
+        if (b_hue_min <= b_hue_max) {
+            // if it's normal, just check the ranges
+            b_ring = b_hue_min <= optical.get_hue() && optical.get_hue() <= b_hue_max;
+        } else if (b_hue_min >= b_hue_max) {
+            // if the range goes around 0, say hue min is 330 while hue_max is 30,
+            // 0 and 360 are used as bounds.
+            b_ring = optical.get_hue() <= b_hue_max || optical.get_hue() >= b_hue_min;
+        }
+        if (b_ring) blue_ring_seen = true;
+
+        if (r_hue_min <= r_hue_max) {
+            // if it's normal, just check the ranges
+            r_ring = r_hue_min <= optical.get_hue() && optical.get_hue() <= r_hue_max;
+        } else if (r_hue_min >= r_hue_max) {
+            // if the range goes around 0, say hue min is 330 while hue_max is 30,
+            // 0 and 360 are used as bounds.
+            r_ring = optical.get_hue() <= r_hue_max || optical.get_hue() >= r_hue_min;
+        }
+        if (r_ring) red_ring_seen = true;
+    }
+
+    if (pros::millis() - last_outtake >= COLOR_SORT_COOLDOWN) {
+        if ((alliance && !b_ring && p_brs || !alliance && !r_ring && p_rrs)) {
+            pros::Task([] {
+                queue_outtake();
+                last_outtake = pros::millis();
+            });
+        }
     }
 }
 
@@ -128,25 +132,52 @@ void menu_update() {
         }
         case 1: {
             block_controls = true;
-            std::snprintf(ctrl_log[0], 15, "%cside: %s      ", pointer_index == 0 ? '>' : ' ',
-                          alliance ? "RED " : "BLUE");
-            std::snprintf(ctrl_log[1], 15, "%ccs: %s       ", pointer_index == 1 ? '>' : ' ',
-                          color_sort_enabled ? "ON " : "OFF");
-            std::snprintf(ctrl_log[2], 15, "%cmore...      ", pointer_index == 2 ? '>' : ' ');
+            if (pointer_index == 3) {
+                std::snprintf(ctrl_log[0], 15, "%cmore...      ", pointer_index == 3 ? '>' : ' ');
+                std::snprintf(ctrl_log[1], 15, "               ");
+                std::snprintf(ctrl_log[2], 15, "               ");
+            } else {
+                std::snprintf(ctrl_log[0], 15, "%creset_arm    ", pointer_index == 0 ? '>' : ' ');
+                std::snprintf(ctrl_log[1], 15, "%cside: %s      ", pointer_index == 1 ? '>' : ' ',
+                              alliance ? "RED " : "BLUE");
+                std::snprintf(ctrl_log[2], 15, "%ccs: %s       ", pointer_index == 2 ? '>' : ' ',
+                              color_sort_enabled ? "ON " : "OFF");
+            }
 
-            if (pointer_index >= 3) pointer_index = 2;
+            if (pointer_index >= 4) pointer_index = 3;
 
             if (menu_select) {
                 switch (pointer_index) {
                     case 0: {
-                        alliance = !alliance;
+                        pros::Task([&] {
+                            const bool p_arm_clamp = arm_clamp;
+                            arm_clamp = false;
+
+                            arm_target_pos.fetch_add(-9999);
+
+                            while (arm.get_current_draw() < 2300) {
+                                chisel::wait(PROCESS_DELAY);
+                            }
+
+                            reset_arm();
+
+                            arm_clamp = p_arm_clamp;
+                        });
+
+                        menu_toggle.tick(true);
+                        menu_toggle.tick(false);
+
                         break;
                     }
                     case 1: {
-                        color_sort_enabled = !color_sort_enabled;
+                        alliance = !alliance;
                         break;
                     }
                     case 2: {
+                        color_sort_enabled = !color_sort_enabled;
+                        break;
+                    }
+                    case 3: {
                         menu_page = 2;
                         pointer_index = 0;
                         break;
@@ -454,23 +485,15 @@ void autonomous() {
 
     intake_itf.assign_command(&auton_intake_command);
 
-    const float multi = alliance ? 1 : -1;
-
     odom.internal_pose.x = 0;
     odom.internal_pose.y = 0;
     odom.internal_pose.h = 0;
     odom.pose.x = 0;
     odom.pose.y = 0;
     odom.pose.h = 0;
-    odom.pose_offset.x = -52;
-    odom.pose_offset.y = 36;
-    odom.pose_offset.h = -127 * multi;
-
-    arm.tare_position_all();
-    arm_pos.store(0);
-    arm_target_pos.store(0);
-    arm.tare_position();
-    arm.tare_position_all();
+    odom.pose_offset.x = 0;
+    odom.pose_offset.y = 0;
+    odom.pose_offset.h = 0;
 
     (void)mogo.set_value(true);
 
@@ -483,82 +506,39 @@ void autonomous() {
     pointer_index = 0;
     wait(15);
 
-    arm_target_pos.fetch_add(ARM_SCORE_POS);
-    wait(700);
+    pros::Task([&] {
+        const bool p_arm_clamp = arm_clamp;
+        arm_clamp = false;
 
-    target_dist.fetch_add(-5);
-    wait_cross(lateral_pid_controller, -3);
-    target_heading.store(-120 * multi);
-    wait(500);
-    target_dist.fetch_add(2);
-    wait(100);
-    ldoinker.set_value(true);
-    wait(500);
+        arm_target_pos.fetch_add(-9999);
 
-    arm_target_pos.fetch_add(-ARM_SCORE_POS - 70);
+        while (arm.get_current_draw() < 2300) {
+            chisel::wait(PROCESS_DELAY);
+        }
 
-    target_dist.fetch_add(-34);
-    angular_pid_controller.max_speed=35;
-    lateral_pid_controller.max_speed=50;
-    target_heading.store(175 * multi);
-    wait_stable(lateral_pid_controller);
-    target_dist.fetch_add(-7);
-    wait(800);
-    mogo.set_value(false);
-    wait(300);
+        reset_arm();
 
-    target_heading.store(70 * multi);
-    wait_stable((angular_pid_controller));
-    ldoinker.set_value(false);
-    wait(300);
-    angular_pid_controller.max_speed = 127;
-    target_heading.store(90 * multi);
-    wait_stable(angular_pid_controller);
-    lateral_pid_controller.max_speed = 127;
-    target_dist.fetch_add(30);
-    auton_intake_command.power = 127;
-
-    wait_stable(lateral_pid_controller);
-
-
-    target_heading.store(180 * multi);
-    wait_stable((angular_pid_controller));
-
-    arm_target_pos.fetch_add(arm_pos.load() -ARM_SCORE_POS - 200);
-    pros::Task([] {
-        wait(1000);reset_arm();
+        arm_clamp = p_arm_clamp;
     });
 
-    target_dist.fetch_add(34);
-    wait_cross(lateral_pid_controller, 18);
-    target_heading.store(130 * multi);
+    // auton_intake_command.power = 127;
 
-    wait_stable(angular_pid_controller);
-    lateral_pid_controller.max_speed = 30;
-    target_dist.fetch_add(12);
-    wait(1200);
-    lateral_pid_controller.max_speed = 30;
-    target_dist.store(current_dist.load() - 12);
-    wait(600);
+    chassis.motion_queue.emplace(new chisel::TurnToHeading(&odom.pose, 90, 0, 30));
+    chassis.motion_queue.emplace(new chisel::TurnToHeading(&odom.pose, 0, 0, 30));
 
-    target_dist.store(current_dist.load() + 3);
-
-    ldoinker.set_value(true);
-    wait(200);
-    target_heading.store(180 * multi);
-    wait(1000);
-    ldoinker.set_value(false);
-    target_heading.store(-45 * multi);
-    wait(1000);
-    target_dist.fetch_add(-12);
-    wait(500);
-
+    wait(10000);
 
     chassis.state = DRIVE_STATE;
 }
 
 void opcontrol() {
     printf("%sopcontrol start\n", chisel::prefix().c_str());
+    block_movement = false;
+    block_controls = false;
+
+    auton_intake_command.power = 0;
+    auton_intake_command.priority = -999;
+    auton_intake_command.dismiss();
 
     intake_itf.assign_command(&driver_intake_command);
 

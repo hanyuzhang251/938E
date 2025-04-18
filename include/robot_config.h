@@ -70,9 +70,9 @@ constexpr uint32_t COLOR_SORT_COOLDOWN = 500;
 
 constexpr float ARM_SPEED = 240;
 
-constexpr float ARM_LOW_POS = 300;
+constexpr float ARM_LOW_POS = 250;
 constexpr float MAX_ARM_POS = 1550;
-constexpr float ARM_LOAD_POS = 212;
+constexpr float ARM_LOAD_POS = 205;
 constexpr float ARM_SCORE_POS = 800;
 
 inline int arm_macro_cycle_index = 0;
@@ -184,7 +184,7 @@ inline chisel::PIDSetting lateral_pid_settings{
     5, // kp
     0.1, // ki
     0, // kd
-    1.5f, // tolerance
+    2.5f, // tolerance
     12, // wind
     999, // clamp
     999, // slew
@@ -233,14 +233,14 @@ inline void device_update() {
     pid_handle_process(arm_pid);
     (void)arm.move(arm_pid_output.load());
 
-    if (chassis.state == AUTON_STATE) {
-        pid_handle_process(angular_pid_controller);
-        pid_handle_process(lateral_pid_controller);
-
-        float left_power = lateral_pid_output.load() + angular_pid_output.load();
-        float right_power = lateral_pid_output.load() - angular_pid_output.load();
-
-        (void)drive_train.left_motors->move(left_power);
-        (void)drive_train.right_motors->move(right_power);
-    }
+    // if (chassis.state == AUTON_STATE) {
+    //     pid_handle_process(angular_pid_controller);
+    //     pid_handle_process(lateral_pid_controller);
+    //
+    //     float left_power = lateral_pid_output.load() + angular_pid_output.load();
+    //     float right_power = lateral_pid_output.load() - angular_pid_output.load();
+    //
+    //     (void)drive_train.left_motors->move(left_power);
+    //     (void)drive_train.right_motors->move(right_power);
+    // }
 }
