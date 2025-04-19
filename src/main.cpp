@@ -483,50 +483,53 @@ void wait_cross(const chisel::PIDController &pid_process, float point, const boo
 void autonomous() {
     printf("%sauton start\n", chisel::prefix().c_str());
 
-    intake_itf.assign_command(&auton_intake_command);
+    auton_init();
 
-    odom.internal_pose.x = 0;
-    odom.internal_pose.y = 0;
-    odom.internal_pose.h = 0;
-    odom.pose.x = 0;
-    odom.pose.y = 0;
-    odom.pose.h = 0;
-    odom.pose_offset.x = 0;
-    odom.pose_offset.y = 0;
-    odom.pose_offset.h = 0;
-
-    (void)mogo.set_value(true);
-
-    target_heading.store (odom.pose_offset.h);
-
-    current_dist.store(0);
-    target_dist.store(current_dist.load());
-    chassis.state = AUTON_STATE;
     menu_page = 333100;
     pointer_index = 0;
-    wait(15);
 
-    pros::Task([&] {
-        const bool p_arm_clamp = arm_clamp;
-        arm_clamp = false;
+    // Move towards neutral mogo goal
+    target_dist.fetch_add(42);
 
-        arm_target_pos.fetch_add(-9999);
+    arm_pid_controller.max_speed = 50;
+    // Score on neutral mogo with lady brown
+    arm_target_pos.fetch_add(ARM_SCORE_POS + 300);
 
-        while (arm.get_current_draw() < 2300) {
-            chisel::wait(PROCESS_DELAY);
-        }
+    // Wait until arm movement is done.
+    wait_stable(arm_pid_controller, 5000, 1, 1);
 
-        reset_arm();
+    // Move the mogo
+    arm_target_pos.fetch_add(-200); // Raise arm so mogo doesn't drag on the ground
+    wait(150); // Slight delay so arm has time to lift
+    target_heading.store(-95);
+    target_dist.fetch_add(-4); // Slight overturn and backward movement to position for grabbing upper ring
 
-        arm_clamp = p_arm_clamp;
-    });
+    wait(500); // Delay to give mogo chance to move
 
-    // auton_intake_command.power = 127;
+    // Wait until turning is complete
+    wait_stable(angular_pid_controller, 1000);
 
-    chassis.motion_queue.emplace(new chisel::TurnToHeading(&odom.pose, 90, 0, 30));
-    chassis.motion_queue.emplace(new chisel::TurnToHeading(&odom.pose, 0, 0, 30));
+    // Drop doinker on upper ring
+    (void)ldoinker.set_value(true);
+    wait(200); // Slight delya to allow for doinker to secure the ring
 
-    wait(10000);
+    arm_pid_controller.max_speed = 127;
+    // Drop arm down to release the mogo
+    arm_target_pos.fetch_add(MAX_ARM_POS - arm_pos.load());
+
+    // Wait to let things settle
+    wait(250);
+
+    // Slow it down
+    angular_pid_controller.max_speed = 30;
+    lateral_pid_controller.max_speed = 50;
+
+    // target_heading.store(-80);
+    target_dist.fetch_add(-8);
+
+    wait_stable(angular_pid_controller);
+    wait_stable(lateral_pid_controller);
+
 
     chassis.state = DRIVE_STATE;
 }

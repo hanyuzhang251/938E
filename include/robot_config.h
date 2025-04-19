@@ -82,12 +82,12 @@ inline bool arm_clamp = true;
 inline pros::Motor arm(ARM_PORT);
 
 inline chisel::PIDSetting arm_pid_settings{
-    0.7, 0, 1, 0, 999, 999, 999, 0, 999
+    0.7, 0, 1, 10, 999, 999, 999, 0, 999
 };
 inline std::atomic<float> arm_pos(0);
 inline std::atomic<float> arm_target_pos(0);
 inline std::atomic<float> arm_pid_output(0);
-inline chisel::PIDController arm_pid = {
+inline chisel::PIDController arm_pid_controller = {
     arm_pos,
     arm_target_pos,
     arm_pid_output,
@@ -224,23 +224,52 @@ inline void device_init() {
     current_dist.store(0);
 }
 
+inline void auton_init() {
+    intake_itf.assign_command(&auton_intake_command);
+
+    odom.internal_pose.x = 0;
+    odom.internal_pose.y = 0;
+    odom.internal_pose.h = 0;
+    odom.pose.x = 0;
+    odom.pose.y = 0;
+    odom.pose.h = 0;
+    odom.pose_offset.x = 0;
+    odom.pose_offset.y = 0;
+    odom.pose_offset.h = -20;
+
+    (void)mogo.set_value(true);
+
+    target_heading.store (odom.pose_offset.h);
+
+    current_dist.store(0);
+    target_dist.store(current_dist.load());
+
+    (void)arm.tare_position();
+    arm_pos.store(0);
+    arm_target_pos.store(arm_pos.load());
+
+    chassis.state = AUTON_STATE;
+
+    wait(15);
+}
+
 inline void device_update() {
     intake_itf.clean_commands();
     intake_itf.update();
     intake_itf.push_control();
 
     arm_pos.store(arm.get_position());
-    pid_handle_process(arm_pid);
+    pid_handle_process(arm_pid_controller);
     (void)arm.move(arm_pid_output.load());
 
-    // if (chassis.state == AUTON_STATE) {
-    //     pid_handle_process(angular_pid_controller);
-    //     pid_handle_process(lateral_pid_controller);
-    //
-    //     float left_power = lateral_pid_output.load() + angular_pid_output.load();
-    //     float right_power = lateral_pid_output.load() - angular_pid_output.load();
-    //
-    //     (void)drive_train.left_motors->move(left_power);
-    //     (void)drive_train.right_motors->move(right_power);
-    // }
+    if (chassis.state == AUTON_STATE) {
+        pid_handle_process(angular_pid_controller);
+        pid_handle_process(lateral_pid_controller);
+
+        float left_power = lateral_pid_output.load() + angular_pid_output.load();
+        float right_power = lateral_pid_output.load() - angular_pid_output.load();
+
+        (void)drive_train.left_motors->move(left_power);
+        (void)drive_train.right_motors->move(right_power);
+    }
 }
