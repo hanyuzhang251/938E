@@ -495,6 +495,9 @@ void autonomous() {
     // Score on neutral mogo with lady brown
     arm_target_pos.fetch_add(ARM_SCORE_POS + 300);
 
+    wait_cross(lateral_pid_controller, 38);
+    angular_pid_controller.max_speed = 127;
+
     // Wait until arm movement is done.
     wait_stable(arm_pid_controller, 5000, 1, 1);
 
@@ -515,7 +518,7 @@ void autonomous() {
 
     arm_pid_controller.max_speed = 127;
     // Drop arm down to release the mogo
-    arm_target_pos.fetch_add(MAX_ARM_POS - arm_pos.load());
+    arm_target_pos.fetch_add(-arm_pos.load());
 
     // Wait to let things settle
     wait(250);
@@ -526,6 +529,8 @@ void autonomous() {
 
     // target_heading.store(-80);
     target_dist.fetch_add(-8);
+    wait_cross(lateral_pid_controller, -3);
+    target_heading.store(0);
 
     wait_stable(angular_pid_controller);
     wait_stable(lateral_pid_controller);
