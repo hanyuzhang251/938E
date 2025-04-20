@@ -73,7 +73,8 @@ constexpr float ARM_SPEED = 240;
 constexpr float ARM_LOW_POS = 250;
 constexpr float MAX_ARM_POS = 1550;
 constexpr float ARM_LOAD_POS = 205;
-constexpr float ARM_SCORE_POS = 800;
+constexpr float ARM_SCORE_POS = 750;
+constexpr float ARM_ALLIANCE_POS = 920;
 
 inline int arm_macro_cycle_index = 0;
 
@@ -224,7 +225,7 @@ inline void device_init() {
     current_dist.store(0);
 }
 
-inline void auton_init() {
+inline void auton_init(const float h_offset = 0, const float arm_offset = 0) {
     intake_itf.assign_command(&auton_intake_command);
 
     odom.internal_pose.x = 0;
@@ -235,7 +236,7 @@ inline void auton_init() {
     odom.pose.h = 0;
     odom.pose_offset.x = 0;
     odom.pose_offset.y = 0;
-    odom.pose_offset.h = -20;
+    odom.pose_offset.h = h_offset;
 
     (void)mogo.set_value(true);
 
@@ -245,7 +246,7 @@ inline void auton_init() {
     target_dist.store(current_dist.load());
 
     (void)arm.tare_position();
-    arm_pos.store(0);
+    arm_pos.store(arm_offset);
     arm_target_pos.store(arm_pos.load());
 
     chassis.state = AUTON_STATE;

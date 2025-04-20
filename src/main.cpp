@@ -5,7 +5,7 @@
 
 pros::Controller master(pros::E_CONTROLLER_MASTER);
 
-bool alliance = false; // true = red, false = blue
+bool alliance = true; // true = red, false = blue
 bool color_sort_enabled = true;
 
 bool red_ring_seen = false;
@@ -480,63 +480,94 @@ void wait_cross(const chisel::PIDController &pid_process, float point, const boo
     for (int i = 0; i < buffer_ticks; ++i) wait(PROCESS_DELAY);
 }
 
+void red_neg_12_aut() {
+    auton_init(125, 190); // init auton with starting heading of 125 deg, and arm holding ring at pos 190
+
+    arm_target_pos.store(ARM_ALLIANCE_POS); // score ring on alliance
+    wait(300); // delay to give arm time to score
+
+    target_dist.fetch_add(-40); // start moving backwards
+
+    wait_cross(lateral_pid_controller, -2.5); // wait so arm disengaged from ring
+    arm_target_pos.store(-50); // reset arm to default position
+    // arc movement to mogo
+    target_heading.store(210);
+    angular_pid_controller.max_speed = 127 / 2.0f;
+
+    wait_stable(lateral_pid_controller);
+    (void)mogo.set_value(false); // clamp the mogo
+    wait(200);
+
+    angular_pid_controller.max_speed = 127;
+    target_heading.store(-43);
+    wait_stable(angular_pid_controller);
+
+    auton_intake_command.power = 127;
+    target_dist.fetch_add(22);
+
+    uint32_t end = pros::millis() + 1500;
+    bool prs = red_ring_seen;
+    while (pros::millis() < end) {
+        if (!red_ring_seen && prs) break;
+        wait(10);
+    }
+    wait(200);
+
+    target_heading.store(-90);
+    target_dist.fetch_add(15);
+
+    uint32_t start = pros::millis() + 500;
+    end = pros::millis() + 2000;
+    prs = red_ring_seen;
+    while (pros::millis() < end) {
+        if (!red_ring_seen && prs && pros::millis() > start) break;
+        wait(10);
+    }
+    wait(200);
+
+    target_heading.store(132);
+    target_dist.fetch_add(25);
+
+    wait_stable(lateral_pid_controller);
+
+    lateral_pid_controller.max_speed = 50;
+    angular_pid_controller.max_speed = 22;
+
+    target_heading.store(-135);
+    target_dist.fetch_add(60);
+
+    // wait_cross(lateral_pid_controller, 12.5);
+    // lateral_pid_controller.max_speed = 127 / 3.0f;
+    // target_heading.store(-90);
+
+    wait_stable(lateral_pid_controller);
+    lateral_pid_controller.max_speed = 30;
+
+    target_dist.fetch_add(-12);
+    wait_stable(lateral_pid_controller);
+
+    target_dist.fetch_add(8);
+
+    wait_stable(lateral_pid_controller);
+
+
+
+    wait(800);
+}
+
 void autonomous() {
     printf("%sauton start\n", chisel::prefix().c_str());
-
-    auton_init();
 
     menu_page = 333100;
     pointer_index = 0;
 
-    // Move towards neutral mogo goal
-    target_dist.fetch_add(42);
-
-    arm_pid_controller.max_speed = 50;
-    // Score on neutral mogo with lady brown
-    arm_target_pos.fetch_add(ARM_SCORE_POS + 300);
-
-    wait_cross(lateral_pid_controller, 38);
-    angular_pid_controller.max_speed = 127;
-
-    // Wait until arm movement is done.
-    wait_stable(arm_pid_controller, 5000, 1, 1);
-
-    // Move the mogo
-    arm_target_pos.fetch_add(-200); // Raise arm so mogo doesn't drag on the ground
-    wait(150); // Slight delay so arm has time to lift
-    target_heading.store(-95);
-    target_dist.fetch_add(-4); // Slight overturn and backward movement to position for grabbing upper ring
-
-    wait(500); // Delay to give mogo chance to move
-
-    // Wait until turning is complete
-    wait_stable(angular_pid_controller, 1000);
-
-    // Drop doinker on upper ring
-    (void)ldoinker.set_value(true);
-    wait(200); // Slight delya to allow for doinker to secure the ring
-
-    arm_pid_controller.max_speed = 127;
-    // Drop arm down to release the mogo
-    arm_target_pos.fetch_add(-arm_pos.load());
-
-    // Wait to let things settle
-    wait(250);
-
-    // Slow it down
-    angular_pid_controller.max_speed = 30;
-    lateral_pid_controller.max_speed = 50;
-
-    // target_heading.store(-80);
-    target_dist.fetch_add(-8);
-    wait_cross(lateral_pid_controller, -3);
-    target_heading.store(0);
-
-    wait_stable(angular_pid_controller);
-    wait_stable(lateral_pid_controller);
-
+    red_neg_12_aut();
 
     chassis.state = DRIVE_STATE;
+    wait(15);
+
+    (void)left_motors.move(0);
+    (void)right_motors.move(0);
 }
 
 void opcontrol() {
