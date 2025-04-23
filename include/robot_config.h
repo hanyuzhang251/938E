@@ -184,7 +184,7 @@ inline chisel::PIDController angular_pid_controller {
 inline chisel::PIDSetting lateral_pid_settings{
     5, // kp
     0.1, // ki
-    0, // kd
+    2.5, // kd
     2.5f, // tolerance
     12, // wind
     999, // clamp
@@ -226,17 +226,28 @@ inline void device_init() {
 }
 
 inline void auton_init(const float h_offset = 0, const float arm_offset = 0) {
+    chassis.state = CRASHOUT;
+    wait(15);
+
     intake_itf.assign_command(&auton_intake_command);
 
-    odom.internal_pose.x = 0;
-    odom.internal_pose.y = 0;
-    odom.internal_pose.h = 0;
-    odom.pose.x = 0;
-    odom.pose.y = 0;
-    odom.pose.h = 0;
-    odom.pose_offset.x = 0;
-    odom.pose_offset.y = 0;
-    odom.pose_offset.h = h_offset;
+    odom.internal_pose.x.store(0);
+    odom.internal_pose.y.store(0);
+    odom.internal_pose.h.store(0);
+    odom.pose.x.store(0);
+    odom.pose.y.store(0);
+    odom.pose.h.store(0);
+    odom.pose_offset.x.store(0);
+    odom.pose_offset.y.store(0);
+    odom.pose_offset.h.store(h_offset);
+
+    odom.prev_left_pos = 0;
+    odom.prev_right_pos = 0;
+    (void)left_motors.tare_position_all();
+    (void)right_motors.tare_position_all();
+
+    prev_dist.store(0);
+    current_dist.store(0);
 
     (void)mogo.set_value(true);
 
@@ -250,7 +261,6 @@ inline void auton_init(const float h_offset = 0, const float arm_offset = 0) {
     arm_target_pos.store(arm_pos.load());
 
     chassis.state = AUTON_STATE;
-
     wait(15);
 }
 

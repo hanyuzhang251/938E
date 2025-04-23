@@ -1,4 +1,7 @@
 #include "main.h"
+
+#include <csetjmp>
+
 #include "chisel/chisel.h"
 
 #include "robot_config.h"
@@ -481,7 +484,7 @@ void wait_cross(const chisel::PIDController &pid_process, float point, const boo
 }
 
 void red_neg_12_aut() {
-    auton_init(125, 190); // init auton with starting heading of 125 deg, and arm holding ring at pos 190
+    auton_init(124, 190); // init auton with starting heading of 125 deg, and arm holding ring at pos 190
 
     arm_target_pos.store(ARM_ALLIANCE_POS); // score ring on alliance
     wait(300); // delay to give arm time to score
@@ -499,58 +502,119 @@ void red_neg_12_aut() {
     wait(200);
 
     angular_pid_controller.max_speed = 127;
-    target_heading.store(-43);
+    target_heading.store(-39);
     wait_stable(angular_pid_controller);
 
     auton_intake_command.power = 127;
-    target_dist.fetch_add(22);
+    target_dist.fetch_add(21.5);
 
-    uint32_t end = pros::millis() + 1500;
-    bool prs = red_ring_seen;
+    uint32_t end = pros::millis() + 800;
     while (pros::millis() < end) {
+        const bool prs = red_ring_seen;
         if (!red_ring_seen && prs) break;
         wait(10);
     }
-    wait(200);
 
-    target_heading.store(-90);
-    target_dist.fetch_add(15);
+    wait_stable(lateral_pid_controller);
 
-    uint32_t start = pros::millis() + 500;
-    end = pros::millis() + 2000;
-    prs = red_ring_seen;
+    target_heading.store(-95);
+    angular_pid_controller.max_speed = 127;
+    target_dist.fetch_add(18);
+
+    red_ring_seen = false;
+    uint32_t start = pros::millis() + 650;
+    end = pros::millis() + 1500;
     while (pros::millis() < end) {
-        if (!red_ring_seen && prs && pros::millis() > start) break;
+        const bool prs = red_ring_seen;
+        if (red_ring_seen && pros::millis() > start) break;
         wait(10);
     }
-    wait(200);
 
-    target_heading.store(132);
-    target_dist.fetch_add(25);
+    target_dist.fetch_add(-28.5);
+    lateral_pid_controller.max_speed = 127;
+    wait(100);
+    target_heading.store(-45);
+    angular_pid_controller.max_speed = 127;
+
 
     wait_stable(lateral_pid_controller);
-
-    lateral_pid_controller.max_speed = 50;
-    angular_pid_controller.max_speed = 22;
 
     target_heading.store(-135);
-    target_dist.fetch_add(60);
+    angular_pid_controller.max_speed = 127;
+    target_dist.fetch_add(24);
+    lateral_pid_controller.max_speed = 127;
 
-    // wait_cross(lateral_pid_controller, 12.5);
-    // lateral_pid_controller.max_speed = 127 / 3.0f;
-    // target_heading.store(-90);
+    wait_cross(lateral_pid_controller, 14);
+
+    target_heading.store(-190);
+
+    wait_stable(angular_pid_controller);
+    wait(250);
+
+    lateral_pid_controller.max_speed = 60;
+    angular_pid_controller.max_speed = 30;
+
+    target_dist.fetch_add(43);
+    wait_cross(lateral_pid_controller, 7.5f);
+    target_heading.store(-135);
+
+    wait(1250);
+
+    lateral_pid_controller.max_speed = 15;
+    target_dist.store(current_dist.load() - 4);
+    wait_stable(lateral_pid_controller);
+
+    wait(200);
+
+    red_ring_seen = false;
+    start = pros::millis() + 300;
+    end = pros::millis() + 1500;
+    while (pros::millis() < end) {
+        if (red_ring_seen && pros::millis() > start) {
+            auton_intake_command.power = 0;
+            break;
+        }
+        wait(10);
+    }
+
+    lateral_pid_controller.max_speed = 127;
+    target_dist.fetch_add(4);
+    wait(500);
+
+    target_dist.store(current_dist.load() - 4);
+    target_heading.store(73);
+    angular_pid_controller.max_speed = 127;
+    wait_stable(angular_pid_controller);
+
+    target_dist.fetch_add(43);
+    wait_cross(lateral_pid_controller, 40);
+
+    (void)rdoinker.set_value(true);
 
     wait_stable(lateral_pid_controller);
-    lateral_pid_controller.max_speed = 30;
 
-    target_dist.fetch_add(-12);
+    lateral_pid_controller.max_speed = 127 / 3.0f;
+
+    auton_intake_command.power = 127;
+
+    target_dist.fetch_add(-9);
     wait_stable(lateral_pid_controller);
+    (void)rdoinker.set_value(false);
 
-    target_dist.fetch_add(8);
+    target_heading.store(95);
+    lateral_pid_controller.max_speed = 127;
+    wait(300);
 
-    wait_stable(lateral_pid_controller);
+    target_dist.fetch_add(33);
+    wait_cross(lateral_pid_controller, 12);
 
+    target_heading.store(-20);
+    angular_pid_controller.max_speed = 127 / 2.0f;
 
+    wait_cross(lateral_pid_controller, 9);
+    target_dist.fetch_add(15);
+    wait(250);
+    arm_target_pos.store(ARM_SCORE_POS);
 
     wait(800);
 }
@@ -566,8 +630,14 @@ void autonomous() {
     chassis.state = DRIVE_STATE;
     wait(15);
 
+    (void)left_motors.set_brake_mode_all(pros::MotorBrake::coast);
+    (void)right_motors.set_brake_mode_all(pros::MotorBrake::coast);
+
     (void)left_motors.move(0);
     (void)right_motors.move(0);
+
+    auton_intake_command.priority = 0;
+    auton_intake_command.dismiss();
 }
 
 void opcontrol() {

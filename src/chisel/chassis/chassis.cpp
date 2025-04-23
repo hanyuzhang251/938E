@@ -64,10 +64,12 @@ void Chassis::update_motions() const {
 }
 
 void Chassis::update() {
-    odom->predict_with_ime();
-    // don't consider odom cause we don't have it yet
-    odom->push_prediction(true, false);
-    odom->load_pose();
+    if (state != CRASHOUT) {
+        odom->predict_with_ime();
+        // don't consider odom cause we don't have it yet
+        odom->push_prediction(true, false);
+        odom->load_pose();
+    }
 
     clean_commands();
     update_motions();
@@ -76,7 +78,7 @@ void Chassis::update() {
 static void chassis_update(void* param) {
     auto *chassis = static_cast<Chassis*>(param);
     while(true) {
-        if (chassis->enabled.load()) {
+        if (chassis->enabled.load() && chassis->state != CRASHOUT) {
             chassis->update();
         }
         wait(PROCESS_DELAY);
