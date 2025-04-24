@@ -60,6 +60,7 @@ inline pros::Motor intake(INTAKE_PORT);
 inline auto intake_itf = chisel::MotorItf(&intake);
 inline chisel::Command driver_intake_command = {0, 326};
 inline chisel::Command auton_intake_command = {0, 551};
+inline chisel::Command unstuck_intake_command = {0, 0};
 inline chisel::Command color_sort_command = {0, 0};
 
 constexpr double BLUE_RING_HUE = 215;
@@ -220,6 +221,7 @@ inline void device_init() {
     optical.set_led_pwm(100);
 
     intake_itf.assign_command(&color_sort_command);
+    intake_itf.assign_command(&unstuck_intake_command);
 
     target_dist.store(0);
     current_dist.store(0);

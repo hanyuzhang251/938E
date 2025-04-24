@@ -10,6 +10,31 @@ pros::Controller master(pros::E_CONTROLLER_MASTER);
 
 bool alliance = true; // true = red, false = blue
 bool color_sort_enabled = true;
+bool unstuck_enabled = true;
+
+int intake_stuck_ticks = 0;
+constexpr int INTAKE_STUCK_LIMIT = 6;
+int intake_outtake_ticks = 0;
+constexpr int INTAKE_OUTTAKE_DURATION = 15;
+
+void unstuck_update() {
+    if (intake.get_current_draw() > 50 && intake.get_efficiency() < 3) {
+        ++intake_stuck_ticks;
+    } else {
+        intake_stuck_ticks = 0;
+    }
+    if (intake_stuck_ticks >= INTAKE_STUCK_LIMIT) {
+        intake_outtake_ticks = INTAKE_OUTTAKE_DURATION;
+    }
+    if (intake_outtake_ticks > 0) {
+        unstuck_intake_command.priority = 1467;
+        unstuck_intake_command.power = -127;
+
+        --intake_outtake_ticks;
+    } else {
+        unstuck_intake_command.priority = 0;
+    }
+}
 
 bool red_ring_seen = false;
 bool blue_ring_seen = false;
@@ -408,6 +433,8 @@ void async_update([[maybe_unused]] void *param) {
     while (true) {
         color_sort_update();
 
+        unstuck_update();
+
         device_update();
 
         menu_update();
@@ -458,13 +485,15 @@ void competition_initialize() {
 }
 
 void wait_stable(const chisel::PIDController &pid_process, const uint32_t timeout = 5000, const int buffer_ticks = 3,
-                 const int min_stable_ticks = 8) {
+                 const int min_stable_ticks = 8, float tolerance = -67) {
+    if (tolerance <= 0) tolerance = pid_process.pid.tolerance;
+
     int stable_ticks = 0;
     const uint32_t end_time = pros::millis() + timeout;
 
     while (stable_ticks < min_stable_ticks) {
         pros::lcd::print(4, "error: %f", pid_process.get_error());
-        if (std::abs(pid_process.get_error()) <= pid_process.pid.tolerance) ++stable_ticks;
+        if (std::abs(pid_process.get_error()) <= tolerance) ++stable_ticks;
         else stable_ticks = 0;
 
         if (pros::millis() >= end_time) return;
@@ -492,7 +521,7 @@ void red_neg_12_aut() {
     target_dist.fetch_add(-40); // start moving backwards
 
     wait_cross(lateral_pid_controller, -2.5); // wait so arm disengaged from ring
-    arm_target_pos.store(-50); // reset arm to default position
+    arm_target_pos.store(ARM_LOAD_POS + 120); // reset arm to default position
     // arc movement to mogo
     target_heading.store(210);
     angular_pid_controller.max_speed = 127 / 2.0f;
@@ -506,14 +535,17 @@ void red_neg_12_aut() {
     wait_stable(angular_pid_controller);
 
     auton_intake_command.power = 127;
-    target_dist.fetch_add(21.5);
+    target_dist.fetch_add(21.2);
 
     uint32_t end = pros::millis() + 800;
+    red_ring_seen = false;
+    bool prs = red_ring_seen;
     while (pros::millis() < end) {
-        const bool prs = red_ring_seen;
         if (!red_ring_seen && prs) break;
+        prs = red_ring_seen;
         wait(10);
     }
+    wait(120);
 
     wait_stable(lateral_pid_controller);
 
@@ -525,8 +557,8 @@ void red_neg_12_aut() {
     uint32_t start = pros::millis() + 650;
     end = pros::millis() + 1500;
     while (pros::millis() < end) {
-        const bool prs = red_ring_seen;
         if (red_ring_seen && pros::millis() > start) break;
+        prs = red_ring_seen;
         wait(10);
     }
 
@@ -546,43 +578,40 @@ void red_neg_12_aut() {
 
     wait_cross(lateral_pid_controller, 14);
 
-    target_heading.store(-190);
+    target_heading.store(-180);
 
-    wait_stable(angular_pid_controller);
-    wait(250);
+    wait_stable(angular_pid_controller, 5000, 3, 8, 3.5);
 
-    lateral_pid_controller.max_speed = 60;
-    angular_pid_controller.max_speed = 30;
+    lateral_pid_controller.max_speed = 90;
+    angular_pid_controller.max_speed = 45;
 
-    target_dist.fetch_add(43);
+    target_dist.fetch_add(44);
     wait_cross(lateral_pid_controller, 7.5f);
     target_heading.store(-135);
 
     wait(1250);
 
-    lateral_pid_controller.max_speed = 15;
+    lateral_pid_controller.max_speed = 20;
     target_dist.store(current_dist.load() - 4);
     wait_stable(lateral_pid_controller);
 
-    wait(200);
+    wait(350);
+
+    lateral_pid_controller.max_speed = 127;
+    target_dist.fetch_add(4);
 
     red_ring_seen = false;
-    start = pros::millis() + 300;
-    end = pros::millis() + 1500;
+    end = pros::millis() + 700;
     while (pros::millis() < end) {
-        if (red_ring_seen && pros::millis() > start) {
+        if (red_ring_seen) {
             auton_intake_command.power = 0;
             break;
         }
         wait(10);
     }
 
-    lateral_pid_controller.max_speed = 127;
-    target_dist.fetch_add(4);
-    wait(500);
-
     target_dist.store(current_dist.load() - 4);
-    target_heading.store(73);
+    target_heading.store(74.5);
     angular_pid_controller.max_speed = 127;
     wait_stable(angular_pid_controller);
 
@@ -601,7 +630,7 @@ void red_neg_12_aut() {
     wait_stable(lateral_pid_controller);
     (void)rdoinker.set_value(false);
 
-    target_heading.store(95);
+    target_heading.store(92);
     lateral_pid_controller.max_speed = 127;
     wait(300);
 
@@ -615,6 +644,8 @@ void red_neg_12_aut() {
     target_dist.fetch_add(15);
     wait(250);
     arm_target_pos.store(ARM_SCORE_POS);
+
+    mogo_toggle.value = false;
 
     wait(800);
 }
