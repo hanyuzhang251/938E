@@ -502,18 +502,22 @@ void wait_stable(const chisel::PIDController &pid_process, const uint32_t timeou
     for (int i = 0; i < buffer_ticks; ++i) wait(PROCESS_DELAY);
 }
 
-void wait_cross(const chisel::PIDController &pid_process, float point, const bool relative = true, const int buffer_ticks = 0) {
+void wait_cross(const chisel::PIDController &pid_process, float point, const bool relative = true,
+                const int buffer_ticks = 0) {
     if (relative) point += pid_process.value.load();
 
-   const bool side = pid_process.value.load() >= point;
+    const bool side = pid_process.value.load() >= point;
     while ((pid_process.value.load() >= point) == side) {
         wait(PROCESS_DELAY);
     }
     for (int i = 0; i < buffer_ticks; ++i) wait(PROCESS_DELAY);
 }
 
-void red_neg_12_aut() {
-    auton_init(124, 190); // init auton with starting heading of 125 deg, and arm holding ring at pos 190
+// Red ceritifed. Blue untested
+void neg_5p1_aut(const bool side = true) {
+    const float multi = side ? 1 : -1;
+
+    auton_init(124 * multi, 190); // init auton with starting heading of 125 deg, and arm holding ring at pos 190
 
     arm_target_pos.store(ARM_ALLIANCE_POS); // score ring on alliance
     wait(300); // delay to give arm time to score
@@ -523,15 +527,15 @@ void red_neg_12_aut() {
     wait_cross(lateral_pid_controller, -2.5); // wait so arm disengaged from ring
     arm_target_pos.store(ARM_LOAD_POS + 120); // reset arm to default position
     // arc movement to mogo
-    target_heading.store(210);
+    target_heading.store(210 * multi);
     angular_pid_controller.max_speed = 127 / 2.0f;
 
     wait_stable(lateral_pid_controller);
-    (void)mogo.set_value(false); // clamp the mogo
+    (void) mogo.set_value(false); // clamp the mogo
     wait(200); // delay so mogo can clamp correctly
 
     angular_pid_controller.max_speed = 127;
-    target_heading.store(-39); // point towards 4 ring stack
+    target_heading.store(-39 * multi); // point towards 4 ring stack
     wait_stable(angular_pid_controller);
 
     auton_intake_command.power = 127; // start running intake
@@ -546,64 +550,72 @@ void red_neg_12_aut() {
         prs = red_ring_seen;
         wait(10);
     }
-    wait(120);
+    wait(200); // delay a little extra so ring goes on mogo correctly
 
     wait_stable(lateral_pid_controller); // wait until we finish moving, just in case if we collect the ring early
 
-    target_heading.store(-95); // face toward second ring, overshoot a little towards our side to prevent crossing
+    // shallow arc to second ring
+    target_heading.store(-95 * multi); // overshoot a little towards our side to prevent crossing
     angular_pid_controller.max_speed = 127;
+    target_dist.fetch_add(18);
 
-    target_dist.fetch_add(18); // collect second ring
-
+    // wait until we see a ring, for a maximum of 1200 ms starting after 650 ms.
     red_ring_seen = false;
     uint32_t start = pros::millis() + 650;
-    end = pros::millis() + 1500;
+    end = pros::millis() + 1200;
     while (pros::millis() < end) {
         if (red_ring_seen && pros::millis() > start) break;
         prs = red_ring_seen;
         wait(10);
     }
+    // Note the difference as here we finish waiting upon first sight of a ring, and don't wait extra.
 
+    // Reset speeds to max
+    lateral_pid_controller.max_speed = 127;
+    angular_pid_controller.max_speed = 127;
+
+    // Arc movement to exit ring stack area without crossing
     target_dist.fetch_add(-28.5);
-    lateral_pid_controller.max_speed = 127;
     wait(100);
-    target_heading.store(-45);
-    angular_pid_controller.max_speed = 127;
+    target_heading.store(-45 * multi);
 
+    wait_stable(lateral_pid_controller); // wait until movement is complete.
 
-    wait_stable(lateral_pid_controller);
-
-    target_heading.store(-135);
-    angular_pid_controller.max_speed = 127;
+    // Arc movement to collect sole ring stack
+    target_heading.store(-135 * multi);
     target_dist.fetch_add(24);
-    lateral_pid_controller.max_speed = 127;
 
-    wait_cross(lateral_pid_controller, 14);
+    wait_cross(lateral_pid_controller, 14); // Wait until we cross where the ring stack would be
 
-    target_heading.store(-180);
+    target_heading.store(-180 * multi); // Position for movement to corner ring stack
 
-    wait_stable(angular_pid_controller, 5000, 3, 8, 3.5);
+    wait_stable(angular_pid_controller, 5000, 3, 8, 3.5); // Wait until turning is complete, with a very wide tolerance
 
+    // Slow it down. Very carefully tuned speeds
     lateral_pid_controller.max_speed = 90;
     angular_pid_controller.max_speed = 45;
 
+    // Arc movement to collect corner rings
     target_dist.fetch_add(44);
     wait_cross(lateral_pid_controller, 7.5f);
-    target_heading.store(-135);
+    target_heading.store(-135 * multi);
 
-    wait(1250);
+    wait(1250); // Wait 1250 ms which is about when we have entered the ring stack
 
+    // Back out slowly to pull the bottom ring.
     lateral_pid_controller.max_speed = 20;
     target_dist.store(current_dist.load() - 4);
     wait_stable(lateral_pid_controller);
 
-    wait(350);
+    wait(300); // Short delay for consistency.
 
+    // Move forward agian to collect the ring.
     lateral_pid_controller.max_speed = 127;
     target_dist.fetch_add(4);
 
+    // Wait until we see the ring, for a maximum of 750 ms
     red_ring_seen = false;
-    end = pros::millis() + 700;
+    end = pros::millis() + 750;
     while (pros::millis() < end) {
         if (red_ring_seen) {
             auton_intake_command.power = 0;
@@ -611,51 +623,60 @@ void red_neg_12_aut() {
         }
         wait(10);
     }
+    // This time we stop the intake as well, because scoring when turning is very inconsistent.
 
+    // Back out and face ring stack closer to alliance stake
     target_dist.store(current_dist.load() - 4);
-    target_heading.store(74.5);
+    target_heading.store(74.5 * multi);
     angular_pid_controller.max_speed = 127;
 
+    // Activate doinker here for a bit so rolling rings don't screw over the rest of the auton
     wait(400);
+    (void) rdoinker.set_value(true);
 
-    (void)rdoinker.set_value(true);
+    wait_stable(angular_pid_controller); // Wait until turning is complete.
 
-    wait_stable(angular_pid_controller);
+    target_dist.fetch_add(43); // move towards alliance ring stack
 
-    target_dist.fetch_add(43);
-
+    // After a bit, raise the doinker again
     wait_cross(lateral_pid_controller, 15);
-    (void)rdoinker.set_value(true);
+    (void) rdoinker.set_value(false);
 
+    // When approaching ring stack, activate doinker
     wait_cross(lateral_pid_controller, 40);
+    (void) rdoinker.set_value(true);
 
-    (void)rdoinker.set_value(true);
+    wait_stable(lateral_pid_controller); // Wait until movement is complete
 
-    wait_stable(lateral_pid_controller);
+    auton_intake_command.power = 127; // Activate intake
 
-    lateral_pid_controller.max_speed = 127 / 3.0f;
-
-    auton_intake_command.power = 127;
-
+    // Pull the ring back slowly. Due to poor doinker quality, usually doesn't pull all the way off the ring stack.
     target_dist.fetch_add(-9);
+    lateral_pid_controller.max_speed = 127 / 3.0f;
     wait_stable(lateral_pid_controller);
-    (void)rdoinker.set_value(false);
+    (void) rdoinker.set_value(false);
 
-    target_heading.store(92);
-    lateral_pid_controller.max_speed = 127;
+    target_heading.store(92 * multi); // Point towards ring. Overshoot a little for consistency.
     wait(300);
 
-    target_dist.fetch_add(33);
-    wait_cross(lateral_pid_controller, 12);
-
-    target_heading.store(-20);
+    // Speed settings. Carefully tuned
+    lateral_pid_controller.max_speed = 127;
     angular_pid_controller.max_speed = 127 / 2.0f;
 
+    // Arc movement to collect ring and point towards tower
+    target_dist.fetch_add(33);
+    wait_cross(lateral_pid_controller, 12);
+    target_heading.store(-20 * multi);
+
+    // After collecting the ring, boost it a little so we reach the tower
     wait_cross(lateral_pid_controller, 9);
     target_dist.fetch_add(15);
+
+    // After short delay, lower arm to make contact with the tower.
     wait(250);
     arm_target_pos.store(ARM_SCORE_POS);
 
+    // Ensure mogo stays clamped.
     mogo_toggle.value = false;
 
     wait(800);
@@ -667,16 +688,16 @@ void autonomous() {
     menu_page = 333100;
     pointer_index = 0;
 
-    red_neg_12_aut();
+    neg_5p1_aut(alliance);
 
     chassis.state = DRIVE_STATE;
     wait(15);
 
-    (void)left_motors.set_brake_mode_all(pros::MotorBrake::coast);
-    (void)right_motors.set_brake_mode_all(pros::MotorBrake::coast);
+    (void) left_motors.set_brake_mode_all(pros::MotorBrake::coast);
+    (void) right_motors.set_brake_mode_all(pros::MotorBrake::coast);
 
-    (void)left_motors.move(0);
-    (void)right_motors.move(0);
+    (void) left_motors.move(0);
+    (void) right_motors.move(0);
 
     auton_intake_command.priority = 0;
     auton_intake_command.dismiss();
