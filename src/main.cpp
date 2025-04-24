@@ -528,15 +528,16 @@ void red_neg_12_aut() {
 
     wait_stable(lateral_pid_controller);
     (void)mogo.set_value(false); // clamp the mogo
-    wait(200);
+    wait(200); // delay so mogo can clamp correctly
 
     angular_pid_controller.max_speed = 127;
-    target_heading.store(-39);
+    target_heading.store(-39); // point towards 4 ring stack
     wait_stable(angular_pid_controller);
 
-    auton_intake_command.power = 127;
-    target_dist.fetch_add(21.2);
+    auton_intake_command.power = 127; // start running intake
+    target_dist.fetch_add(21.2); // collect closer ring
 
+    // wait until we have collected the ring, for a maximum of 800 ms
     uint32_t end = pros::millis() + 800;
     red_ring_seen = false;
     bool prs = red_ring_seen;
@@ -547,11 +548,12 @@ void red_neg_12_aut() {
     }
     wait(120);
 
-    wait_stable(lateral_pid_controller);
+    wait_stable(lateral_pid_controller); // wait until we finish moving, just in case if we collect the ring early
 
-    target_heading.store(-95);
+    target_heading.store(-95); // face toward second ring, overshoot a little towards our side to prevent crossing
     angular_pid_controller.max_speed = 127;
-    target_dist.fetch_add(18);
+
+    target_dist.fetch_add(18); // collect second ring
 
     red_ring_seen = false;
     uint32_t start = pros::millis() + 650;
@@ -613,9 +615,18 @@ void red_neg_12_aut() {
     target_dist.store(current_dist.load() - 4);
     target_heading.store(74.5);
     angular_pid_controller.max_speed = 127;
+
+    wait(400);
+
+    (void)rdoinker.set_value(true);
+
     wait_stable(angular_pid_controller);
 
     target_dist.fetch_add(43);
+
+    wait_cross(lateral_pid_controller, 15);
+    (void)rdoinker.set_value(true);
+
     wait_cross(lateral_pid_controller, 40);
 
     (void)rdoinker.set_value(true);
