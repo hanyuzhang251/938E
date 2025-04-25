@@ -8,7 +8,7 @@
 
 pros::Controller master(pros::E_CONTROLLER_MASTER);
 
-bool alliance = true; // true = red, false = blue
+bool alliance = false; // true = red, false = blue
 bool color_sort_enabled = true;
 bool unstuck_enabled = true;
 
@@ -18,7 +18,9 @@ int intake_outtake_ticks = 0;
 constexpr int INTAKE_OUTTAKE_DURATION = 15;
 
 void unstuck_update() {
-    if (intake.get_current_draw() > 50 && intake.get_efficiency() < 3) {
+    if (!unstuck_enabled) return;
+
+    if (intake.get_current_draw() > 50 && intake.get_efficiency() < 3 && arm_macro_cycle_index != 1) {
         ++intake_stuck_ticks;
     } else {
         intake_stuck_ticks = 0;
@@ -515,6 +517,8 @@ void wait_cross(const chisel::PIDController &pid_process, float point, const boo
 
 // Red ceritifed. Blue untested
 void neg_5p1_aut(const bool side = true) {
+    bool &ring_seen = side ? red_ring_seen : blue_ring_seen;
+    pros::adi::DigitalOut &doinker = side ? rdoinker : ldoinker;
     const float multi = side ? 1 : -1;
 
     auton_init(124 * multi, 190); // init auton with starting heading of 125 deg, and arm holding ring at pos 190
@@ -535,19 +539,22 @@ void neg_5p1_aut(const bool side = true) {
     wait(200); // delay so mogo can clamp correctly
 
     angular_pid_controller.max_speed = 127;
-    target_heading.store(-39 * multi); // point towards 4 ring stack
+
+    // Heading should be -45.5 degrees if before 6:00 PM, -39 degrees after
+    target_heading.store(-39.0f * multi); // Point towards 4 ring stack.
+
     wait_stable(angular_pid_controller);
 
     auton_intake_command.power = 127; // start running intake
-    target_dist.fetch_add(21.2); // collect closer ring
+    target_dist.fetch_add(21); // collect closer ring
 
-    // wait until we have collected the ring, for a maximum of 800 ms
-    uint32_t end = pros::millis() + 800;
-    red_ring_seen = false;
-    bool prs = red_ring_seen;
+    // wait until we have collected the ring, for a maximum of 1200 ms
+    uint32_t end = pros::millis() + 1200;
+    ring_seen = false;
+    bool prs = ring_seen;
     while (pros::millis() < end) {
-        if (!red_ring_seen && prs) break;
-        prs = red_ring_seen;
+        if (!ring_seen && prs) break;
+        prs = ring_seen;
         wait(10);
     }
     wait(200); // delay a little extra so ring goes on mogo correctly
@@ -560,12 +567,12 @@ void neg_5p1_aut(const bool side = true) {
     target_dist.fetch_add(18);
 
     // wait until we see a ring, for a maximum of 1200 ms starting after 650 ms.
-    red_ring_seen = false;
+    ring_seen = false;
     uint32_t start = pros::millis() + 650;
     end = pros::millis() + 1200;
     while (pros::millis() < end) {
-        if (red_ring_seen && pros::millis() > start) break;
-        prs = red_ring_seen;
+        if (ring_seen && pros::millis() > start) break;
+        prs = ring_seen;
         wait(10);
     }
     // Note the difference as here we finish waiting upon first sight of a ring, and don't wait extra.
@@ -577,7 +584,7 @@ void neg_5p1_aut(const bool side = true) {
     // Arc movement to exit ring stack area without crossing
     target_dist.fetch_add(-28.5);
     wait(100);
-    target_heading.store(-45 * multi);
+    target_heading.store(-42 * multi);
 
     wait_stable(lateral_pid_controller); // wait until movement is complete.
 
@@ -614,10 +621,10 @@ void neg_5p1_aut(const bool side = true) {
     target_dist.fetch_add(4);
 
     // Wait until we see the ring, for a maximum of 750 ms
-    red_ring_seen = false;
+    ring_seen = false;
     end = pros::millis() + 750;
     while (pros::millis() < end) {
-        if (red_ring_seen) {
+        if (ring_seen) {
             auton_intake_command.power = 0;
             break;
         }
@@ -627,24 +634,16 @@ void neg_5p1_aut(const bool side = true) {
 
     // Back out and face ring stack closer to alliance stake
     target_dist.store(current_dist.load() - 4);
-    target_heading.store(74.5 * multi);
+    target_heading.store(72.5f * multi);
     angular_pid_controller.max_speed = 127;
-
-    // Activate doinker here for a bit so rolling rings don't screw over the rest of the auton
-    wait(400);
-    (void) rdoinker.set_value(true);
 
     wait_stable(angular_pid_controller); // Wait until turning is complete.
 
     target_dist.fetch_add(43); // move towards alliance ring stack
 
-    // After a bit, raise the doinker again
-    wait_cross(lateral_pid_controller, 15);
-    (void) rdoinker.set_value(false);
-
     // When approaching ring stack, activate doinker
     wait_cross(lateral_pid_controller, 40);
-    (void) rdoinker.set_value(true);
+    (void) doinker.set_value(true);
 
     wait_stable(lateral_pid_controller); // Wait until movement is complete
 
@@ -654,7 +653,7 @@ void neg_5p1_aut(const bool side = true) {
     target_dist.fetch_add(-9);
     lateral_pid_controller.max_speed = 127 / 3.0f;
     wait_stable(lateral_pid_controller);
-    (void) rdoinker.set_value(false);
+    (void) doinker.set_value(false);
 
     target_heading.store(92 * multi); // Point towards ring. Overshoot a little for consistency.
     wait(300);
@@ -673,11 +672,13 @@ void neg_5p1_aut(const bool side = true) {
     target_dist.fetch_add(15);
 
     // After short delay, lower arm to make contact with the tower.
-    wait(250);
+    wait(350);
     arm_target_pos.store(ARM_SCORE_POS);
 
     // Ensure mogo stays clamped.
     mogo_toggle.value = false;
+
+    menu_page = 0;
 
     wait(800);
 }
@@ -685,32 +686,29 @@ void neg_5p1_aut(const bool side = true) {
 void autonomous() {
     printf("%sauton start\n", chisel::prefix().c_str());
 
-    menu_page = 333100;
-    pointer_index = 0;
+    pros::Task([] {
+        wait(14900);
+        auton_end();
+    });
 
     neg_5p1_aut(alliance);
-
-    chassis.state = DRIVE_STATE;
-    wait(15);
-
-    (void) left_motors.set_brake_mode_all(pros::MotorBrake::coast);
-    (void) right_motors.set_brake_mode_all(pros::MotorBrake::coast);
-
-    (void) left_motors.move(0);
-    (void) right_motors.move(0);
-
-    auton_intake_command.priority = 0;
-    auton_intake_command.dismiss();
 }
 
 void opcontrol() {
     printf("%sopcontrol start\n", chisel::prefix().c_str());
+
+    unstuck_enabled = false;
+
     block_movement = false;
     block_controls = false;
 
     auton_intake_command.power = 0;
     auton_intake_command.priority = -999;
     auton_intake_command.dismiss();
+
+    unstuck_intake_command.power = 0;
+    unstuck_intake_command.priority = -999;
+    unstuck_intake_command.dismiss();
 
     intake_itf.assign_command(&driver_intake_command);
 

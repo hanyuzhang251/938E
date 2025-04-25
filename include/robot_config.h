@@ -227,6 +227,20 @@ inline void device_init() {
     current_dist.store(0);
 }
 
+inline void auton_end() {
+    chassis.state = DRIVE_STATE;
+    wait(15);
+
+    (void) left_motors.set_brake_mode_all(pros::MotorBrake::coast);
+    (void) right_motors.set_brake_mode_all(pros::MotorBrake::coast);
+
+    (void) left_motors.move(0);
+    (void) right_motors.move(0);
+
+    auton_intake_command.priority = 0;
+    auton_intake_command.dismiss();
+}
+
 inline void auton_init(const float h_offset = 0, const float arm_offset = 0) {
     chassis.state = CRASHOUT;
     wait(15);
