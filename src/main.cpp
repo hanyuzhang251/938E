@@ -1,4 +1,7 @@
 #include "main.h"
+
+#include <csetjmp>
+
 #include "chisel/chisel.h"
 
 #include "robot_config.h"
@@ -7,6 +10,33 @@ pros::Controller master(pros::E_CONTROLLER_MASTER);
 
 bool alliance = true; // true = red, false = blue
 bool color_sort_enabled = true;
+bool unstuck_enabled = true;
+
+int intake_stuck_ticks = 0;
+constexpr int INTAKE_STUCK_LIMIT = 6;
+int intake_outtake_ticks = 0;
+constexpr int INTAKE_OUTTAKE_DURATION = 15;
+
+void unstuck_update() {
+    if (!unstuck_enabled) return;
+
+    if (intake.get_current_draw() > 50 && intake.get_efficiency() < 3 && arm_macro_cycle_index != 1) {
+        ++intake_stuck_ticks;
+    } else {
+        intake_stuck_ticks = 0;
+    }
+    if (intake_stuck_ticks >= INTAKE_STUCK_LIMIT) {
+        intake_outtake_ticks = INTAKE_OUTTAKE_DURATION;
+    }
+    if (intake_outtake_ticks > 0) {
+        unstuck_intake_command.priority = 1467;
+        unstuck_intake_command.power = -127;
+
+        --intake_outtake_ticks;
+    } else {
+        unstuck_intake_command.priority = 0;
+    }
+}
 
 bool red_ring_seen = false;
 bool blue_ring_seen = false;
@@ -33,39 +63,43 @@ void color_sort_update() {
 
     if (!color_sort_enabled) return;
 
-    if (optical.get_proximity() < 200) return;
-
     const double r_hue_min = std::fmod(RED_RING_HUE - RING_HUE_TOLOERANCE + 360, 360.0f);
     const double r_hue_max = std::fmod(RED_RING_HUE + RING_HUE_TOLOERANCE, 360.0f);
     const double b_hue_min = std::fmod(BLUE_RING_HUE - RING_HUE_TOLOERANCE + 360, 360.0f);
     const double b_hue_max = std::fmod(BLUE_RING_HUE + RING_HUE_TOLOERANCE, 360.0f);
 
     bool b_ring = false;
-
-    if (b_hue_min <= b_hue_max) {
-        // if it's normal, just check the ranges
-        b_ring = b_hue_min <= optical.get_hue() && optical.get_hue() <= b_hue_max;
-    } else if (b_hue_min >= b_hue_max) {
-        // if the range goes around 0, say hue min is 330 while hue_max is 30,
-        // 0 and 360 are used as bounds.
-        b_ring = optical.get_hue() <= b_hue_max || optical.get_hue() >= b_hue_min;
-    }
-    if (b_ring) blue_ring_seen = true;
-
     bool r_ring = false;
-    if (r_hue_min <= r_hue_max) {
-        // if it's normal, just check the ranges
-        r_ring = r_hue_min <= optical.get_hue() && optical.get_hue() <= r_hue_max;
-    } else if (r_hue_min >= r_hue_max) {
-        // if the range goes around 0, say hue min is 330 while hue_max is 30,
-        // 0 and 360 are used as bounds.
-        r_ring = optical.get_hue() <= r_hue_max || optical.get_hue() >= r_hue_min;
-    }
-    if (r_ring) red_ring_seen = true;
 
-    if (pros::millis() - last_outtake >= COLOR_SORT_COOLDOWN && (alliance && !b_ring && p_brs || !alliance && !r_ring && p_rrs)) {
-        pros::Task([] { queue_outtake(); });
-        last_outtake = pros::millis();
+    if (optical.get_proximity() >= 200) {
+        if (b_hue_min <= b_hue_max) {
+            // if it's normal, just check the ranges
+            b_ring = b_hue_min <= optical.get_hue() && optical.get_hue() <= b_hue_max;
+        } else if (b_hue_min >= b_hue_max) {
+            // if the range goes around 0, say hue min is 330 while hue_max is 30,
+            // 0 and 360 are used as bounds.
+            b_ring = optical.get_hue() <= b_hue_max || optical.get_hue() >= b_hue_min;
+        }
+        if (b_ring) blue_ring_seen = true;
+
+        if (r_hue_min <= r_hue_max) {
+            // if it's normal, just check the ranges
+            r_ring = r_hue_min <= optical.get_hue() && optical.get_hue() <= r_hue_max;
+        } else if (r_hue_min >= r_hue_max) {
+            // if the range goes around 0, say hue min is 330 while hue_max is 30,
+            // 0 and 360 are used as bounds.
+            r_ring = optical.get_hue() <= r_hue_max || optical.get_hue() >= r_hue_min;
+        }
+        if (r_ring) red_ring_seen = true;
+    }
+
+    if (pros::millis() - last_outtake >= COLOR_SORT_COOLDOWN) {
+        if ((alliance && !b_ring && p_brs || !alliance && !r_ring && p_rrs)) {
+            pros::Task([] {
+                queue_outtake();
+                last_outtake = pros::millis();
+            });
+        }
     }
 }
 
@@ -128,25 +162,52 @@ void menu_update() {
         }
         case 1: {
             block_controls = true;
-            std::snprintf(ctrl_log[0], 15, "%cside: %s      ", pointer_index == 0 ? '>' : ' ',
-                          alliance ? "RED " : "BLUE");
-            std::snprintf(ctrl_log[1], 15, "%ccs: %s       ", pointer_index == 1 ? '>' : ' ',
-                          color_sort_enabled ? "ON " : "OFF");
-            std::snprintf(ctrl_log[2], 15, "%cmore...      ", pointer_index == 2 ? '>' : ' ');
+            if (pointer_index == 3) {
+                std::snprintf(ctrl_log[0], 15, "%cmore...      ", pointer_index == 3 ? '>' : ' ');
+                std::snprintf(ctrl_log[1], 15, "               ");
+                std::snprintf(ctrl_log[2], 15, "               ");
+            } else {
+                std::snprintf(ctrl_log[0], 15, "%creset_arm    ", pointer_index == 0 ? '>' : ' ');
+                std::snprintf(ctrl_log[1], 15, "%cside: %s      ", pointer_index == 1 ? '>' : ' ',
+                              alliance ? "RED " : "BLUE");
+                std::snprintf(ctrl_log[2], 15, "%ccs: %s       ", pointer_index == 2 ? '>' : ' ',
+                              color_sort_enabled ? "ON " : "OFF");
+            }
 
-            if (pointer_index >= 3) pointer_index = 2;
+            if (pointer_index >= 4) pointer_index = 3;
 
             if (menu_select) {
                 switch (pointer_index) {
                     case 0: {
-                        alliance = !alliance;
+                        pros::Task([&] {
+                            const bool p_arm_clamp = arm_clamp;
+                            arm_clamp = false;
+
+                            arm_target_pos.fetch_add(-9999);
+
+                            while (arm.get_current_draw() < 2300) {
+                                chisel::wait(PROCESS_DELAY);
+                            }
+
+                            reset_arm();
+
+                            arm_clamp = p_arm_clamp;
+                        });
+
+                        menu_toggle.tick(true);
+                        menu_toggle.tick(false);
+
                         break;
                     }
                     case 1: {
-                        color_sort_enabled = !color_sort_enabled;
+                        alliance = !alliance;
                         break;
                     }
                     case 2: {
+                        color_sort_enabled = !color_sort_enabled;
+                        break;
+                    }
+                    case 3: {
                         menu_page = 2;
                         pointer_index = 0;
                         break;
@@ -374,6 +435,8 @@ void async_update([[maybe_unused]] void *param) {
     while (true) {
         color_sort_update();
 
+        unstuck_update();
+
         device_update();
 
         menu_update();
@@ -423,14 +486,16 @@ void competition_initialize() {
     init();
 }
 
-static void wait_stable(const chisel::PIDController &pid_process, const uint32_t timeout = 5000, const int buffer_ticks = 3,
-                 const int min_stable_ticks = 8) {
+void wait_stable(const chisel::PIDController &pid_process, const uint32_t timeout = 5000, const int buffer_ticks = 3,
+                 const int min_stable_ticks = 8, float tolerance = -67) {
+    if (tolerance <= 0) tolerance = pid_process.pid.tolerance;
+
     int stable_ticks = 0;
     const uint32_t end_time = pros::millis() + timeout;
 
     while (stable_ticks < min_stable_ticks) {
         pros::lcd::print(4, "error: %f", pid_process.get_error());
-        if (std::abs(pid_process.get_error()) <= pid_process.pid.tolerance) ++stable_ticks;
+        if (std::abs(pid_process.get_error()) <= tolerance) ++stable_ticks;
         else stable_ticks = 0;
 
         if (pros::millis() >= end_time) return;
@@ -439,140 +504,328 @@ static void wait_stable(const chisel::PIDController &pid_process, const uint32_t
     for (int i = 0; i < buffer_ticks; ++i) wait(PROCESS_DELAY);
 }
 
-static void wait_cross(const chisel::PIDController &pid_process, float point, const bool relative = true, const int buffer_ticks = 0) {
+void wait_cross(const chisel::PIDController &pid_process, float point, const bool relative = true,
+                const int buffer_ticks = 0) {
     if (relative) point += pid_process.value.load();
 
-   const bool side = pid_process.value.load() >= point;
+    const bool side = pid_process.value.load() >= point;
     while ((pid_process.value.load() >= point) == side) {
         wait(PROCESS_DELAY);
     }
     for (int i = 0; i < buffer_ticks; ++i) wait(PROCESS_DELAY);
 }
 
-//#include "bezier_motion.hpp"
+void neg_6_aut(const bool side = true) {
+    bool &ring_seen = side ? red_ring_seen : blue_ring_seen;
+    pros::adi::DigitalOut &doinker = side ? rdoinker : ldoinker;
+    pros::adi::DigitalOut &other_doinker = side ? ldoinker : rdoinker;
+    const float multi = side ? -1 : 1;
 
-void autonomous() {
-    /*printf("%sauton start\n", chisel::prefix().c_str());
+    auton_init(20 * multi, 0);
 
-    intake_itf.assign_command(&auton_intake_command);
-
-    const float multi = alliance ? 1 : -1;
-
-    odom.internal_pose.x = 0;
-    odom.internal_pose.y = 0;
-    odom.internal_pose.h = 0;
-    odom.pose.x = 0;
-    odom.pose.y = 0;
-    odom.pose.h = 0;
-    odom.pose_offset.x = -52;
-    odom.pose_offset.y = 36;
-    odom.pose_offset.h = -25 * multi;
-
-    (void)mogo.set_value(true);
-
-    target_heading.store (odom.pose_offset.h);
-
-    current_dist.store(0);
-    target_dist.store(current_dist.load());
-    chassis.state = AUTON_STATE;
-    menu_page = 333100;
-    pointer_index = 0;
-    wait(15);
-
-    pros::Task([&] {
-        const bool p_arm_clamp = arm_clamp;
-        arm_clamp = false;
-
-        arm_target_pos.fetch_add(-9999);
-
-        while (arm.get_current_draw() < 2300) {
-            chisel::wait(PROCESS_DELAY);
-        }
-
-        reset_arm();
-
-        arm_clamp = p_arm_clamp;
-    });
+    target_heading.store(22);
+    target_dist.fetch_add(50.5);
+    (void) other_doinker.set_value(true);
 
     auton_intake_command.power = 127;
 
-    target_dist.fetch_add(47);
-    (void)rdoinker.set_value(true);
+    wait_stable(lateral_pid_controller);
+
+    ring_seen = false;
+    uint32_t end = pros::millis() + 1000;
+    while (pros::millis() < end) {
+        if (ring_seen) {
+            auton_intake_command.power = 0;
+            break;
+        }
+        wait(10);
+    }
+
+    target_dist.fetch_add(-24);
+
+    wait_cross(lateral_pid_controller, -3);
+    target_heading.store(90);
+    wait_cross(lateral_pid_controller, -2);
+    (void) other_doinker.set_value(false);
+
+    wait_stable(lateral_pid_controller, 5000, 3, 8, 5);
+
+    target_dist.fetch_add(-3);
 
     wait_stable(lateral_pid_controller);
 
-    target_dist.fetch_add(-30);
+    (void) mogo.set_value(false);
+    wait(250);
 
-    pros::Task([&] {
-        const uint32_t end = pros::millis() + 1200;
-        while (!red_ring_seen && pros::millis() < end) {
-            wait(PROCESS_DELAY / 2);
+    target_dist.fetch_add(38);
+    target_heading.store(90);
+
+    wait_cross(lateral_pid_controller, 3);
+    target_heading.store(108);
+
+    pros::Task([] {
+        for (int i = 1; i <= 6; ++i) {
+            lateral_pid_controller.max_speed = 127 - 10 * i;
+            wait(30);
         }
-        auton_intake_command.power = 0;
+        auton_intake_command.power = 127;
     });
 
-    wait_cross(lateral_pid_controller, -2);
-    target_heading.store(-80 * multi);
+    wait_cross(lateral_pid_controller, 19);
+    target_heading.store(70);
 
     wait_stable(lateral_pid_controller);
 
-    (void)mogo.set_value(false);
-    wait(200);
+    lateral_pid_controller.max_speed = 127;
+    angular_pid_controller.max_speed = 127;
 
-    target_heading.store(-120 * multi);
-    wait(200);
+    wait(1000);
+    target_heading.store(190);
 
-    (void)rdoinker.set_value(false);
+    wait_stable(angular_pid_controller, 5000, 3, 8, 2.5);
+
+    target_dist.fetch_add(36);
+    pros::Task([] {
+        for (int i = 1; i <= 10; ++i) {
+            lateral_pid_controller.max_speed = 127 - 6 * i;
+            wait(30);
+        }
+    });
+
+    wait_cross(lateral_pid_controller, 18.5);
+    target_heading.store(135);
+    angular_pid_controller.max_speed = 60;
+
+    wait_stable(angular_pid_controller, 5000, 3, 8, 3.5);
+    target_dist.fetch_add(18);
+
+    pros::Task([] {
+        for (int i = 1; i <= 5; ++i) {
+            lateral_pid_controller.max_speed = 67 - 5 * i;
+            wait(30);
+        }
+    });
+
+    wait(800);
+
+    target_dist.store(current_dist.load() -12);
+    lateral_pid_controller.max_speed = 127;
+    wait_stable(lateral_pid_controller, 500, 3, 8, 3);
+
+    target_dist.fetch_add(12);
+    wait(500);
+
+    target_dist.store(current_dist.load() -12);
+    wait(500);
+
+    // Ensure mogo stays clamped.
+    mogo_toggle.value = false;
+
+    menu_page = 0;
+}
+
+void neg_5p1_aut(const bool side = true) {
+    bool &ring_seen = side ? red_ring_seen : blue_ring_seen;
+    pros::adi::DigitalOut &doinker = side ? rdoinker : ldoinker;
+    const float multi = side ? 1 : -1;
+
+    auton_init(124 * multi, 190); // init auton with starting heading of 125 deg, and arm holding ring at pos 190
+
+    arm_target_pos.store(ARM_ALLIANCE_POS); // score ring on alliance
+    wait(300); // delay to give arm time to score
+
+    target_dist.fetch_add(-40); // start moving backwards
+
+    wait_cross(lateral_pid_controller, -2.5); // wait so arm disengaged from ring
+    arm_target_pos.store(ARM_LOAD_POS + 120); // reset arm to default position
+    // arc movement to mogo
+    target_heading.store(210 * multi);
+    angular_pid_controller.max_speed = 127 / 2.0f;
+
+    wait_stable(lateral_pid_controller);
+    (void) mogo.set_value(false); // clamp the mogo
+    wait(200); // delay so mogo can clamp correctly
+
+    angular_pid_controller.max_speed = 127;
+
+    // Heading should be -45.5 degrees if before 6:00 PM, -39 degrees after
+    target_heading.store(-38.5 * multi); // Point towards 4 ring stack.
+
+    wait_stable(angular_pid_controller, 5000, 3, 8, 2.5);
+
+    auton_intake_command.power = 127; // start running intake
+    target_dist.fetch_add(21.5); // collect closer ring
+
+    // wait until we have collected the ring, for a maximum of 1500 ms
+    uint32_t end = pros::millis() + 1500;
+    ring_seen = false;
+    bool prs = ring_seen;
+    while (pros::millis() < end) {
+        if (!ring_seen && prs) break;
+        prs = ring_seen;
+        wait(10);
+    }
+    wait(150); // delay a little extra so ring goes on mogo correctly
+
+    wait_stable(lateral_pid_controller); // wait until we finish moving, just in case if we collect the ring early
+
+    // shallow arc to second ring
+    target_heading.store(-95 * multi); // overshoot a little towards our side to prevent crossing
+    angular_pid_controller.max_speed = 127;
+    target_dist.fetch_add(20);
+
+    // // wait until we see a ring, for a maximum of 1200 ms starting after 650 ms.
+    // ring_seen = false;
+    // uint32_t start = pros::millis() + 650;
+    // end = pros::millis() + 1200;
+    // while (pros::millis() < end) {
+    //     if (ring_seen && pros::millis() > start) break;
+    //     prs = ring_seen;
+    //     wait(10);
+    // }
+    // // Note the difference as here we finish waiting upon first sight of a ring, and don't wait extra.
+
+    wait_stable(lateral_pid_controller, 2000, 3, 8); // wait until we complete the movement
+    wait(150);
+
+    // Reset speeds to max
+    lateral_pid_controller.max_speed = 127;
+    angular_pid_controller.max_speed = 127;
+
+    // Arc movement to exit ring stack area without crossing
+    target_dist.fetch_add(-32.5);
+    wait(150);
+    target_heading.store(-45 * multi);
+
+    wait_stable(lateral_pid_controller); // wait until movement is complete.
+
+    // Arc movement to collect sole ring stack
+    target_heading.store(-135 * multi);
+    target_dist.fetch_add(26);
+
+    wait_cross(lateral_pid_controller, 15.5); // Wait until we cross where the ring stack would be
+
+    target_heading.store(-190 * multi); // Position for movement to corner ring stack
+
+    wait_stable(angular_pid_controller, 5000, 3, 8, 3.5); // Wait until turning is complete, with a very wide tolerance
+
+    // Speed tooning
+    lateral_pid_controller.max_speed = 127;
+    angular_pid_controller.max_speed = 63;
+    
+    // Arc movement to collect corner rings
+    target_dist.fetch_add(60);
+    target_heading.store(-135 * multi);
+
+    wait_cross(lateral_pid_controller, 3);
+
+    for (int i = 1; i <= 10; ++i) {
+        lateral_pid_controller.max_speed = 127 - 5 * i;
+        wait(30);
+    }
+
+    unstuck_enabled = false; // disable unjammer so we don't outtake ring by accident
+
+    wait(1250); // Wait ____ ms which is about when we have entered the ring stack
+
+    // Back out to pull the bottom ring.
+    lateral_pid_controller.max_speed = 17;
+    target_dist.store(current_dist.load() - 4);
+    for (int i = 1; i <= 5; ++i) {
+        lateral_pid_controller.max_speed = 17 + i * 5;
+        wait(40);
+    }
+
+    wait_stable(lateral_pid_controller); // wait until movement is complete
+
+    // Move forward agian to collect the ring.
+
+    lateral_pid_controller.max_speed = 127;
+    target_dist.fetch_add(4);
+
+    wait(500); // wait until movement is complete;
+
+    // Back out and face ring stack closer to alliance stake
+    target_dist.store(current_dist.load() - 9);
+    lateral_pid_controller.max_speed = 127;
+    wait_cross(lateral_pid_controller, -6);
+    target_heading.store(77.5 * multi);
+    angular_pid_controller.max_speed = 127;
+
+    wait_stable(angular_pid_controller); // Wait until turning is complete.
+
+    target_dist.fetch_add(34); // move towards alliance ring stack
+
+    unstuck_enabled = true; // re-enable unjammer
+
+    // When approaching ring stack, activate doinker
+    wait_cross(lateral_pid_controller, 32.67);
+    (void) doinker.set_value(true);
+
+    wait_stable(lateral_pid_controller); // Wait until movement is complete
+
+    auton_intake_command.power = 127; // Activate intake
+
+    // Pull the ring back slowly. Due to poor doinker quality, usually doesn't pull all the way off the ring stack.
+    target_dist.fetch_add(-9);
+    lateral_pid_controller.max_speed = 127 / 3.0f;
+    wait_stable(lateral_pid_controller);
+    (void) doinker.set_value(false);
+
+    target_heading.store(92 * multi); // Point towards ring. Overshoot a little for consistency.
     wait(300);
 
-    auton_intake_command.power = 127;
+    // Speed settings. Carefully tuned
+    lateral_pid_controller.max_speed = 127;
+    angular_pid_controller.max_speed = 127 / 2.0f;
 
-    target_heading.store(-67 * multi);
-    wait_stable(angular_pid_controller);
+    // Arc movement to collect ring and point towards tower
+    target_dist.fetch_add(33);
+    wait_cross(lateral_pid_controller, 12);
+    target_heading.store(-20 * multi);
 
-    target_dist.fetch_add(40);
+    // After collecting the ring, boost it a little so we reach the tower
+    wait_cross(lateral_pid_controller, 9);
+    target_dist.fetch_add(15);
 
-    wait_cross(lateral_pid_controller, 29);
-    target_heading.store(-80 * multi);
+    // After short delay, lower arm to make contact with the tower.
+    wait(350);
+    arm_target_pos.store(ARM_SCORE_POS);
 
-    wait_cross(lateral_pid_controller, 2);
-    arm_target_pos.store(ARM_LOAD_POS);
-    wait_stable(lateral_pid_controller, 2000);
-    target_heading.store(-53 * multi);
-    wait(1500);
-    auton_intake_command.power = -5;
-    arm_target_pos.store(ARM_SCORE_POS + 200);
+    // Ensure mogo stays clamped.
+    mogo_toggle.value = false;
 
-    wait(3000);
+    menu_page = 0;
 
-    chassis.state = DRIVE_STATE;*/
-    //left_motors.move(127);
-	//target_dist.fetch_add(90);
-    /*chassis.state = AUTON_STATE;
-    
-	//target_dist.store(30);
-	//wait_stable(lateral_pid_controller);
-    bezier_motion::bezier(bezier_motion::vec2(51, 40), 0.5, bezier_motion::vec2(0.76, 0.76))
-        .execute_pid_motion(NO_PREVIOUS_CONTROL_POINT, [](double lin_dist){
-            lateral_pid_controller.max_speed = 127;
-            lateral_pid_controller.min_speed = 6;
-            target_dist.store(lin_dist);
-            wait_stable(lateral_pid_controller);
-        }, [](double ang_offset_heading){
-            angular_pid_controller.max_speed = 127;
-            angular_pid_controller.min_speed = 6;
-            target_heading.store(ang_offset_heading);
-            wait_stable(angular_pid_controller);
-        });*/
-    chassis.state = AUTON_STATE;
-    extern void somerandomauto(); 
-    somerandomauto();
-    chassis.state = DRIVE_STATE;
+    wait(800);
+}
 
+void autonomous() {
+    printf("%sauton start\n", chisel::prefix().c_str());
+
+    pros::Task([] {
+        wait(14900);
+        auton_end();
+    });
+
+    neg_5p1_aut(alliance);
 }
 
 void opcontrol() {
     printf("%sopcontrol start\n", chisel::prefix().c_str());
+
+    unstuck_enabled = false;
+
+    block_movement = false;
+    block_controls = false;
+
+    auton_intake_command.power = 0;
+    auton_intake_command.priority = -999;
+    auton_intake_command.dismiss();
+
+    unstuck_intake_command.power = 0;
+    unstuck_intake_command.priority = -999;
+    unstuck_intake_command.dismiss();
 
     intake_itf.assign_command(&driver_intake_command);
 

@@ -37,14 +37,14 @@ constexpr pros::digi_button ARM_MACRO_CYCLE_BUTTON = pros::E_CONTROLLER_DIGITAL_
 inline chisel::Toggle arm_macro_cycle_toggle(false);
 
 constexpr int32_t DT_FL_PORT = -6;
-constexpr int32_t DT_ML_PORT = -7;
-constexpr int32_t DT_BL_PORT = -8;
+constexpr int32_t DT_ML_PORT = -14;
+constexpr int32_t DT_BL_PORT = -15;
 
-constexpr int32_t DT_FR_PORT = 3;
-constexpr int32_t DT_MR_PORT = 4;
-constexpr int32_t DT_BR_PORT = 5;
+constexpr int32_t DT_FR_PORT = 3;//#####
+constexpr int32_t DT_MR_PORT = 4;//#####
+constexpr int32_t DT_BR_PORT = 5;//#####
 
-constexpr int32_t INTAKE_PORT = -2;
+constexpr int32_t INTAKE_PORT = -2;//#####
 constexpr int32_t ARM_PORT = -9;
 constexpr int32_t MOGO_PORT = 1;
 constexpr int32_t LDOINKER_PORT = 2;
@@ -60,6 +60,7 @@ inline pros::Motor intake(INTAKE_PORT);
 inline auto intake_itf = chisel::MotorItf(&intake);
 inline chisel::Command driver_intake_command = {0, 326};
 inline chisel::Command auton_intake_command = {0, 551};
+inline chisel::Command unstuck_intake_command = {0, 0};
 inline chisel::Command color_sort_command = {0, 0};
 
 constexpr double BLUE_RING_HUE = 215;
@@ -70,10 +71,11 @@ constexpr uint32_t COLOR_SORT_COOLDOWN = 500;
 
 constexpr float ARM_SPEED = 240;
 
-constexpr float ARM_LOW_POS = 300;
-constexpr float MAX_ARM_POS = 1550;
-constexpr float ARM_LOAD_POS = 185;
-constexpr float ARM_SCORE_POS = 800;
+constexpr float ARM_LOW_POS = 250;
+constexpr float MAX_ARM_POS = 9968;
+constexpr float ARM_LOAD_POS = 180;
+constexpr float ARM_SCORE_POS = 690;
+constexpr float ARM_ALLIANCE_POS = 920;
 
 inline int arm_macro_cycle_index = 0;
 
@@ -82,12 +84,12 @@ inline bool arm_clamp = true;
 inline pros::Motor arm(ARM_PORT);
 
 inline chisel::PIDSetting arm_pid_settings{
-    0.7, 0, 1, 0, 999, 999, 999, 0, 999
+    0.7, 0, 1, 10, 999, 999, 999, 0, 999
 };
 inline std::atomic<float> arm_pos(0);
 inline std::atomic<float> arm_target_pos(0);
 inline std::atomic<float> arm_pid_output(0);
-inline chisel::PIDController arm_pid = {
+inline chisel::PIDController arm_pid_controller = {
     arm_pos,
     arm_target_pos,
     arm_pid_output,
@@ -159,7 +161,7 @@ inline chisel::Odom odom{
 inline chisel::PIDSetting angular_pid_settings{
     2, // kp
     0.1, // ki
-    35, // kd
+    39, // kd
     2, // tolerance
     30, // wind
     999, // clamp
@@ -181,10 +183,10 @@ inline chisel::PIDController angular_pid_controller {
 };
 
 inline chisel::PIDSetting lateral_pid_settings{
-    5, // kp
+    4.5, // kp
     0.1, // ki
-    0, // kd
-    1.5f, // tolerance
+    3, // kd
+    2, // tolerance
     12, // wind
     999, // clamp
     999, // slew
@@ -219,9 +221,63 @@ inline void device_init() {
     optical.set_led_pwm(100);
 
     intake_itf.assign_command(&color_sort_command);
+    intake_itf.assign_command(&unstuck_intake_command);
 
     target_dist.store(0);
     current_dist.store(0);
+}
+
+inline void auton_end() {
+    chassis.state = DRIVE_STATE;
+    wait(15);
+
+    (void) left_motors.set_brake_mode_all(pros::MotorBrake::coast);
+    (void) right_motors.set_brake_mode_all(pros::MotorBrake::coast);
+
+    (void) left_motors.move(0);
+    (void) right_motors.move(0);
+
+    auton_intake_command.priority = 0;
+    auton_intake_command.dismiss();
+}
+
+inline void auton_init(const float h_offset = 0, const float arm_offset = 0) {
+    chassis.state = CRASHOUT;
+    wait(15);
+
+    intake_itf.assign_command(&auton_intake_command);
+
+    odom.internal_pose.x.store(0);
+    odom.internal_pose.y.store(0);
+    odom.internal_pose.h.store(0);
+    odom.pose.x.store(0);
+    odom.pose.y.store(0);
+    odom.pose.h.store(0);
+    odom.pose_offset.x.store(0);
+    odom.pose_offset.y.store(0);
+    odom.pose_offset.h.store(h_offset);
+
+    odom.prev_left_pos = 0;
+    odom.prev_right_pos = 0;
+    (void)left_motors.tare_position_all();
+    (void)right_motors.tare_position_all();
+
+    prev_dist.store(0);
+    current_dist.store(0);
+
+    (void)mogo.set_value(true);
+
+    target_heading.store (odom.pose_offset.h);
+
+    current_dist.store(0);
+    target_dist.store(current_dist.load());
+
+    (void)arm.tare_position();
+    arm_pos.store(arm_offset);
+    arm_target_pos.store(arm_pos.load());
+
+    chassis.state = AUTON_STATE;
+    wait(15);
 }
 
 inline void device_update() {
@@ -230,7 +286,7 @@ inline void device_update() {
     intake_itf.push_control();
 
     arm_pos.store(arm.get_position());
-    pid_handle_process(arm_pid);
+    pid_handle_process(arm_pid_controller);
     (void)arm.move(arm_pid_output.load());
 
     if (chassis.state == AUTON_STATE) {

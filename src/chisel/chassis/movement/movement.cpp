@@ -11,7 +11,7 @@ bool ExitCondition::get_exit() const {
 }
 
 void ExitCondition::update(const float error) {
-    if (error > range) start_time = pros::millis();
+    if (std::abs(error) > range) start_time = pros::millis();
 
     if (pros::millis() - start_time >= time) exit = true;
 }
@@ -21,15 +21,20 @@ void ExitCondition::reset() {
     exit = false;
 }
 
-Motion::Motion(Pose* pose, const uint32_t life, const bool async, const float min_speed, const float max_speed)
-    : curr_pose(pose), life(life), async(async), min_speed(min_speed), max_speed(max_speed) {}
+Motion::Motion(Pose* pose, const float min_speed, const float max_speed,
+    const uint32_t life, const bool async,
+    const ExitCondition &lateral_exit, const ExitCondition &angular_exit)
+    : curr_pose(pose), min_speed(min_speed), max_speed(max_speed), life(life), async(async),
+    lateral_exit(lateral_exit), angular_exit(angular_exit) {}
 
 std::pair<float, float> Motion::get_controls() {
     return controls;
 }
 
-TurnToHeading::TurnToHeading(Pose* pose, const float target_heading, const uint32_t life, const bool async)
-    : Motion(pose, life, async), target_heading(target_heading) {}
+TurnToHeading::TurnToHeading(Pose* pose, const float target_heading, const float min_speed, const float max_speed,
+    const uint32_t life, const bool async,
+    const ExitCondition &lateral_exit, const ExitCondition &angular_exit)
+    : Motion(pose, min_speed, max_speed, life, async, lateral_exit, angular_exit), target_heading(target_heading) {}
 
 void TurnToHeading::update() {
     angular_pid_control = deg_err(target_heading, curr_pose->h);
@@ -40,8 +45,10 @@ void TurnToHeading::push_controls() {
     controls.second = angular_pid_control;
 }
 
-TurnToPoint::TurnToPoint(Pose* pose, const Pose& target_point, const uint32_t life, const bool async)
-    : Motion(pose, life, async), target_point(target_point) {}
+TurnToPoint::TurnToPoint(Pose* pose, const Pose &target_point, const float min_speed, const float max_speed,
+    const uint32_t life, const bool async,
+    const ExitCondition &lateral_exit, const ExitCondition &angular_exit)
+    : Motion(pose, min_speed, max_speed, life, async, lateral_exit, angular_exit), target_point(target_point) {}
 
 void TurnToPoint::update() {
     angular_pid_control = deg_to_point(target_point);
@@ -52,8 +59,10 @@ void TurnToPoint::push_controls() {
     controls.second = angular_pid_control;
 }
 
-MoveToPoint::MoveToPoint(Pose* pose, const Pose& target_point, const uint32_t life, const bool async, const bool reversed)
-    : Motion(pose, life, async), target_point(target_point), reversed(reversed) {}
+MoveToPoint::MoveToPoint(Pose* pose, const Pose &target_point, const float min_speed, const float max_speed,
+    const uint32_t life, const bool async,
+    const ExitCondition &lateral_exit, const ExitCondition &angular_exit)
+    : Motion(pose, min_speed, max_speed, life, async, lateral_exit, angular_exit), target_point(target_point), reversed(reversed) {}
 
 void MoveToPoint::update() {
     // Calculate the relative target for conciseness

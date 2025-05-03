@@ -20,54 +20,56 @@ int Chassis::clean_commands() {
     return clear_count;
 }
 
+void Chassis::assign_motion(Motion *motion) {
+    motion_queue.emplace(motion);
+}
+
 void Chassis::update_motions() const {
-    printf("\nUPDATE MOTIONS CALLED\n");
+    // printf("\nUPDATE MOTIONS CALLED\n");
 
     if (motion_queue.empty()) {
-        printf("\tno motions available, returning\n");
+        // printf("\tno motions available, returning\n");
         return;
     }
 
     const auto top_motion = motion_queue.front();
     top_motion->life--;
 
-    printf("\ttop motion life=%ld\n", top_motion->life);
-
-    printf("\ttop motion pose=(%f, %f, %f)\n", top_motion->curr_pose->x.load(), top_motion->curr_pose->y.load(), top_motion->curr_pose->h.load());
-
     top_motion->update();
     top_motion->push_controls();
 
-    printf("\ttop motion raw controls: lat=%f, ang=%f\n", top_motion->get_controls().first, top_motion->get_controls().second);
-
     if (state.load() == AUTON_STATE) {
-        lateral_pid_controller->target.store(top_motion->controls.first);
+        lateral_pid_controller->target.store(lateral_pid_controller->value.load() + top_motion->controls.first);
+        angular_pid_controller->target.store(angular_pid_controller->value.load() + top_motion->controls.second);
 
-        printf("\tUPDATING LATERAL PID...\n");
         pid_handle_process(*lateral_pid_controller);
-        printf("\tUPDATING ANGULAR PID...\n");
         pid_handle_process(*angular_pid_controller);
 
-        printf("\tlat-o=%f, ang-o=%f\n", lateral_pid_controller->output.load(), angular_pid_controller->output.load());
+        top_motion->lateral_exit.update(lateral_pid_controller->error);
+        top_motion->angular_exit.update(angular_pid_controller->error);
+
+        if (top_motion->lateral_exit.get_exit() && top_motion->angular_exit.get_exit()) {
+            top_motion->life = -1;
+        }
 
         float left_power = lateral_pid_output.load() + angular_pid_output.load();
         float right_power = lateral_pid_output.load() - angular_pid_output.load();
-
-        printf("\tleft-p=%f, right-p=%f\n", left_power, right_power);
 
         left_power = abs_clamp(left_power, top_motion->min_speed, top_motion->max_speed);
         right_power = abs_clamp(right_power, top_motion->min_speed, top_motion->max_speed);
 
         (void)drive_train->left_motors->move(left_power);
-        (void)drive_train->left_motors->move(right_power);
+        (void)drive_train->right_motors->move(right_power);
     }
 }
 
 void Chassis::update() {
-    odom->predict_with_ime();
-    // don't consider odom cause we don't have it yet
-    odom->push_prediction(true, false);
-    odom->load_pose();
+    if (state != CRASHOUT) {
+        odom->predict_with_ime();
+        // don't consider odom cause we don't have it yet
+        odom->push_prediction(true, false);
+        odom->load_pose();
+    }
 
     clean_commands();
     update_motions();
@@ -76,7 +78,7 @@ void Chassis::update() {
 static void chassis_update(void* param) {
     auto *chassis = static_cast<Chassis*>(param);
     while(true) {
-        if (chassis->enabled.load()) {
+        if (chassis->enabled.load() && chassis->state != CRASHOUT) {
             chassis->update();
         }
         wait(PROCESS_DELAY);

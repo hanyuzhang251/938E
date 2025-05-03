@@ -10,6 +10,10 @@
 
 namespace chisel {
 
+
+    /**
+     *
+     */
     struct Chassis {
         std::atomic<int> state = std::atomic(INIT_STATE);
 
@@ -31,6 +35,8 @@ namespace chisel {
         Chassis(DriveTrain* drive_train, DriveSettings* lateral_drive_settings, DriveSettings* angular_drive_settings, Odom* odom, PIDController* angular_pid_controller, PIDController* lateral_pid_controller, bool enabled_ = false);
 
         void initialize() const;
+
+        void assign_motion(Motion* motion);
 
     private:
         int clean_commands();
