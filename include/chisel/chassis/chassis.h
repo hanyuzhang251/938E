@@ -10,6 +10,10 @@
 
 namespace chisel {
 
+
+    /**
+     *
+     */
     struct Chassis {
         std::atomic<int> state = std::atomic(INIT_STATE);
 

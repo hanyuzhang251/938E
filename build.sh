@@ -1,7 +1,8 @@
+reset=false;
 clean=false
 upload=false
 
-while getopts "cu" opt; do
+while getopts "cur" opt; do
   case $opt in
     c)
       clean=true
@@ -9,11 +10,19 @@ while getopts "cu" opt; do
     u)
       upload=true
       ;;
+    r)
+      reset=true
+      ;;
     \?)
       echo "Invalid option: -$OPTARG" >&2
       ;;
   esac
 done
+
+if $reset; then
+  reset
+  source ~/.zshrc
+fi
 
 if $clean; then
   make clean

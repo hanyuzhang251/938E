@@ -37,14 +37,14 @@ constexpr pros::digi_button ARM_MACRO_CYCLE_BUTTON = pros::E_CONTROLLER_DIGITAL_
 inline chisel::Toggle arm_macro_cycle_toggle(false);
 
 constexpr int32_t DT_FL_PORT = -6;
-constexpr int32_t DT_ML_PORT = -7;
-constexpr int32_t DT_BL_PORT = -8;
+constexpr int32_t DT_ML_PORT = -14;
+constexpr int32_t DT_BL_PORT = -15;
 
-constexpr int32_t DT_FR_PORT = 3;
-constexpr int32_t DT_MR_PORT = 4;
-constexpr int32_t DT_BR_PORT = 5;
+constexpr int32_t DT_FR_PORT = 3;//#####
+constexpr int32_t DT_MR_PORT = 4;//#####
+constexpr int32_t DT_BR_PORT = 5;//#####
 
-constexpr int32_t INTAKE_PORT = -2;
+constexpr int32_t INTAKE_PORT = -2;//#####
 constexpr int32_t ARM_PORT = -9;
 constexpr int32_t MOGO_PORT = 1;
 constexpr int32_t LDOINKER_PORT = 2;
@@ -72,9 +72,9 @@ constexpr uint32_t COLOR_SORT_COOLDOWN = 500;
 constexpr float ARM_SPEED = 240;
 
 constexpr float ARM_LOW_POS = 250;
-constexpr float MAX_ARM_POS = 1550;
-constexpr float ARM_LOAD_POS = 205;
-constexpr float ARM_SCORE_POS = 750;
+constexpr float MAX_ARM_POS = 9968;
+constexpr float ARM_LOAD_POS = 180;
+constexpr float ARM_SCORE_POS = 690;
 constexpr float ARM_ALLIANCE_POS = 920;
 
 inline int arm_macro_cycle_index = 0;
@@ -161,7 +161,7 @@ inline chisel::Odom odom{
 inline chisel::PIDSetting angular_pid_settings{
     2, // kp
     0.1, // ki
-    35, // kd
+    39, // kd
     2, // tolerance
     30, // wind
     999, // clamp
@@ -183,10 +183,10 @@ inline chisel::PIDController angular_pid_controller {
 };
 
 inline chisel::PIDSetting lateral_pid_settings{
-    5, // kp
+    4.5, // kp
     0.1, // ki
-    2.5, // kd
-    2.5f, // tolerance
+    3, // kd
+    2, // tolerance
     12, // wind
     999, // clamp
     999, // slew
