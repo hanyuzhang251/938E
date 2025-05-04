@@ -28,7 +28,7 @@ constexpr pros::digi_button RDOINKER_TOGGLE_BUTTON = pros::E_CONTROLLER_DIGITAL_
 inline chisel::Toggle rdoinker_toggle(false);
 
 constexpr pros::digi_button MOGO_TOGGLE_BUTTON = pros::E_CONTROLLER_DIGITAL_A;
-inline chisel::Toggle mogo_toggle(true);
+inline chisel::Toggle mogo_toggle(false);
 
 constexpr pros::digi_button ARM_UP_BUTTON = pros::E_CONTROLLER_DIGITAL_R1;
 constexpr pros::digi_button ARM_DOWN_BUTTON = pros::E_CONTROLLER_DIGITAL_R2;
@@ -166,7 +166,7 @@ inline chisel::PIDSetting angular_pid_settings{
     30, // wind
     999, // clamp
     999, // slew
-    0, // small error
+    1, // small error
     60 // large error
 };
 inline std::atomic<float> target_heading (0);

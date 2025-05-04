@@ -1,7 +1,5 @@
 #include "main.h"
 
-#include <csetjmp>
-
 #include "chisel/chisel.h"
 
 #include "robot_config.h"
@@ -654,7 +652,7 @@ void neg_5p1_aut(const bool side = true) {
     wait_stable(angular_pid_controller, 5000, 3, 8, 2.5);
 
     auton_intake_command.power = 127; // start running intake
-    target_dist.fetch_add(21.5); // collect closer ring
+    target_dist.fetch_add(21.25); // collect closer ring
 
     // wait until we have collected the ring, for a maximum of 1500 ms
     uint32_t end = pros::millis() + 1500;
@@ -693,7 +691,7 @@ void neg_5p1_aut(const bool side = true) {
     angular_pid_controller.max_speed = 127;
 
     // Arc movement to exit ring stack area without crossing
-    target_dist.fetch_add(-32.5);
+    target_dist.fetch_add(-31);
     wait(150);
     target_heading.store(-45 * multi);
 
@@ -712,12 +710,12 @@ void neg_5p1_aut(const bool side = true) {
     // Speed tooning
     lateral_pid_controller.max_speed = 127;
     angular_pid_controller.max_speed = 63;
-    
+
     // Arc movement to collect corner rings
     target_dist.fetch_add(60);
     target_heading.store(-135 * multi);
 
-    wait_cross(lateral_pid_controller, 3);
+    wait_cross(lateral_pid_controller, 5);
 
     for (int i = 1; i <= 10; ++i) {
         lateral_pid_controller.max_speed = 127 - 5 * i;
@@ -726,7 +724,7 @@ void neg_5p1_aut(const bool side = true) {
 
     unstuck_enabled = false; // disable unjammer so we don't outtake ring by accident
 
-    wait(1250); // Wait ____ ms which is about when we have entered the ring stack
+    wait(1000); // Wait ____ ms which is about when we have entered the ring stack
 
     // Back out to pull the bottom ring.
     lateral_pid_controller.max_speed = 17;
@@ -754,12 +752,12 @@ void neg_5p1_aut(const bool side = true) {
 
     wait_stable(angular_pid_controller); // Wait until turning is complete.
 
-    target_dist.fetch_add(34); // move towards alliance ring stack
+    target_dist.fetch_add(33); // move towards alliance ring stack
 
     unstuck_enabled = true; // re-enable unjammer
 
     // When approaching ring stack, activate doinker
-    wait_cross(lateral_pid_controller, 32.67);
+    wait_cross(lateral_pid_controller, 31.75);
     (void) doinker.set_value(true);
 
     wait_stable(lateral_pid_controller); // Wait until movement is complete
@@ -767,8 +765,14 @@ void neg_5p1_aut(const bool side = true) {
     auton_intake_command.power = 127; // Activate intake
 
     // Pull the ring back slowly. Due to poor doinker quality, usually doesn't pull all the way off the ring stack.
-    target_dist.fetch_add(-9);
+    target_dist.fetch_add(-8);
     lateral_pid_controller.max_speed = 127 / 3.0f;
+
+    for (int i = 1; i <= 5; ++i) {
+        lateral_pid_controller.max_speed = 127 / 3.0f + i * 10;
+        wait(30);
+    }
+
     wait_stable(lateral_pid_controller);
     (void) doinker.set_value(false);
 
@@ -787,6 +791,9 @@ void neg_5p1_aut(const bool side = true) {
     // After collecting the ring, boost it a little so we reach the tower
     wait_cross(lateral_pid_controller, 9);
     target_dist.fetch_add(15);
+
+    // set the intake to coast so that even if we are a bit late, we can still intake the ring onto the mogo
+    (void)intake.set_brake_mode(pros::MotorBrake::coast);
 
     // After short delay, lower arm to make contact with the tower.
     wait(350);
@@ -826,6 +833,8 @@ void opcontrol() {
     unstuck_intake_command.power = 0;
     unstuck_intake_command.priority = -999;
     unstuck_intake_command.dismiss();
+
+    (void)intake.set_brake_mode(pros::MotorBrake::brake);
 
     intake_itf.assign_command(&driver_intake_command);
 
