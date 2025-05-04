@@ -6,7 +6,7 @@
 
 pros::Controller master(pros::E_CONTROLLER_MASTER);
 
-bool alliance = true; // true = red, false = blue
+bool alliance = false; // true = red, false = blue
 bool color_sort_enabled = true;
 bool unstuck_enabled = true;
 

@@ -1,7 +1,7 @@
 {
     "py/object": "pros.conductor.project.Project",
     "py/state": {
-        "project_name": "red 5p1 rr",
+        "project_name": "blue 5p1",
         "target": "v5",
         "templates": {
             "kernel": {
@@ -255,7 +255,7 @@
             }
         },
         "upload_options": {
-            "description": "states",
+            "description": "scrims",
             "icon": "X",
             "slot": 2
         },
