@@ -42,7 +42,7 @@ bool blue_ring_seen = false;
 uint32_t last_outtake = 0;
 
 void queue_outtake() {
-    wait(100);
+    wait(50);
 
     color_sort_command.power = -30;
     color_sort_command.priority = 999;
@@ -154,7 +154,8 @@ void menu_update() {
         case 0: {
             block_controls = false;
             std::snprintf(ctrl_log[0], 15, "ut: %s         ", chisel::prefix().substr(1, 5).c_str());
-            std::snprintf(ctrl_log[1], 15, "               ");
+            std::snprintf(ctrl_log[1], 15, "bt: %d%%       ",
+                          static_cast<int>(std::round(pros::battery::get_capacity())));
             std::snprintf(ctrl_log[2], 15, "               ");
             break;
         }
@@ -521,7 +522,7 @@ void neg_6_aut(const bool side = true) {
 
     auton_init(20 * multi, 0);
 
-    target_heading.store(22);
+    target_heading.store(22 * multi);
     target_dist.fetch_add(50.5);
     (void) other_doinker.set_value(true);
 
@@ -539,82 +540,78 @@ void neg_6_aut(const bool side = true) {
         wait(10);
     }
 
-    target_dist.fetch_add(-24);
+    target_heading.store(60 * multi);
+    wait_stable(angular_pid_controller, 5000, 3, 8, 3.5);
 
-    wait_cross(lateral_pid_controller, -3);
-    target_heading.store(90);
-    wait_cross(lateral_pid_controller, -2);
-    (void) other_doinker.set_value(false);
-
-    wait_stable(lateral_pid_controller, 5000, 3, 8, 5);
-
-    target_dist.fetch_add(-3);
-
+    target_dist.fetch_add(-21.5);
     wait_stable(lateral_pid_controller);
 
     (void) mogo.set_value(false);
+    (void) other_doinker.set_value(false);
     wait(250);
 
-    target_dist.fetch_add(38);
-    target_heading.store(90);
+    target_heading.store(90 * multi);
+    wait_stable(angular_pid_controller, 5000, 3, 8, 3.5);
 
-    wait_cross(lateral_pid_controller, 3);
-    target_heading.store(108);
+    auton_intake_command.power = 127;
 
-    pros::Task([] {
-        for (int i = 1; i <= 6; ++i) {
-            lateral_pid_controller.max_speed = 127 - 10 * i;
-            wait(30);
+    target_dist.fetch_add(27);
+
+    for (int i = 1; i <= 6; ++i) {
+        lateral_pid_controller.max_speed = 127 - 10 * i;
+        wait(90);
         }
-        auton_intake_command.power = 127;
-    });
-
-    wait_cross(lateral_pid_controller, 19);
-    target_heading.store(70);
 
     wait_stable(lateral_pid_controller);
 
+    target_heading.store(200 * multi);
+    wait_stable(angular_pid_controller, 5000, 3, 8, 3.5);
+
+    target_dist.fetch_add(60);
+    target_heading.store(135 * multi);
+
     lateral_pid_controller.max_speed = 127;
+    angular_pid_controller.max_speed = 67;
+
+    for (int i = 1; i <= 20; ++i) {
+        lateral_pid_controller.max_speed = 127 - i * 4;
+        wait(50);
+    }
+
+    unstuck_enabled = false;
+
+    wait(400);
+
+    // Back out to pull the bottom ring.
+    lateral_pid_controller.max_speed = 17;
+    target_dist.store(current_dist.load() - 12);
+    for (int i = 1; i <= 15; ++i) {
+        lateral_pid_controller.max_speed = 17 + i * 5 / 3;
+        wait(40);
+    }
+
+    wait_stable(lateral_pid_controller); // wait until movement is complete
+
+    // Move forward agian to collect the ring.
+
+    lateral_pid_controller.max_speed = 127;
+    target_dist.fetch_add(12);
+
+    wait(800); // wait until movement is complete;
+
+    // Back out and face ring stack closer to alliance stake
+    target_dist.store(current_dist.load() - 9);
+    lateral_pid_controller.max_speed = 127;
+    wait_cross(lateral_pid_controller, -7.5);
+    target_heading.store(-90 * multi);
     angular_pid_controller.max_speed = 127;
 
-    wait(1000);
-    target_heading.store(190);
+    unstuck_enabled = true;
 
-    wait_stable(angular_pid_controller, 5000, 3, 8, 2.5);
+    wait_stable(angular_pid_controller, 5000, 3, 8, 2);
 
-    target_dist.fetch_add(36);
-    pros::Task([] {
-        for (int i = 1; i <= 10; ++i) {
-            lateral_pid_controller.max_speed = 127 - 6 * i;
-            wait(30);
-        }
-    });
-
-    wait_cross(lateral_pid_controller, 18.5);
-    target_heading.store(135);
-    angular_pid_controller.max_speed = 60;
-
-    wait_stable(angular_pid_controller, 5000, 3, 8, 3.5);
-    target_dist.fetch_add(18);
-
-    pros::Task([] {
-        for (int i = 1; i <= 5; ++i) {
-            lateral_pid_controller.max_speed = 67 - 5 * i;
-            wait(30);
-        }
-    });
-
-    wait(800);
-
-    target_dist.store(current_dist.load() -12);
-    lateral_pid_controller.max_speed = 127;
-    wait_stable(lateral_pid_controller, 500, 3, 8, 3);
-
-    target_dist.fetch_add(12);
-    wait(500);
-
-    target_dist.store(current_dist.load() -12);
-    wait(500);
+    target_dist.fetch_add(72);
+    wait_stable(lateral_pid_controller);
 
     // Ensure mogo stays clamped.
     mogo_toggle.value = false;
@@ -793,7 +790,7 @@ void neg_5p1_aut(const bool side = true) {
     target_dist.fetch_add(15);
 
     // set the intake to coast so that even if we are a bit late, we can still intake the ring onto the mogo
-    (void)intake.set_brake_mode(pros::MotorBrake::coast);
+    (void) intake.set_brake_mode(pros::MotorBrake::coast);
 
     // After short delay, lower arm to make contact with the tower.
     wait(350);
@@ -815,10 +812,25 @@ void autonomous() {
         auton_end();
     });
 
-    neg_5p1_aut(alliance);
+    neg_6_aut(alliance);
 }
 
 void opcontrol() {
+    pros::Task([&] {
+        const bool p_arm_clamp = arm_clamp;
+        arm_clamp = false;
+
+        arm_target_pos.fetch_add(-9999);
+
+        while (arm.get_current_draw() < 2300) {
+            chisel::wait(PROCESS_DELAY);
+        }
+
+        reset_arm();
+
+        arm_clamp = p_arm_clamp;
+    });
+
     printf("%sopcontrol start\n", chisel::prefix().c_str());
 
     unstuck_enabled = false;
@@ -834,7 +846,7 @@ void opcontrol() {
     unstuck_intake_command.priority = -999;
     unstuck_intake_command.dismiss();
 
-    (void)intake.set_brake_mode(pros::MotorBrake::brake);
+    (void) intake.set_brake_mode(pros::MotorBrake::brake);
 
     intake_itf.assign_command(&driver_intake_command);
 

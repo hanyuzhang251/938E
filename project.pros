@@ -1,7 +1,7 @@
 {
     "py/object": "pros.conductor.project.Project",
     "py/state": {
-        "project_name": "blue 5p1",
+        "project_name": "blue 6p",
         "target": "v5",
         "templates": {
             "kernel": {
