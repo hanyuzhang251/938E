@@ -153,9 +153,9 @@ void menu_update() {
     switch (menu_page) {
         case 0: {
             block_controls = false;
-            std::snprintf(ctrl_log[0], 15, "ut: %s         ", chisel::prefix().substr(1, 5).c_str());
-            std::snprintf(ctrl_log[1], 15, "bt: %d%%       ",
-                          static_cast<int>(std::round(pros::battery::get_capacity())));
+            std::snprintf(ctrl_log[0], 15, "ut: %s                 ", chisel::prefix().substr(1, 5).c_str());
+            std::snprintf(ctrl_log[1], 15, "bt: %f%%                ",
+                          std::round(pros::battery::get_capacity()));
             std::snprintf(ctrl_log[2], 15, "               ");
             break;
         }
@@ -520,6 +520,8 @@ void neg_6_aut(const bool side = true) {
     pros::adi::DigitalOut &other_doinker = side ? ldoinker : rdoinker;
     const float multi = side ? -1 : 1;
 
+    (void) mogo.set_value(false);
+
     auton_init(20 * multi, 0);
 
     target_heading.store(22 * multi);
@@ -531,7 +533,7 @@ void neg_6_aut(const bool side = true) {
     wait_stable(lateral_pid_controller);
 
     ring_seen = false;
-    uint32_t end = pros::millis() + 1000;
+    uint32_t end = pros::millis() + 1500;
     while (pros::millis() < end) {
         if (ring_seen) {
             auton_intake_command.power = 0;
@@ -544,6 +546,10 @@ void neg_6_aut(const bool side = true) {
     wait_stable(angular_pid_controller, 5000, 3, 8, 3.5);
 
     target_dist.fetch_add(-21.5);
+
+    wait_cross(lateral_pid_controller, -10);
+    (void) mogo.set_value(true);
+
     wait_stable(lateral_pid_controller);
 
     (void) mogo.set_value(false);
@@ -555,32 +561,31 @@ void neg_6_aut(const bool side = true) {
 
     auton_intake_command.power = 127;
 
-    target_dist.fetch_add(27);
+    target_dist.fetch_add(32);
+    lateral_pid_controller.max_speed = 50;
 
-    for (int i = 1; i <= 6; ++i) {
-        lateral_pid_controller.max_speed = 127 - 10 * i;
-        wait(90);
-        }
-
+    wait_cross(lateral_pid_controller, 12);
+    target_heading.store(95);
+    wait_cross(lateral_pid_controller, 19);
+    target_heading.store(90);
     wait_stable(lateral_pid_controller);
 
-    target_heading.store(200 * multi);
+    target_dist.fetch_add(-34);
+    wait_stable(lateral_pid_controller);
+
+    target_heading.store(135);
     wait_stable(angular_pid_controller, 5000, 3, 8, 3.5);
 
-    target_dist.fetch_add(60);
-    target_heading.store(135 * multi);
+    target_dist.fetch_add(50);
 
-    lateral_pid_controller.max_speed = 127;
-    angular_pid_controller.max_speed = 67;
-
-    for (int i = 1; i <= 20; ++i) {
-        lateral_pid_controller.max_speed = 127 - i * 4;
-        wait(50);
-    }
+    wait(800);
 
     unstuck_enabled = false;
 
-    wait(400);
+    target_dist.fetch_add(8);
+    lateral_pid_controller.max_speed = 47;
+
+    wait(600);
 
     // Back out to pull the bottom ring.
     lateral_pid_controller.max_speed = 17;

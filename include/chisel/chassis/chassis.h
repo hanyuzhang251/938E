@@ -1,7 +1,7 @@
 #pragma once
 
 #include "chisel/chassis/drive.h"
-#include "chisel/odom/odom.h"
+#include "chisel/chassis/odom.h"
 #include "chisel/pid.h"
 #include "chisel/chassis/movement/movement.h"
 
@@ -9,7 +9,6 @@
 #include <queue>
 
 namespace chisel {
-
 
     /**
      *

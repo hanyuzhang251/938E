@@ -5,7 +5,7 @@
 #include "util/util.h"
 #include "chassis/chassis.h"
 #include "chassis/drive.h"
-#include "chisel/odom/odom.h"
+#include "chisel/chassis/odom.h"
 #include "pid.h"
 #include "util/motoritf.h"
 
