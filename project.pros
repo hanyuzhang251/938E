@@ -1,7 +1,7 @@
 {
     "py/object": "pros.conductor.project.Project",
     "py/state": {
-        "project_name": "blue 6p rr",
+        "project_name": "red 4p1p1 safe",
         "target": "v5",
         "templates": {
             "kernel": {
@@ -257,7 +257,7 @@
         "upload_options": {
             "description": "scrims",
             "icon": "X",
-            "slot": 2
+            "slot": 1
         },
         "use_early_access": false
     }

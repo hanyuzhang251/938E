@@ -45,7 +45,7 @@ constexpr int32_t DT_MR_PORT = 4;//#####
 constexpr int32_t DT_BR_PORT = 5;//#####
 
 constexpr int32_t INTAKE_PORT = -2;//#####
-constexpr int32_t ARM_PORT = -9;
+constexpr int32_t ARM_PORT = -7;
 constexpr int32_t MOGO_PORT = 1;
 constexpr int32_t LDOINKER_PORT = 2;
 constexpr int32_t RDOINKER_PORT = 3;
@@ -162,7 +162,7 @@ inline chisel::PIDSetting angular_pid_settings{
     2, // kp
     0.1, // ki
     39, // kd
-    2, // tolerance
+    2.5, // tolerance
     30, // wind
     999, // clamp
     999, // slew
