@@ -112,6 +112,7 @@ uint32_t next_display_time = pros::millis();
 int next_display_index = 0;
 
 void menu_update() {
+
     menu_toggle.tick(master.get_digital(MENU_TOGGLE_BUTTON));
     if (menu_toggle.value && menu_page != 254000) {
         menu_toggle.value = false;
@@ -533,16 +534,21 @@ void neg_6_aut(const bool side = true) {
     wait_stable(lateral_pid_controller);
 
     ring_seen = false;
-    uint32_t end = pros::millis() + 1500;
-    while (pros::millis() < end) {
-        if (ring_seen) {
-            auton_intake_command.power = 0;
-            break;
-        }
-        wait(10);
-    }
+    uint32_t end = pros::millis() + 1670;
 
-    target_heading.store(60 * multi);
+    pros::Task([&] {
+     while (pros::millis() < end) {
+         if (ring_seen) {
+             auton_intake_command.power = 0;
+             break;
+         }
+         wait(10);
+     }
+    });
+
+    wait(500);
+
+    target_heading.store(57 * multi);
     wait_stable(angular_pid_controller, 5000, 3, 8, 3.5);
 
     target_dist.fetch_add(-21.5);
@@ -553,43 +559,55 @@ void neg_6_aut(const bool side = true) {
     wait_stable(lateral_pid_controller);
 
     (void) mogo.set_value(false);
-    (void) other_doinker.set_value(false);
-    wait(250);
+    wait(50);
 
-    target_heading.store(90 * multi);
+    (void) other_doinker.set_value(false);
+    wait(200);
+
+    target_heading.store(85 * multi);
     wait_stable(angular_pid_controller, 5000, 3, 8, 3.5);
 
     auton_intake_command.power = 127;
 
-    target_dist.fetch_add(32);
-    lateral_pid_controller.max_speed = 50;
+    target_dist.fetch_add(26);
+    lateral_pid_controller.max_speed = 47;
 
-    wait_cross(lateral_pid_controller, 12);
+    wait_cross(lateral_pid_controller, 6);
+    target_heading.store(90);
+    wait_cross(lateral_pid_controller, 6);
     target_heading.store(95);
-    wait_cross(lateral_pid_controller, 19);
+    wait_cross(lateral_pid_controller, 8);
     target_heading.store(90);
     wait_stable(lateral_pid_controller);
 
-    target_dist.fetch_add(-34);
+    target_dist.fetch_add(-24);
+
+    wait(150);
+
+    for (int i = 0; i <= 9; ++i) {
+        lateral_pid_controller.max_speed = 67 + i * 7;
+        wait(50);
+    }
+
     wait_stable(lateral_pid_controller);
 
     target_heading.store(135);
     wait_stable(angular_pid_controller, 5000, 3, 8, 3.5);
 
-    target_dist.fetch_add(50);
+    target_dist.fetch_add(52);
 
-    wait(800);
+    wait_stable(lateral_pid_controller, 5000, 3, 8, 6);
 
     unstuck_enabled = false;
 
-    target_dist.fetch_add(8);
+    target_dist.fetch_add(27);
     lateral_pid_controller.max_speed = 47;
 
-    wait(600);
+    wait(700);
 
     // Back out to pull the bottom ring.
     lateral_pid_controller.max_speed = 17;
-    target_dist.store(current_dist.load() - 12);
+    target_dist.store(current_dist.load() - 14);
     for (int i = 1; i <= 15; ++i) {
         lateral_pid_controller.max_speed = 17 + i * 5 / 3;
         wait(40);
@@ -600,7 +618,7 @@ void neg_6_aut(const bool side = true) {
     // Move forward agian to collect the ring.
 
     lateral_pid_controller.max_speed = 127;
-    target_dist.fetch_add(12);
+    target_dist.fetch_add(14);
 
     wait(800); // wait until movement is complete;
 
@@ -608,15 +626,28 @@ void neg_6_aut(const bool side = true) {
     target_dist.store(current_dist.load() - 9);
     lateral_pid_controller.max_speed = 127;
     wait_cross(lateral_pid_controller, -7.5);
-    target_heading.store(-90 * multi);
+    target_heading.store(-93 * multi);
     angular_pid_controller.max_speed = 127;
 
     unstuck_enabled = true;
 
     wait_stable(angular_pid_controller, 5000, 3, 8, 2);
 
-    target_dist.fetch_add(72);
+    unstuck_enabled = false;
+
+    target_dist.fetch_add(29);
+    arm_target_pos.store(ARM_LOAD_POS);
+
     wait_stable(lateral_pid_controller);
+    target_heading.store(-124);
+
+    wait_stable(angular_pid_controller, 5000, 3, 8, 3.5);
+    target_dist.fetch_add(11);
+
+    wait_cross(lateral_pid_controller, 4);
+    arm_target_pos.fetch_add(1100);
+
+    wait(1000);
 
     // Ensure mogo stays clamped.
     mogo_toggle.value = false;
