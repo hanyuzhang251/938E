@@ -1,7 +1,7 @@
 {
     "py/object": "pros.conductor.project.Project",
     "py/state": {
-        "project_name": "red 4p1p1 safe",
+        "project_name": "'oawirg'",
         "target": "v5",
         "templates": {
             "kernel": {
@@ -255,9 +255,9 @@
             }
         },
         "upload_options": {
-            "description": "scrims",
+            "description": "world",
             "icon": "X",
-            "slot": 1
+            "slot": 3
         },
         "use_early_access": false
     }

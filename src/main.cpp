@@ -1,5 +1,7 @@
 #include "main.h"
 
+#include <stdatomic.h>
+
 #include "chisel/chisel.h"
 
 #include "robot_config.h"
@@ -519,6 +521,128 @@ void wait_cross(const chisel::PIDController &pid_process, float point, const boo
     for (int i = 0; i < buffer_ticks; ++i) wait(PROCESS_DELAY);
 }
 
+void pos_5p_aut(const bool side = true) {
+    bool &ring_seen = side ? red_ring_seen : blue_ring_seen;
+    pros::adi::DigitalOut &doinker = side ? rdoinker : ldoinker;
+    pros::adi::DigitalOut &other_doinker = side ? ldoinker : rdoinker;
+    const float multi = side ? 1 : -1;
+
+    auton_init(0 * multi, 0);
+
+    // back into mogo
+    target_dist.fetch_add(-32);
+    wait_stable(lateral_pid_controller);
+
+    // get mogo and extend doinker
+    (void)mogo.set_value(false);
+    (void)doinker.set_value(true);
+    wait(250);
+
+    // coast hooks so we can go under ladder
+    (void)intake.set_brake_mode(pros::MotorBrake::coast);
+
+    // face center ring stack
+    target_heading.store(127.5 * multi);
+    wait_stable(angular_pid_controller);
+
+    // score preload on mogo
+    auton_intake_command.power = 127;
+    wait(300);
+
+    // collect ring
+    target_dist.fetch_add(14.5);
+    wait_stable(lateral_pid_controller);
+    wait(350);
+
+    // collect other ring
+    target_heading.store(150);
+    wait_stable(angular_pid_controller);
+    (void)other_doinker.set_value(true);
+
+    // back out
+    target_dist.fetch_add(-41);
+    target_heading.store(127);
+
+    // outtake so we can exit center
+    auton_intake_command.power = -127;
+
+    // gradually accelerate
+    pros::Task([] {
+        for (int i = 1; i < 10; ++i) {
+            lateral_pid_controller.max_speed = 87 + i * 4;
+            wait(50);
+        }
+    });
+
+    // drift ahh to position
+    wait_cross(lateral_pid_controller, -20);
+    target_heading.store(-180 * multi);
+
+    wait_stable(lateral_pid_controller);
+    wait_stable(angular_pid_controller);
+
+    (void)doinker.set_value(false);
+    wait(250);
+
+    target_heading.store(-135);
+    wait_stable(angular_pid_controller);
+
+    target_dist.fetch_add(16.5);
+    target_heading.store(-90 * multi);
+    angular_pid_controller.max_speed = 127 / 3.0f;
+
+    wait_stable(lateral_pid_controller);
+
+
+return;
+    wait_stable(angular_pid_controller);
+
+    target_dist.fetch_add(27.5);
+    wait_stable(lateral_pid_controller);
+
+    target_heading.store(0 * multi);
+    wait_stable(angular_pid_controller);
+
+    target_dist.fetch_add(32.5);
+    wait_stable(lateral_pid_controller);
+
+    target_heading.store(-45 * multi);
+    wait_stable(angular_pid_controller);
+
+    unstuck_enabled = false;
+
+    target_dist.fetch_add(27);
+    lateral_pid_controller.max_speed = 53;
+
+    wait(300);
+
+    // Back out to pull the bottom ring.
+    lateral_pid_controller.max_speed = 17;
+    target_dist.store(current_dist.load() - 16);
+    lateral_pid_controller.max_speed = 127;
+
+    wait_stable(lateral_pid_controller); // wait until movement is complete
+
+    // Move forward agian to collect the ring.
+
+    lateral_pid_controller.max_speed = 127;
+    target_dist.fetch_add(16);
+
+    wait_cross(lateral_pid_controller, 9);
+    wait(300);
+
+    // Back out and face ring stack closer to alliance stake
+    target_dist.store(current_dist.load() - 9);
+    lateral_pid_controller.max_speed = 127;
+    wait_cross(lateral_pid_controller, -7.5);
+    target_heading.store(-93 * multi);
+    angular_pid_controller.max_speed = 127;
+
+    unstuck_enabled = true;
+
+    wait(800);
+}
+
 void neg_6_aut(const bool side = true) {
     bool &ring_seen = side ? red_ring_seen : blue_ring_seen;
     pros::adi::DigitalOut &doinker = side ? rdoinker : ldoinker;
@@ -528,6 +652,21 @@ void neg_6_aut(const bool side = true) {
     (void) mogo.set_value(false);
 
     auton_init(20 * multi, 0);
+
+    pros::Task([&] {
+        const bool p_arm_clamp = arm_clamp;
+        arm_clamp = false;
+
+        arm_target_pos.fetch_add(-9999);
+
+        while (arm.get_current_draw() < 2300) {
+            chisel::wait(PROCESS_DELAY);
+        }
+
+        reset_arm();
+
+        arm_clamp = p_arm_clamp;
+    });
 
     target_heading.store(22 * multi);
     target_dist.fetch_add(50.5);
@@ -563,10 +702,10 @@ void neg_6_aut(const bool side = true) {
     wait_stable(lateral_pid_controller);
 
     (void) mogo.set_value(false);
-    wait(35);
+    wait(50);
 
     (void) other_doinker.set_value(false);
-    wait(215);
+    wait(200);
 
     target_heading.store(90 * multi);
     wait_stable(angular_pid_controller, 5000, 3, 8, 3.5);
@@ -577,9 +716,9 @@ void neg_6_aut(const bool side = true) {
     lateral_pid_controller.max_speed = 47;
 
     wait_cross(lateral_pid_controller, 12);
-    target_heading.store(95);
+    target_heading.store(95 * multi);
     wait_cross(lateral_pid_controller, 8);
-    target_heading.store(90);
+    target_heading.store(90 * multi);
     wait_stable(lateral_pid_controller);
 
     target_dist.fetch_add(-24);
@@ -593,7 +732,7 @@ void neg_6_aut(const bool side = true) {
 
     wait_stable(lateral_pid_controller);
 
-    target_heading.store(135);
+    target_heading.store(135 * multi);
     wait_stable(angular_pid_controller, 5000, 3, 8, 3.5);
 
     target_dist.fetch_add(54);
@@ -635,21 +774,33 @@ void neg_6_aut(const bool side = true) {
 
     unstuck_enabled = false;
 
-    target_dist.fetch_add(29);
-    arm_target_pos.store(ARM_LOAD_POS);
+    target_dist.fetch_add(29.5);
+    arm_target_pos.store(ARM_LOAD_POS - 15);
 
     wait_stable(lateral_pid_controller);
-    target_heading.store(-135);
+    target_heading.store(-135 * multi);
 
     wait_stable(angular_pid_controller, 5000, 3, 8, 3.5);
-    target_dist.fetch_add(11);
+    target_dist.fetch_add(11.5);
 
     auton_intake_command.power = 0;
     (void)intake.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
 
     wait(250);
-    arm_target_pos.store(ARM_ALLIANCE_POS); // score ring on alliance
+    arm_target_pos.store(ARM_ALLIANCE_POS + 100); // score ring on alliance
     wait(300); // delay to give arm time to score
+
+    target_heading.store(-150 * multi);
+    wait(150);
+
+    target_heading.store(-120 * multi);
+    wait(300);
+
+    target_heading.store(-135 * multi);
+    wait(150);
+
+    target_dist.fetch_add(-24);
+    wait(800);
 
     // Ensure mogo stays clamped.
     mogo_toggle.value = false;
@@ -667,22 +818,26 @@ void neg_5p1_aut(const bool side = true) {
     arm_target_pos.store(ARM_ALLIANCE_POS); // score ring on alliance
     wait(300); // delay to give arm time to score
 
-    target_dist.fetch_add(-40); // start moving backwards
-
-    wait_cross(lateral_pid_controller, -2.5); // wait so arm disengaged from ring
-    arm_target_pos.store(ARM_LOAD_POS + 120); // reset arm to default position
-    // arc movement to mogo
-    target_heading.store(210 * multi);
-    angular_pid_controller.max_speed = 127 / 2.0f;
+    target_dist.fetch_add(-7); // start moving backwards
 
     wait_stable(lateral_pid_controller);
+
+    arm_target_pos.store(ARM_LOAD_POS + 120); // reset arm to default position
+
+    // move to mogo
+    target_heading.store(180);
+    angular_pid_controller.max_speed = 127;
+
+    target_dist.fetch_add(-31);
+    wait_stable(lateral_pid_controller);
+
     (void) mogo.set_value(false); // clamp the mogo
     wait(200); // delay so mogo can clamp correctly
 
     angular_pid_controller.max_speed = 127;
 
     // Heading should be -45.5 degrees if before 6:00 PM, -39 degrees after
-    target_heading.store(-38.5 * multi); // Point towards 4 ring stack.
+    target_heading.store(-43 * multi); // Point towards 4 ring stack.
 
     wait_stable(angular_pid_controller, 5000, 3, 8, 2.5);
 
@@ -1023,7 +1178,7 @@ void autonomous() {
         auton_end();
     });
 
-    neg_4p1p1_aut(alliance);
+    neg_5p1_aut(alliance);
 }
 
 void opcontrol() {

@@ -5,7 +5,7 @@
 
 constexpr pros::digi_button MENU_TOGGLE_BUTTON = pros::E_CONTROLLER_DIGITAL_Y;
 inline chisel::Toggle menu_toggle(false);
-constexpr pros::digi_button MENU_SELECT_BUTTON = pros::E_CONTROLLER_DIGITAL_A;
+constexpr pros::digi_button MENU_SELECT_BUTTON = pros::E_CONTROLLER_DIGITAL_X;
 inline chisel::Toggle menu_select_toggle(false);
 constexpr pros::digi_button MENU_BACK_BUTTON = pros::E_CONTROLLER_DIGITAL_B;
 inline chisel::Toggle menu_back_toggle(false);
@@ -73,7 +73,7 @@ constexpr float ARM_SPEED = 240;
 
 constexpr float ARM_LOW_POS = 250;
 constexpr float MAX_ARM_POS = 9968;
-constexpr float ARM_LOAD_POS = 190;
+constexpr float ARM_LOAD_POS = 200;
 constexpr float ARM_SCORE_POS = 690;
 constexpr float ARM_ALLIANCE_POS = 920;
 
