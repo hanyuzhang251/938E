@@ -21,11 +21,14 @@ done
 
 if $reset; then
   reset
+  echo "Reset terminal"
   source ~/.zshrc
+  echo "Sourced .zshrc\n"
 fi
 
 if $clean; then
   make clean
+  echo "Cleaned project\n"
 fi
 
 time make -j$(($(sysctl -n hw.ncpu) + 1))

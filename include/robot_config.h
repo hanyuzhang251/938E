@@ -161,7 +161,7 @@ inline chisel::Odom odom{
 inline chisel::PIDSetting angular_pid_settings{
     2, // kp
     0.1, // ki
-    39, // kd
+    43, // kd
     2.5, // tolerance
     30, // wind
     999, // clamp
