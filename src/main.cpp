@@ -4,12 +4,11 @@
 #include <stdatomic.h>
 
 #include "chisel/chisel.h"
-
 #include "robot_config.h"
 
 pros::Controller master(pros::E_CONTROLLER_MASTER);
 
-bool alliance = false; // true = red, false = blue
+bool alliance = true; // true = red, false = blue
 bool color_sort_enabled = true;
 bool unstuck_enabled = true;
 
@@ -186,6 +185,8 @@ void menu_update() {
             if (menu_select) {
                 switch (pointer_index) {
                     case 0: {
+                        arm_macro_cycle_index = 0;
+                        wait(15);
                         bool mogo_value = mogo_toggle.value;
                         pros::Task([&] {
                             const bool p_arm_clamp = arm_clamp;
@@ -196,7 +197,7 @@ void menu_update() {
                             wait(15);
                             mogo_toggle.value = mogo_value;
 
-                            while (arm.get_current_draw() < 2300) {
+                            while (arm.get_current_draw() < 2400) {
                                 chisel::wait(PROCESS_DELAY);
                             }
 
@@ -743,15 +744,20 @@ void pos_3p1r_aut(const bool side = true) {
     wait(350);
 
     target_dist.fetch_add(-30);
-    arm_target_pos.store(ARM_ALLIANCE_POS);
+    // arm_target_pos.store(ARM_ALLIANCE_POS);
     wait_stable(lateral_pid_controller);
 
-    target_heading.store(45 * multi);
+    target_heading.store(90 * multi);
     wait_stable(angular_pid_controller, 5000, 2, 6, 3.5);
 
-    auton_intake_command.power = -127;
+    auton_intake_command.power = 127;
 
-    target_dist.fetch_add(29);
+    target_dist.fetch_add(60);
+
+    wait_cross(lateral_pid_controller, 25);
+
+    lateral_pid_controller.max_speed = 127 / 3.0f * 2.0f;
+
     wait_stable(lateral_pid_controller);
 
     // Ensure mogo stays clamped.
@@ -765,7 +771,7 @@ void pos_3p1r_aut(const bool side = true) {
 
 }
 
-void neg_6_aut(const bool side = true) {
+void neg_rr(const bool side = true) {
     bool &ring_seen = side ? red_ring_seen : blue_ring_seen;
     pros::adi::DigitalOut &doinker = side ? rdoinker : ldoinker;
     pros::adi::DigitalOut &other_doinker = side ? ldoinker : rdoinker;
@@ -811,8 +817,6 @@ void neg_6_aut(const bool side = true) {
         }
     });
 
-    wait(300);
-
     target_heading.store(57 * multi);
     wait_stable(angular_pid_controller, 5000, 3, 8, 3.5);
 
@@ -824,10 +828,10 @@ void neg_6_aut(const bool side = true) {
     wait_stable(lateral_pid_controller);
 
     (void) mogo.set_value(false);
-    wait(50);
+    wait(180);
 
     (void) other_doinker.set_value(false);
-    wait(200);
+    wait(70);
 
     target_heading.store(90 * multi);
     wait_stable(angular_pid_controller, 5000, 3, 8, 3.5);
@@ -843,7 +847,7 @@ void neg_6_aut(const bool side = true) {
     target_heading.store(90 * multi);
     wait_stable(lateral_pid_controller);
 
-    target_dist.fetch_add(-24);
+    target_dist.fetch_add(-23);
 
     wait(150);
 
@@ -887,7 +891,7 @@ void neg_6_aut(const bool side = true) {
     target_dist.store(current_dist.load() - 9);
     lateral_pid_controller.max_speed = 127;
     wait_cross(lateral_pid_controller, -7.5);
-    target_heading.store(-93 * multi);
+    target_heading.store(-94.5 * multi);
     angular_pid_controller.max_speed = 127;
 
     unstuck_enabled = true;
@@ -896,19 +900,36 @@ void neg_6_aut(const bool side = true) {
 
     unstuck_enabled = false;
 
-    target_dist.fetch_add(29.5);
+    target_dist.fetch_add(33);
+    wait_stable(lateral_pid_controller);
+
+    (void)other_doinker.set_value(true);
+    wait(250);
+
+    target_dist.fetch_add(-7);
+    wait_stable(lateral_pid_controller);
+
+    target_heading.store(-125 * multi);
+    angular_pid_controller.max_speed = 127 / 2.0f;
+    wait_stable(angular_pid_controller, 5000, 2, 6, 6);
+    (void)other_doinker.set_value(false);
+    wait_stable(angular_pid_controller, 5000, 2, 6, 3);
+
+    target_heading.store(-100 * multi);
+    angular_pid_controller.max_speed = 127;
+    wait_stable(angular_pid_controller, 5000, 2, 6, 4);
     arm_target_pos.store(ARM_LOAD_POS - 15);
 
+    target_dist.fetch_add(7);
     wait_stable(lateral_pid_controller);
-    target_heading.store(-135 * multi);
 
-    wait_stable(angular_pid_controller, 5000, 3, 8, 3.5);
-    target_dist.fetch_add(11.5);
+    target_heading.store(-135 * multi);
+    wait_stable(angular_pid_controller, 5000, 2, 6, 5);
 
     auton_intake_command.power = 0;
     (void) intake.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
 
-    wait(250);
+    wait(50);
     arm_target_pos.store(ARM_ALLIANCE_POS + 100); // score ring on alliance
     wait(300); // delay to give arm time to score
 
@@ -946,6 +967,20 @@ void neg_5p1r_safe(const bool side = true) {
     wait_stable(lateral_pid_controller);
 
     arm_target_pos.store(ARM_LOAD_POS + 120); // reset arm to default position
+    pros::Task([&] {
+        const bool p_arm_clamp = arm_clamp;
+        arm_clamp = false;
+
+        arm_target_pos.fetch_add(-9999);
+
+        while (arm.get_current_draw() < 2300) {
+            chisel::wait(PROCESS_DELAY);
+        }
+
+        reset_arm();
+
+        arm_clamp = p_arm_clamp;
+    });
 
     // move to mogo
     target_heading.store(200 * multi);
@@ -1061,18 +1096,17 @@ void neg_5p1r_safe(const bool side = true) {
     target_dist.store(current_dist.load() - 9);
     lateral_pid_controller.max_speed = 127;
     wait_cross(lateral_pid_controller, -6);
-    target_heading.store(83 * multi);
+    target_heading.store(45 * multi);
     angular_pid_controller.max_speed = 127;
 
     wait_stable(angular_pid_controller, 5000, 1, 6, 3.5); // Wait until turning is complete.
 
-    target_dist.fetch_add(70); // move towards alliance ring stack
+    arm_target_pos.store(ARM_ALLIANCE_POS);
+    wait(150);
+
+    target_dist.fetch_add(60); // move towards ladder
 
     unstuck_enabled = true; // re-enable unjammer
-
-    // When approaching ring stack, slow
-    wait_cross(lateral_pid_controller, 34);
-    lateral_pid_controller.max_speed = 127 * 2.0f / 3.0f;
 
     wait_stable(lateral_pid_controller);
 
@@ -1256,11 +1290,11 @@ void autonomous() {
     printf("%sauton start\n", chisel::prefix().c_str());
 
     pros::Task([] {
-        wait(14900);
+        wait(14950);
         auton_end();
     });
 
-    pos_3p1r_aut(alliance);
+    neg_5p1r_safe(alliance);
 }
 
 void opcontrol() {

@@ -73,7 +73,7 @@ constexpr float ARM_SPEED = 240;
 
 constexpr float ARM_LOW_POS = 250;
 constexpr float MAX_ARM_POS = 9968;
-constexpr float ARM_LOAD_POS = 200;
+constexpr float ARM_LOAD_POS = 185;
 constexpr float ARM_SCORE_POS = 690;
 constexpr float ARM_ALLIANCE_POS = 920;
 
