@@ -39,16 +39,8 @@ void MotorItf::update() {
 		}
 	}
 
-	// If the power reported by the top command is valid, set the final power (to be sent to the motor).
-	if (abs(top_command->power) <= 127) {
-	    final_power = top_command->power;
-	}
-	// Otherwise, ignore it and report to the console.
-	// Perhaps it would be better to set it anyway as it's more likely a motor power of >127.0f was intended to be 127.0f.
-	// Regardless, this system neither has caused any problems nor likely will cause any problems, so I'll leave it like this.
-	else {
-		printf("%sinvalid motor power (%ld) sent to motorItf, ignoring command\n", prefix().c_str(), top_command->power);
-	}
+	// Set motor power
+	final_power = top_command->power;
 }
 
 void MotorItf::push_control() const {
